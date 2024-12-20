@@ -126,11 +126,11 @@ export default class Logs extends React.Component {
 
         <div className="struct_text">
           <h2>Step {this.state.step['step']}</h2>
-          <h3><code>{this.state.step['url']}</code></h3>
+          <h3><code><a href={this.state.step['url']}>{this.state.step['url']}</a></code></h3>
           <ul>
-            <li><code>ip: {this.state.step['ip']}</code></li>                        
-            <li><code>from {this.state.step['src_url']}</code></li>
-            <li><code>status: {this.state.step['status_code']}</code></li>            
+            <li><code>from <a href={this.state.step['src_url']}>{this.state.step['src_url']}</a></code></li>
+            <li><code className={this.state.step['status_string']}>status: {this.state.step['status_code']}</code></li><br/>
+            <li><code>ip: {this.state.step['ip']}</code></li>                                                
             <li><code>{this.state.step['struct_text']}</code></li>
           </ul>
         </div>
