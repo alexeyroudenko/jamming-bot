@@ -185,33 +185,39 @@
     #log_words {
         position: absolute;
         font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
-        bottom:10%;
+        bottom:32px;
         right:284px;
         z-index:100;
         width:512px;
         height:384px;
+        vertical-align: bottom;
         font-size:11px;
         color:#fff;
         opacity:1.5;
-        white-space: pre-wrap;
-        font-size: 20px;
+        /* white-space: pre-wrap; */
+        font-size: .2cm;
         overflow: hidden;
+        display: table-cell;  
     }
 
     #log_phrases {
         position: absolute;
         font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
-        top:10%;
+        bottom:32px;
         right:284px;
         z-index:100;
         width:512px;
-        height:512px;
+        height:256px;
         font-size:11px;
+        vertical-align: bottom;
         color:#fff;
         opacity:1.5;
         white-space: pre-wrap;
-        font-size: 20px;
+        font-size: .4cm;
         overflow: hidden;
+        color:#888;
+        /* border:1px solid #aaa;   */
+        display: table-cell;  
     }
 
     #log_events {
@@ -724,6 +730,7 @@
         step = data['step']
         url = data['url'];
         from_url = data['src_url'];    
+        struct_text = data['struct_text']
         text = data['text']
         words = data['words']
 
@@ -799,6 +806,9 @@
         if (data.analyzed) {
             document.getElementById("log_words").innerHTML = "<code>" + data.analyzed.words.join(', ') + "</code>";
         }
+        if (struct_text) {
+            document.getElementById("log_phrases").innerHTML = "<code>" + struct_text + "</code>";
+        }
         document.getElementById("log_headers").innerHTML = "<code>" + headers + "</code>";
         //typeString(url, "log_url", 1); //log_msg(info)
     }); // socket on step
@@ -842,8 +852,6 @@
         sanimateText();
 
         document.getElementById("log_phrases").innerHTML = "<code><h3>noun_phrases</h3>" + data['noun_phrases'].join('<br>') + "</code>";
-
-        
 
         //words_all = data['words_str'] + words_all
         //words = data['words']
@@ -920,16 +928,17 @@
 <div id="nodes"></div>
 
   <div id="debug">
+    
     <code>
         | counter:<span id="counter"></span>
         | latency:<span id="latency"></span> 
         | v2.0.0 |
+        <button onclick="restart()">restart</button>
     </code>
 
     {% if admin %}
     <button onclick="do_step()">step</button>
-    <button onclick="stop()">stop</button>
-    <button onclick="restart()">restart</button>
+    <button onclick="stop()">stop</button>    
     <button onclick="start()">start</button>
     <button onclick="do_add()" style="display:none">add</button>::
     <a href="/api/steps/">api<span id="api"></span></a>::
@@ -944,12 +953,12 @@
 
     <span id="log_url" class="text"></span>
     <div id="log_text" class="text"></div>
-    <div id="log_phrases" class="text"></div>
-    <div id="log_words" class="text"></div> 
+    <div id="log_phrases" class="text"></div>    
     <div id="log_sub" class="text"></div> 
     <div id="log_events" class="text"></div> 
     <div id="log_headers" class="text"></div>  
     <div id="log_urls" class="text"></div>  
+    <div id="log_words" class="text"></div> 
 
   <span id='s2'>Second</span>
 

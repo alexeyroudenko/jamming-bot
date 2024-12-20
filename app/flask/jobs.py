@@ -79,18 +79,31 @@ def dostep(step):
     self_job.meta['type'] = "step"        
     self_job.meta['url'] = step['current_url']
 
-    code = step['status_code']
     ip = "0.0.0.0" 
     if "ip" in step.keys():     
-        ip == step['ip']        
+        ip = step['ip']        
     self_job.meta['ip'] = ip
     
+    text_out = ""    
+    if "html" in step.keys():        
+        html = step['html'].encode('utf-8')
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, "html.parser", from_encoding="utf-8")           
+        # headings = [h.get_text() for h in soup.find_all(['h1', 'h2', 'h3'])]
+        paragraphs = [p.get_text() for p in soup.find_all('p')]
+        # head = " ".join(headings)
+        text_out = " ".join(paragraphs)
+        # text_out = html
+        self_job.meta['text'] = text_out
+    
+    
     self_job.save_meta()
-    return { "step": step['step'],             
+    return {    "step": step['step'],             
                 "code": step['status_code'], 
                 "ip": ip, 
-                "url": step['current_url'], 
-                "src_url": step['src_url'] 
+                "url": step['current_url'],                
+                "src_url": step['src_url'],
+                "text":text_out[0:1024] + "..."
             }
 
 
