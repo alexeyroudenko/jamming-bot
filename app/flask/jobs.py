@@ -76,13 +76,19 @@ def dostep(step):
         'percent': 100
     }            
     
-    self_job.meta['type'] = "step"
-    self_job.meta['ip'] = step['ip']
+    self_job.meta['type'] = "step"        
     self_job.meta['url'] = step['current_url']
+
+    code = step['status_code']
+    ip = "0.0.0.0" 
+    if "ip" in step.keys():     
+        ip == step['ip']        
+    self_job.meta['ip'] = ip
+    
     self_job.save_meta()
     return { "step": step['step'],             
                 "code": step['status_code'], 
-                "ip": step['ip'], 
+                "ip": ip, 
                 "url": step['current_url'], 
                 "src_url": step['src_url'] 
             }
