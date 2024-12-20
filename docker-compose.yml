@@ -1,0 +1,100 @@
+services:
+
+  bot:
+    build: 
+      dockerfile: docker/bot/Dockerfile
+    container_name: jamming-bot
+    ports:
+      - "5007:5007"
+    env_file:
+      - .env      
+    volumes:
+      - type: bind
+        source: ./app/bot
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data 
+    depends_on:
+      - redis    
+
+  flask:
+    build: 
+      dockerfile: docker/flask/Dockerfile
+    image: master-image
+    container_name: flask
+    ports:
+      - "5000:5000"
+    command: python app.py
+    env_file:
+      - .env    
+    volumes:
+      - type: bind
+        source: ./app/flask
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data 
+    depends_on:
+      - redis
+
+  worker:    
+    build: 
+      dockerfile: docker/worker/Dockerfile
+    image: worker-image
+    command: rq worker --name worker --disable-job-desc-logging --url redis://redis:6379/0
+    env_file:
+      - .env
+    volumes:
+      - type: bind
+        source: ./app/flask
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data 
+    depends_on:
+      - redis
+
+# uncomment to have a another worker
+  # worker2:
+  #   image: worker-image
+  #   command: rq worker --name worker2 --url redis://redis:6379/0
+  #   volumes:
+  #     - type: bind
+  #       source: ./app/flask
+  #       target: /app
+  #     - type: bind
+  #       source: ./data
+  #       target: /app/data    
+  #   depends_on:
+  #     - redis
+
+  nginx:
+    container_name: nginx
+    restart: "no"
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - type: bind
+        source: ./data/certbot/www
+        target: /var/www/certbot
+    depends_on:
+      - flask
+      - redis
+
+  redis: 
+    image: redislabs/redismod
+    container_name: redis
+    ports:
+      - '6379:6379'
+    volumes:
+    - /data/redis:/data      
+
+volumes:
+  data:
+    external: true
+  app:

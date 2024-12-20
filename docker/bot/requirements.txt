@@ -1,0 +1,12 @@
+databases
+tld
+bs4
+requests
+validators
+aiosqlite
+python-osc
+pyyaml
+numpy
+tldextract
+redis
+sentry-sdk[flask]

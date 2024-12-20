@@ -1,4 +1,0 @@
-services:
-  jamming_bot:
-    container_name: jamming_bot
-    build: .
