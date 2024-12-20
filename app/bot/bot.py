@@ -63,8 +63,16 @@ sentry_sdk.profiler.stop_profiler()
 
 
 
-
-
+exclude_tlds = {
+    "ru", "cn", "es", "mx", "ar", "pt", "br", "kr", "jp", "de", "fr", "it", "in", "id", "ph",
+    "tr", "th", "vn", "gr", "pl", "ua", "by", "kz", "ir", "pk", "eg", "sa", "ae", "il", "ma",
+    "ng", "za", "ke", "tz", "co", "cl", "pe", "ve", "uy", "bo", "ec", "cr", "gt", "hn", "ni",
+    "sv", "py", "do", "cu", "hk", "tw", "my", "lk", "bd"
+}
+def domain_is_en(domain):
+    tld = tldextract.extract(domain).suffix
+    return tld not in exclude_tlds
+        
 
 def get_second_level_domain(url):
     extracted = tldextract.extract(url)
@@ -124,6 +132,7 @@ class NetSpider():
         self.count_per_domain = count_per_domain
         self.do_verbs = False
         self.send_events = False
+        self.send_osc = False
         self.send_sublinks = False
         self.resume_at_restart = False
 
@@ -150,6 +159,7 @@ class NetSpider():
             config = yaml.load(file, Loader=SafeLoader)                
             self.sleep_time = config['sleep_time']
             self.send_events = config['send_events']
+            self.send_osc = config['send_osc']
             self.send_sublinks = config['send_sublinks']
             self.resume_at_restart = config['resume_at_restart']
             #self.is_active = config['is_active']
@@ -232,6 +242,8 @@ class NetSpider():
         if self.send_events:
             STEP_URL = 'http://flask:5000/bot/step/'
             r = requests.post(STEP_URL, data = step_data)
+            
+        if self.send_osc:
             try:
                 self.osc.send_message("/step", {step_data})
             except Exception as e0:
@@ -248,10 +260,11 @@ class NetSpider():
             # logging.info(event_name)
             EVENT_URL = f'http://flask:5000/bot/events/{event_name}/'
             r = requests.post(EVENT_URL, {"data":data})
-        try:
-            self.osc.send_message(f"/events/{event_name}/", data)
-        except Exception as e0:
-            logging.error(f"error send OSC: {e0}")
+        if self.send_osc:            
+            try:
+                self.osc.send_message(f"/events/{event_name}/", data)
+            except Exception as e0:
+                logging.error(f"error send OSC: {e0}")
                 
 
     '''
@@ -306,7 +319,7 @@ class NetSpider():
                         else:   
                             new_link_element = href
                                                                                     
-                if new_link_element not in stored_links_for_domain and new_link_element != "":
+                if new_link_element not in stored_links_for_domain and new_link_element != "" and domain_is_en(new_link_element):
                     
                     hostname = get_second_level_domain(new_link_element)
                     stored_links_for_domain = await self.retrieve_stored_links_for_domain(hostname)

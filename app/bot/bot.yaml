@@ -7,6 +7,7 @@ max_errors: 100000
 color_log: True
 resolve_coords: False
 is_active: True
+send_osc: False
 send_events: True
 send_sublinks: False
 version: "2.2.2"
