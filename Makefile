@@ -17,3 +17,7 @@ nginx:
 .PHONY: flask
 flask:	
 	docker compose up -d flask --build
+
+.PHONY: frontend
+frontend:	
+	docker compose up -d frontend --build

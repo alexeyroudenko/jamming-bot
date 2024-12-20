@@ -82,9 +82,20 @@ services:
       - type: bind
         source: ./data/certbot/www
         target: /var/www/certbot
+      - type: bind
+        source: ./frontend/build
+        target: /var/www                
     depends_on:
       - flask
       - redis
+
+  frontend:
+    build: ./frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
 
   redis: 
     image: redislabs/redismod

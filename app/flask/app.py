@@ -345,11 +345,18 @@ def step():
             data['url'] = data['current_url']
             data['id'] = data['url']
             data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"       
-            socketio.emit('step', data)
+            
             
             app.logger.info(f"step {data.keys()}") 
             job = jobs.dostep.delay(data)
-            
+            while True:
+                time.sleep(0.01)
+                job.refresh()  
+                if job.is_finished:                    
+                    struct_text = job.result['text']                        
+                    data['struct_text'] = struct_text                
+                    socketio.emit('step', data)
+                    break          
         
         
         #
