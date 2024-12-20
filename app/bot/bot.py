@@ -232,6 +232,10 @@ class NetSpider():
         if self.send_events:
             STEP_URL = 'http://flask:5000/bot/step/'
             r = requests.post(STEP_URL, data = step_data)
+            try:
+                self.osc.send_message("/step", {step_data})
+            except Exception as e0:
+                logging.error(f"error send OSC: {e0}")
 
 
     '''
@@ -244,6 +248,10 @@ class NetSpider():
             # logging.info(event_name)
             EVENT_URL = f'http://flask:5000/bot/events/{event_name}/'
             r = requests.post(EVENT_URL, {"data":data})
+        try:
+            self.osc.send_message(f"/events/{event_name}/", data)
+        except Exception as e0:
+            logging.error(f"error send OSC: {e0}")
                 
 
     '''
