@@ -31,9 +31,6 @@ config_file = "bot.yaml"
 
 
 
-
-
-
 import sentry_sdk
 sentry_sdk.init(
     dsn=os.getenv('SHHH_SENTRY_URL'),
@@ -239,15 +236,18 @@ class NetSpider():
         notify outside
     '''                        
     def notify_about_step(self, step_data):
+        
         if self.send_events:
             STEP_URL = 'http://flask:5000/bot/step/'
-            r = requests.post(STEP_URL, data = step_data)
-            
+            r = requests.post(STEP_URL, data = step_data)            
+        
         if self.send_osc:
-            try:
-                self.osc.send_message("/step", {step_data})
+            # logging.info(f"osc step_data: {send_data}")
+            step_data_osc = [step_data['step'], step_data['current_url'], step_data['src_url']]
+            try:   
+                self.osc.send_message("/step", step_data_osc)
             except Exception as e0:
-                logging.error(f"error send OSC: {e0}")
+                logging.error(f"error send OSC: {e0} {step_data.items()}")
 
 
     '''
@@ -262,7 +262,7 @@ class NetSpider():
             r = requests.post(EVENT_URL, {"data":data})
         if self.send_osc:            
             try:
-                self.osc.send_message(f"/events/{event_name}/", data)
+                self.osc.send_message(f"/events/{event_name}/", [])
             except Exception as e0:
                 logging.error(f"error send OSC: {e0}")
                 
