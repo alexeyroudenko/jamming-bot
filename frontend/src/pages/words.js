@@ -25,7 +25,7 @@ const Words = () => {
     //       links: [...links, { source: id, target: Math.round(Math.random() * (id - 1)) }]
     //     };
     //   });
-    // }, 1000);
+    // }, 5000);
 
     let counter = 0
     let start_time = 0    
@@ -63,12 +63,38 @@ const Words = () => {
       let struct_text = data['struct_text']
       let text = data['text']
       let words = data['words']
+      let semantic = data['semantic']
       
+      console.log("semantic", semantic)      
+      if (msg['semantic']) {
+        msg['semantic'].forEach(
+          (element) => { 
+          
+          
+          
+            console.log(element['type'] + " : " + element['text']);
+            let type = element['type'];
+            let text = element['text'];
+
+            setData(({ nodes, links }) => {
+              const id = nodes.length;
+              return {
+                nodes: [...nodes, { id, name: `${type} ${text}` }],
+                links: [...links, { source: id, target: Math.round(Math.random() * (id - 1)) }]
+              };
+            });
+
+          
+          
+          }
+        );
+      }
+
       
       setData(({ nodes, links }) => {
         const id = nodes.length;
         return {
-          nodes: [...nodes, { id, name: `Node ${url}` }],
+          nodes: [...nodes, { id, name: `${step} ${url}` }],
           links: [...links, { source: id, target: Math.round(Math.random() * (id - 1)) }]
         };
       });
@@ -79,6 +105,27 @@ const Words = () => {
 
   }, []);
 
+  const createLineMaterial = () => {
+    return new THREE.ShaderMaterial({
+      uniforms: {
+        resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+        color: { value: new THREE.Color(0x999999) }
+      },
+      vertexShader: `
+        uniform vec2 resolution;
+        void main() {
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 color;
+        void main() {
+          gl_FragColor = vec4(color, 1.0);
+        }
+      `,
+      linewidth: 1 // Это игнорируется в WebGL (для информации)
+    });
+  };
   const createNodeLabel = (node) => {
     const group = new THREE.Group();
     const circleGeometry = new THREE.SphereGeometry(3, 16, 16);
@@ -122,9 +169,15 @@ const Words = () => {
         graphData={data}
         backgroundColor="#000000"
         nodeColor={() => 'white'} // Устанавливаем цвет узлов в белый
-        linkColor="#FFFFFF"
-        linkWidth={1}
+        // linkColor="#FFFFFF"
+        // linkWidth={1}
         nodeThreeObject={createNodeLabel}
+        linkThreeObjectExtend={true} // Используем кастомный объект
+        linkThreeObject={() => {
+          const geometry = new THREE.BufferGeometry();
+          const material = createLineMaterial();
+          return new THREE.Line(geometry, material);
+        }}
       />
     </div>
   );
