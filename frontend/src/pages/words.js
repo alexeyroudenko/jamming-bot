@@ -1,136 +1,32 @@
-import React, { Component } from "react";
-import { Graph } from "react-d3-graph";
+//
+// https://github.com/vasturiano/3d-force-graph/blob/master/example/auto-colored/index.html
+//
+import { ForceGraph3D } from 'react-force-graph';
+import React, { useState, useEffect } from 'react';
 
-class Words extends Component {
-    constructor() {
-      super();
-      let data = {
-        nodes: [{ id: "Harry" }, { id: "Sally" }, { id: "Alice" }],
-        links: [
-          { source: "Harry", target: "Sally" },
-          { source: "Harry", target: "Alice" }
-        ]
-      };
-      this.state = {
-        data: data
-      };
-    }
-  
-    render() {
-      // the graph configuration, you only need to pass down properties
-      // that you want to override, otherwise default ones will be used
-      const myConfig = {
-        nodeHighlightBehavior: true,
-        node: {
-          color: "lightgreen",
-          size: 120,
-          highlightStrokeColor: "blue"
-        },
-        link: {
-          highlightColor: "lightblue"
-        }
-      };
+const Words = () => {
+  const [data, setData] = useState({ nodes: [{ id: 0 }], links: [] });
 
-      const reactRef = this;
-      const onDoubleClickNode = function(nodeId) {
-        alert(`onDoubleClickNode node ${nodeId}`);
-        
-        // let modData = { ...reactRef.state.data };
-        // let selectNode = modData.nodes.filter(item => {
-        //   return item.id === nodeId;
-        // });
-        // selectNode.forEach(item => {
-        //   if (item.color && item.color === "red") item.color = "blue";
-        //   else item.color = "red";
-        // });
-        // reactRef.setState({ data: modData });
-      };
+  useEffect(() => {
+    setInterval(() => {
+      setData(({ nodes, links }) => {
+        const id = nodes.length;
+        return {
+          nodes: [...nodes, { id }],
+          links: [...links, { source: id, target: Math.round(Math.random() * (id-1)) }]
+        };
+      });
+    }, 1000);
+  }, []);
 
-      const onClickNode = (nodeId) => {
-          alert(`Clicked node ${nodeId}`);
-      };
-      
-      const onClickLink = (source, target) => {
-          alert(`Clicked link between ${source} and ${target}`);
-      };
+  return (<div><h1>Hello Words</h1>
+    <ForceGraph3D
+      graphData={data}
+      backgroundColor="#000000"
+      nodeColor="#FFFFFF"      
+      linkWidth={1} 
+    />
+  </div>);
+};
 
-      const onClickGraph = (x, y) => {
-          alert(`Clicked canvas ${x}:${y}`);
-      };      
-  
-      return (
-        <div className="App">
-          <h1>Hello Words</h1>
-          <Graph
-            id="graph-id" // id is mandatory, if no id is defined rd3g will throw an error
-            data={this.state.data}
-            config={myConfig}
-            onDoubleClickNode={onDoubleClickNode}
-            onClickGraph={onClickGraph}
-            onClickNode={onClickNode}
-            onClickLink={onClickLink}
-          />
-        </div>
-      );
-    }
-  }
-  export default Words;
-
-  
-
-// const Words = ({ bg, setBg }) => {
-
-//     // Graph data
-//     const data = {
-//         nodes: [{ id: "Harry" }, { id: "Sally" }, { id: "Alice" }],
-//         links: [
-//             { source: "Harry", target: "Sally" },
-//             { source: "Harry", target: "Alice" },
-//         ],
-//     };
-    
-//     // Graph configuration
-//     const myConfig = {
-//         nodeHighlightBehavior: true,
-//         node: {
-//         color: "lightgreen",
-//         size: 120,
-//             highlightStrokeColor: "blue",
-//         },
-//         link: {
-//             highlightColor: "lightblue",
-//         },
-//     };
-    
-//     // Node click handler
-//     const onClickNode = (nodeId) => {
-//         alert(`Clicked node ${nodeId}`);
-//     };
-    
-//     // Link click handler
-//     const onClickLink = (source, target) => {
-//         alert(`Clicked link between ${source} and ${target}`);
-//     };
-
-//     const onClickGraph = (x, y) => {
-//         alert(`Clicked canvas ${x}:${y}`);
-//     };
-
-//     return (
-//         <div>
-//             <h1>
-//                 words
-//                 <Graph
-//                     id="graph-id" // id is mandatory
-//                     data={data}
-//                     config={myConfig}
-//                     onClickGraph={onClickGraph}
-//                     onClickNode={onClickNode}
-//                     onClickLink={onClickLink}
-//                 />
-//             </h1>
-//         </div>
-//     );
-// };
-
-// export default Words;
+export default Words;

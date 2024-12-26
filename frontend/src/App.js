@@ -103,7 +103,7 @@ function App() {
         <Routes className="Nav">
           <Route exact path="/" element={<Logs/>} />
           <Route path="/steps" element={<Steps/>} />
-          <Route path="/words" element={<Words bg={bg} setBg={setBg}/>} />
+          <Route path="/words" element={<Words/>} />
           <Route path="/blank" element={<Blank/>} />
           {/* <Route path="/contact" element={<Сontact />} /> */}
         </Routes>
