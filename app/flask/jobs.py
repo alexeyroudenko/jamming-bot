@@ -8,6 +8,44 @@ import time
 # import spacy
 
 
+def analyze_text(text):
+    words = []
+    hrases = []
+    import spacy
+    nlp = spacy.load("en_core_web_sm")
+    doc = nlp(text)
+    query = nlp("Jammingbot")
+    similarities = {}
+    for token in doc:
+        if token.has_vector and query.has_vector:
+            similarity = query.similarity(token)
+            if similarity > 0:  # Фильтрация значений, близких к нулю
+                similarities[token.text] = similarity
+    
+    sorted_similarities = sorted(similarities.items(), 
+                                key=lambda x: x[1], 
+                                reverse=True)   
+                
+    # self_job.meta['sorted_similarities'] = sorted_similarities
+    # print(f"similarity сwith'{query.text}':")
+    for word, similarity in sorted_similarities[0:13]:
+        #print(f"{word}: {similarity:.2f}")
+        words.append(word)        
+
+    #
+    # Analyze noun hrases
+    #
+    import spacy
+    nlp = spacy.load("en_core_web_lg")
+    doc = nlp(text)
+    noun_hrases =  [chunk.text for chunk in doc.noun_chunks]            
+    for i in noun_hrases[0:13]:
+        hrases.append(i)
+            
+    return words, hrases
+                
+
+
 # the timeout parameter specifies how long a job may take
 # to execute before it is aborted and regardes as failed
 # the result_ttl parameter specifies how long (in seconds)
@@ -73,6 +111,16 @@ def remove_special_characters(text):
     clean_text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
     return clean_text
 
+
+# def write_data(array, filename):
+#     r = array
+#     if len(r) > 0:
+#         with open(filename, 'a') as file:            
+#             for word in r:
+#                 woord = (str(word['text']).strip().replace("\n", " ").replace("\r", " ").replace("\t", ""))[0:64]
+#                 if not woord.isdigit() and len(woord)>1:
+#                     file.write(f"{step['step']}|{word['type']}|{woord}\n")
+
 #
 #
 #  1. STEP
@@ -116,17 +164,24 @@ def dostep(step):
     
     text_out = remove_html_tags(text_out)
     text_out = remove_special_characters(text_out)
+    
+    text = text_out[0:2048]
+    
     #
-    # semantic analyze
+    # semantic analyze 1
     #            
     import json
     import requests
     url = "http://spacyapi/ent"
     headers = {'content-type': 'application/json'}
-    d = {'text': text_out[0:2048] , 'model': 'en_core_web_md'}
+    d = {'text': text , 'model': 'en_core_web_md'}
     response = requests.post(url, data=json.dumps(d), headers=headers)
     r = response.json()
     
+    #
+    # semantic analyze 2
+    #
+    words, hrases = analyze_text(text)
 
     #
     # write to file
@@ -141,24 +196,31 @@ def dostep(step):
                 if not woord.isdigit() and len(woord)>1:
                     file.write(f"{step['step']}|{word['type']}|{woord}\n")
                 
-
     
+    from flask import jsonify
+    with open(f'data/txt/{step["step"].zfill(4)}_words.json', 'w') as file:
+        file.write(json.dumps(words))
 
-
+    with open(f'data/txt/{step["step"].zfill(4)}_hrases.json', 'w') as file:
+        file.write(json.dumps(hrases))
+                
     self_job.meta['progress'] = {
         'num_iterations': 3,
         'iteration': 3,
         'percent': 100
     }    
     self_job.save_meta()
-    return {    "step": step['step'],             
-                "code": step['status_code'], 
-                "ip": ip, 
-                "url": step['current_url'],                
-                "src_url": step['src_url'],
-                "semantic": r,
-                "text":text_out[0:1024] + "..."
-            }
+    return {    
+            "step": step['step'],             
+            "code": step['status_code'], 
+            "ip": ip, 
+            "url": step['current_url'],                
+            "src_url": step['src_url'],
+            "semantic": r,
+            "semantic_words": words,
+            "semantic_hrases": hrases,
+            "text":text_out[0:1024] + "..."
+        }
 
 
 #

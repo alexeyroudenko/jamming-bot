@@ -113,27 +113,26 @@ const Words = () => {
       let struct_text = data['struct_text']
       let text = data['text']
       let words = data['words']
-      let semantic = data['semantic']
+      let semantic_words = data['semantic_words']
       
-      console.log("semantic", semantic)      
-      if (msg['semantic']) {
+      console.log("semantic_words", semantic_words)      
+      if (msg['semantic_words']) {
 
         count = count + 1;
         if (count % 7 === 6) {
           rotationSpeed += .3
         }
 
-        msg['semantic'].slice(0, 2).forEach(
+        msg['semantic_words'].slice(0, 5).forEach (
 
           (element) => { 
-            console.log(element['type'] + " : " + element['text']);
-            let type = element['type'];
-            let text = element['text'];
+            console.log(element);
+            let text = element;
 
             setData(({ nodes, links }) => {
               const id = nodes.length;
               return {
-                nodes: [...nodes, { id, name: `${type} ${text}` }],
+                nodes: [...nodes, { id, name: `${text}` }],
                 links: [...links, { source: id, target: Math.round(Math.random() * (id - 1)) }]
               };
             });            

@@ -50,6 +50,28 @@ cors = CORS(app)
 
 
 
+
+
+#
+# words cloud
+# TODO: Move do database
+#
+words_stat = {"jammingbot":1}
+def calc_counts(words):
+    for word in words:
+        if word not in words_stat.keys():
+            words_stat[word] = 1
+        else:
+            words_stat[word] = words_stat[word]+1
+    app.logger.info(f"words_stat: --------- {str(words_stat)}")
+    return words_stat
+                    
+    
+    
+    
+    
+
+
 def getConfig():
     if not redis.get('value'):
         redis.set('value', 0.5)
@@ -419,7 +441,7 @@ def step():
             data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"       
             
             
-            app.logger.info(f"step {data.keys()}") 
+            # app.logger.info(f"step {data.keys()}") 
             job = jobs.dostep.delay(data)
             while True:
                 time.sleep(0.01)
@@ -427,7 +449,13 @@ def step():
                 if job.is_finished:                    
                     struct_text = job.result['text']                        
                     data['struct_text'] = struct_text
-                    data['semantic'] = job.result['semantic']                
+                    data['semantic'] = job.result['semantic']
+                    data['semantic_words'] = job.result['semantic_words']                    
+                    semantic_words_array = data['semantic_words']                
+                                        
+                    # words_cloud = calc_counts(semantic_words_array)
+                    # data['words_cloud'] = words_cloud
+                                        
                     socketio.emit('step', data)
                     break          
         
