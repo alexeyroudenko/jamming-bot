@@ -213,6 +213,7 @@ def all_jobs():
                     'status_string': "ok" if str(job.result['code']) == "200" else "error",
                     'url': job.result['url'],
                     'src_url': job.result['src_url'],
+                    'semantic': job.result['semantic'],
                         # 'state': job.get_status(),
                         # 'progress': job.meta.get('progress'),
                         # 'step': job.meta.get('step'),
@@ -333,12 +334,37 @@ def add_analyze_job():
     #     }
     # }
     status_code = 200
-    return redirect('/queue/')
+    response_object = {"message": "hello"}        
+    return jsonify(response_object), status_code
 
 
 
+@app.route("/spacy/", methods=['GET', 'POST'])
+def spacy():    
+    """ Semantic """    
+    if request.method == 'POST':        
+        data = request.form        
+        text = data['text']        
+        job = jobs.analyze.delay(text)
+        app.logger.info("added analyze job")
+    else:
+        app.logger.info("hello from spacy")        
+        message_text = "Jammingbot is a fantasy about a post-apocalyptic future."
 
-
+        import json
+        import requests
+        url = "http://spacyapi/ent"
+        headers = {'content-type': 'application/json'}
+        d = {'text': message_text, 'model': 'en_core_web_md'}
+        response = requests.post(url, data=json.dumps(d), headers=headers)
+        r = response.json()
+        
+        
+                     
+        
+    status_code = 200    
+    response_object = {"message": r}
+    return jsonify(response_object), status_code
 
 
 # '''
@@ -380,7 +406,8 @@ def step():
                 job.refresh()  
                 if job.is_finished:                    
                     struct_text = job.result['text']                        
-                    data['struct_text'] = struct_text                
+                    data['struct_text'] = struct_text
+                    data['semantic'] = job.result['semantic']                
                     socketio.emit('step', data)
                     break          
         

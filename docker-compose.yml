@@ -5,7 +5,9 @@ services:
       dockerfile: docker/bot/Dockerfile
     container_name: jamming-bot
     ports:
+      - "5005:5005"
       - "5007:5007"
+      - "8001:8001"
     env_file:
       - .env      
     volumes:
@@ -16,7 +18,9 @@ services:
         source: ./data
         target: /app/data 
     depends_on:
-      - redis    
+      - redis  
+    networks:
+      - app_network         
 
   flask:
     build: 
@@ -37,6 +41,8 @@ services:
         target: /app/data 
     depends_on:
       - redis
+    networks:
+      - app_network       
 
   worker:    
     build: 
@@ -54,6 +60,28 @@ services:
         target: /app/data 
     depends_on:
       - redis
+    networks:
+      - app_network       
+
+  node_red:
+    image: "nodered/node-red:latest"
+    ports:
+      - "1880:1880"
+    networks:
+      - app_network
+    volumes:
+      - node_red_data:/data
+    environment:
+      - NODE_OPTIONS=--max-old-space-size=256
+    restart: unless-stopped
+  
+  spacyapi:
+    image: bbieniek/spacyapi:en_v3
+    ports:
+      - "127.0.0.1:8080:80"
+    restart: always
+    networks:
+      - app_network              
 
 # uncomment to have a another worker
   # worker2:
@@ -88,6 +116,8 @@ services:
     depends_on:
       - flask
       - redis
+    networks:
+      - app_network 
 
   frontend:
     build: ./frontend
@@ -96,6 +126,8 @@ services:
       - /app/node_modules
     ports:
       - "3000:3000"
+    networks:
+      - app_network 
 
   redis: 
     image: redislabs/redismod
@@ -103,9 +135,16 @@ services:
     ports:
       - '6379:6379'
     volumes:
-    - /data/redis:/data      
+    - /data/redis:/data
+    networks:
+      - app_network      
 
 volumes:
+  node_red_data:
   data:
     external: true
   app:
+
+networks:
+  app_network:
+    driver: bridge

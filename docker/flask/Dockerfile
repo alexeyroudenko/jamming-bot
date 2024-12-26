@@ -26,7 +26,7 @@ RUN pip install gunicorn==19.9.0
 # RUN pip install "click>=7,<8"
 RUN pip install click
 RUN pip install sentry-sdk[flask]
-
+RUN pip install requests
 
 # RUN pip install -U spacy
 # RUN python -m spacy download en_core_web_sm

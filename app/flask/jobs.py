@@ -63,6 +63,16 @@ def pulse():
     return True
     
 
+import re
+
+def remove_html_tags(text):
+    clean_text = re.sub(r'<.*?>', '', text)
+    return clean_text
+
+def remove_special_characters(text):
+    clean_text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
+    return clean_text
+
 #
 #
 #  1. STEP
@@ -71,11 +81,10 @@ def pulse():
 def dostep(step):    
     self_job = get_current_job()    
     self_job.meta['progress'] = {
-        'num_iterations': 2,
-        'iteration': 2,
-        'percent': 100
-    }            
-    
+        'num_iterations': 3,
+        'iteration': 1,
+        'percent': 33
+    }                
     self_job.meta['type'] = "step"        
     self_job.meta['url'] = step['current_url']
 
@@ -83,26 +92,71 @@ def dostep(step):
     if "ip" in step.keys():     
         ip = step['ip']        
     self_job.meta['ip'] = ip
+    self_job.save_meta()
     
     text_out = ""    
     if "html" in step.keys():        
         html = step['html'].encode('utf-8')
         from bs4 import BeautifulSoup
         soup = BeautifulSoup(html, "html.parser", from_encoding="utf-8")           
-        # headings = [h.get_text() for h in soup.find_all(['h1', 'h2', 'h3'])]
+        headings = [h.get_text() for h in soup.find_all(['h1', 'h2', 'h3'])]
         paragraphs = [p.get_text() for p in soup.find_all('p')]
-        # head = " ".join(headings)
-        text_out = " ".join(paragraphs)
+        head = " ".join(headings)
+        text_out = head + " ".join(paragraphs)
         # text_out = html
         self_job.meta['text'] = text_out
+        
+    self_job.meta['progress'] = {
+        'num_iterations': 3,
+        'iteration': 2,
+        'percent': 66
+    }
+    self_job.save_meta()
+                
     
+    text_out = remove_html_tags(text_out)
+    text_out = remove_special_characters(text_out)
+    #
+    # semantic analyze
+    #            
+    import json
+    import requests
+    url = "http://spacyapi/ent"
+    headers = {'content-type': 'application/json'}
+    d = {'text': text_out[0:2048] , 'model': 'en_core_web_md'}
+    response = requests.post(url, data=json.dumps(d), headers=headers)
+    r = response.json()
     
+
+    #
+    # write to file
+    #
+    filename = f'data/semantic.txt'    
+    self_job.meta['filename'] = filename
+    self_job.save_meta()        
+    if len(r) > 0:
+        with open(filename, 'a') as file:            
+            for word in r:
+                woord = (str(word['text']).strip().replace("\n", " ").replace("\r", " ").replace("\t", ""))[0:64]
+                if not woord.isdigit() and len(woord)>1:
+                    file.write(f"{step['step']}|{word['type']}|{woord}\n")
+                
+
+    
+
+
+    self_job.meta['progress'] = {
+        'num_iterations': 3,
+        'iteration': 3,
+        'percent': 100
+    }    
     self_job.save_meta()
     return {    "step": step['step'],             
                 "code": step['status_code'], 
                 "ip": ip, 
                 "url": step['current_url'],                
                 "src_url": step['src_url'],
+                "semantic": r,
                 "text":text_out[0:1024] + "..."
             }
 
