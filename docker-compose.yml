@@ -81,6 +81,14 @@ services:
       - "127.0.0.1:8080:80"
     restart: always
     networks:
+      - app_network
+
+  screenshoter:
+    image: mingalevme/screenshoter
+    ports:
+      - "5020:8080"
+    restart: always
+    networks:
       - app_network              
 
 # uncomment to have a another worker

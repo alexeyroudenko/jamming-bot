@@ -359,12 +359,32 @@ def spacy():
         response = requests.post(url, data=json.dumps(d), headers=headers)
         r = response.json()
         
+
+
+@app.route("/screenshoter/", methods=['GET', 'POST'])
+def screenshoter():    
+    """ Semantic """    
+    if request.method == 'POST':        
+        data = request.form        
+        text = data['text']        
+        job = jobs.analyze.delay(text)
+        app.logger.info("added analyze job")
+    else:
+        app.logger.info("hello from spacy")        
+        message_text = "Jammingbot is a fantasy about a post-apocalyptic future."
+
+        import json
+        import requests
+        # url = "http://screenshoter:8080/take"
+        url = "http://screenshoter:8080/take?url=https%3A%2F%2Fhub.docker.com%2Fr%2Fmingalevme%2Fscreenshoter%2F"
+        response = requests.get(url)
+        with open("response.jpg", "wb") as f:
+            f.write(response.content)
         
                      
         
     status_code = 200    
-    response_object = {"message": r}
-    return jsonify(response_object), status_code
+    return "hello", status_code
 
 
 # '''
