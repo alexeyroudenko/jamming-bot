@@ -3,6 +3,7 @@
 //
 import { ForceGraph3D } from 'react-force-graph';
 import React, { useState, useEffect } from 'react';
+import '../App.css';
 
 const Words = () => {
   const [data, setData] = useState({ nodes: [{ id: 0 }], links: [] });
@@ -13,20 +14,23 @@ const Words = () => {
         const id = nodes.length;
         return {
           nodes: [...nodes, { id }],
-          links: [...links, { source: id, target: Math.round(Math.random() * (id-1)) }]
+          links: [...links, { source: id, target: Math.round(Math.random() * (id - 1)) }]
         };
       });
-    }, 1000);
+    }, 200);
   }, []);
 
-  return (<div><h1>Hello Words</h1>
-    <ForceGraph3D
-      graphData={data}
-      backgroundColor="#000000"
-      nodeColor="#FFFFFF"      
-      linkWidth={1} 
-    />
-  </div>);
+  return (
+    <div className="Graph3d">
+      <ForceGraph3D
+        graphData={data}
+        backgroundColor="#000000"
+        nodeColor={() => 'white'} // Устанавливаем цвет узлов в белый
+        linkColor="#FFFFFF"
+        linkWidth={1}
+      />
+    </div>
+  );
 };
 
 export default Words;

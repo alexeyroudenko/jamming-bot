@@ -108,6 +108,28 @@ h1 {
   overflow: hidden;
 }
 
+.App {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  padding: 0px;
+  margin: 0px;
+}
+.Graph3d {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  padding: 0px;
+  margin: 0px;
+  overflow: hidden;
+}
+
 .events {
   /* border: 1px solid #ff0000; */
   width: 45%;
