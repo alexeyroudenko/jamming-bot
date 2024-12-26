@@ -201,8 +201,7 @@ def all_jobs():
     joblist = get_all_jobs()    
     l = []
     for job in list(joblist):
-        if job.meta.get('type'):
-            
+        if job.meta.get('type'):            
             app.logger.info(f"job.result {job.result}") 
             job_type = job.meta.get('type')
             if job_type == "step":
@@ -223,6 +222,33 @@ def all_jobs():
                     })
     return jsonify(l)
 
+# endpoint for getting a job
+@app.route("/api/step/<step_num>", methods=["GET"])
+def get_step(step_num):
+    joblist = get_all_jobs()    
+    l = []
+    for job in list(joblist):
+        if job.meta.get('type'):            
+            app.logger.info(f"job.result {job.result}") 
+            job_type = job.meta.get('type')
+            if job_type == "step":
+                if int(job.result['step']) == int(step_num):
+                    l.append({
+                        'id': job.get_id(),
+                        'type': job.meta.get('type'), 
+                        'step': int(job.result['step']),
+                        'status_code': int(job.result['code']),
+                        'status_string': "ok" if str(job.result['code']) == "200" else "error",
+                        'url': job.result['url'],
+                        'src_url': job.result['src_url'],
+                            # 'state': job.get_status(),
+                            # 'progress': job.meta.get('progress'),
+                            # 'step': job.meta.get('step'),
+                            # 'username': job.meta.get('step')['current_url'],
+                            # 'r': job.result['words_count'],
+                        'result': job.result
+                        })
+    return jsonify(l)
 
 # endpoint for adding job
 @app.route("/add_wait_job/<num_iterations>", methods=["GET"])
