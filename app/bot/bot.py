@@ -28,9 +28,6 @@ import tldextract
 
 config_file = "bot.yaml"
 
-
-
-
 import sentry_sdk
 sentry_sdk.init(
     dsn=os.getenv('SHHH_SENTRY_URL'),
@@ -390,7 +387,25 @@ class NetSpider():
                         
             if valid:
                 
-                res = get_tld(current_url, as_object=True)
+                import tld 
+                try:
+                    res = get_tld(current_url, as_object=True)
+                except tld.exceptions.TldBadUrl: 
+                    logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t bad url")
+                    self.notify_about_eventp("error_retrieve_url", {})                    
+                    step_data = { "step":self.step_number, "src_url": src_url, "current_url": current_url} 
+                    step_data["status_code"] = "000"
+                    self.notify_about_step(step_data)
+                    return
+                
+                except tld.exceptions.TldDomainNotFound:
+                    logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t domain not found")
+                    self.notify_about_eventp("error_retrieve_url", {})                    
+                    step_data = {"step":self.step_number, "src_url": src_url, "current_url": current_url} 
+                    step_data["status_code"] = "000"
+                    self.notify_about_step(step_data)
+                    return
+
                 current_base_domain = res.fld
                 current_base_domain = get_second_level_domain(current_base_domain)
                 
@@ -552,8 +567,7 @@ class NetSpider():
                     # logging.error(f"exception step 1 {e1} line:{e1.__traceback__.tb_lineno}")
                     # print("Exception in step 1:", e1, traceback.print_exc())                    
                     logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t line {e1.__traceback__.tb_lineno}")
-                    self.notify_about_eventp("error_retrieve_url", {})
-                    
+                    self.notify_about_eventp("error_retrieve_url", {})                    
                     step_data = {
                         "step":self.step_number, 
                         "src_url": src_url, 
@@ -627,10 +641,11 @@ async def main():
                        config['resolve_coords'], 
                        count_per_domain = config['count_per_domain'])
     spider.resume_at_restart = config['resume_at_restart']
-
+    spider.is_active = config['is_active']
+    
     await spider.start(config['start_url'], config['src_url'])
     
-    spider.is_active = config['is_active']
+    
         
     try:
         
