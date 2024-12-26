@@ -86,7 +86,6 @@ export default class Logs extends React.Component {
         this.setState({events: []})
       } else {
         let data = this.state.events
-        
         data.push(msg)
         this.setState({events: data})
       }
@@ -118,7 +117,7 @@ export default class Logs extends React.Component {
       return <p>Error: {this.error.message}</p>;
     }
     else return (
-      <div>
+      <div className="Graph3d">
         <h1>logs</h1>
         <div className="logs">
           {!this.state.logs ? null : this.state.logs.slice().reverse().map((step, index) => (

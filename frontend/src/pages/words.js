@@ -3,7 +3,7 @@
 //
 import { ForceGraph3D } from 'react-force-graph';
 import * as THREE from 'three';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 import io from "socket.io-client"
 import { Url } from '../constants'
@@ -11,21 +11,71 @@ import '../App.css';
 
 export const socket = io(Url, { transports: ["websocket", "polling"] })
 
+let rotationSpeed = .6; // Скорость вращения камеры
+let count = 0;
+let angle = 0;
+
+
+
 
 const Words = () => {
   const [data, setData] = useState({ nodes: [{ id: 0 }], links: [] });
-    
+  const graphRef = useRef();
+  const baseRotation = 0.001;
+
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (graphRef.current) {
+        const graph = graphRef.current;
+        graph.renderer().setSize(window.innerWidth, window.innerHeight);
+        graph.camera().aspect = window.innerWidth / window.innerHeight;
+        graph.camera().updateProjectionMatrix();
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    let animationFrameId;
+    const animateCamera = () => {      
+      if (graphRef.current) {
+        rotationSpeed = rotationSpeed * 0.94; // / count;         
+        const distance = 300; // Радиус вращения камеры
+        angle = angle + rotationSpeed * 0.1 + baseRotation;
+        const camera = graphRef.current.camera();
+        camera.position.x = Math.sin(angle) * distance;
+        camera.position.z = Math.cos(angle) * distance;
+        camera.lookAt(0, 0, 0); // Фокусируем камеру на центре графа
+        camera.updateProjectionMatrix();
+      }
+
+      animationFrameId = requestAnimationFrame(animateCamera);
+    };
+    animateCamera();
+    return () => cancelAnimationFrame(animationFrameId); // Очищаем анимацию при размонтировании
+  }, []);
+
+
   useEffect(() => {
 
     // setInterval(() => {
     //   setData(({ nodes, links }) => {
     //     const id = nodes.length;
+    //     count = count + 1;
+    //     if (count % 7 === 6) {
+    //       rotationSpeed += 1.0
+    //     }
     //     return {
     //       nodes: [...nodes, { id }],
     //       links: [...links, { source: id, target: Math.round(Math.random() * (id - 1)) }]
     //     };
     //   });
-    // }, 5000);
+    // }, 2000);
 
     let counter = 0
     let start_time = 0    
@@ -67,11 +117,15 @@ const Words = () => {
       
       console.log("semantic", semantic)      
       if (msg['semantic']) {
-        msg['semantic'].forEach(
+
+        count = count + 1;
+        if (count % 7 === 6) {
+          rotationSpeed += .3
+        }
+
+        msg['semantic'].slice(0, 2).forEach(
+
           (element) => { 
-          
-          
-          
             console.log(element['type'] + " : " + element['text']);
             let type = element['type'];
             let text = element['text'];
@@ -82,22 +136,21 @@ const Words = () => {
                 nodes: [...nodes, { id, name: `${type} ${text}` }],
                 links: [...links, { source: id, target: Math.round(Math.random() * (id - 1)) }]
               };
-            });
+            });            
+                        
 
-          
-          
           }
         );
       }
 
       
-      setData(({ nodes, links }) => {
-        const id = nodes.length;
-        return {
-          nodes: [...nodes, { id, name: `${step} ${url}` }],
-          links: [...links, { source: id, target: Math.round(Math.random() * (id - 1)) }]
-        };
-      });
+      // setData(({ nodes, links }) => {
+      //   const id = nodes.length;
+      //   return {
+      //     nodes: [...nodes, { id, name: `${step} ${url}` }],
+      //     links: [...links, { source: id, target: Math.round(Math.random() * (id - 1)) }]
+      //   };
+      // });
 
       
       //console.log('step: ', step, url);
@@ -164,13 +217,12 @@ const Words = () => {
   };  
 
   return (
-    <div className="Graph3d">
+    <div className="Graph3d" style={{ width: '100%', height: '100%' }}>
       <ForceGraph3D
+        ref={graphRef}
         graphData={data}
         backgroundColor="#000000"
         nodeColor={() => 'white'} // Устанавливаем цвет узлов в белый
-        // linkColor="#FFFFFF"
-        // linkWidth={1}
         nodeThreeObject={createNodeLabel}
         linkThreeObjectExtend={true} // Используем кастомный объект
         linkThreeObject={() => {

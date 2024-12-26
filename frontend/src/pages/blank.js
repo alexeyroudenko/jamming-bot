@@ -4,7 +4,7 @@ import React from "react";
 
 const Blank = () => {
     return (
-        <div style={{width: "100%", height: "100%"}}>
+        <div  className="Graph3d" style={{width: "100%", height: "100%"}}>
             <h1>
                 blank (steps) page
             </h1>
