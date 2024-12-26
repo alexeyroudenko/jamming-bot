@@ -102,7 +102,6 @@ function App() {
         <Navbar/>
         <Routes className="Nav">
           <Route exact path="/" element={<Logs/>} />
-          <Route path="/words" element={<Words bg={bg} setBg={setBg}/>} />
           <Route path="/steps" element={<Steps/>} />
           <Route path="/words" element={<Words bg={bg} setBg={setBg}/>} />
           <Route path="/blank" element={<Blank/>} />

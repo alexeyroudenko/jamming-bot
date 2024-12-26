@@ -61,12 +61,12 @@ export default class CommunityDetection extends React.Component {
         fetch(Url + "/api/steps/")
             .then((res) => res.json())
             .then((result) => {
-                console.log("firstRequest result:", result);                
+                console.log("firstRequest result:");                
                 var edges = []
                 var nodes = []
                 var new_nodes = []                
                 result.forEach((node) => {
-                    console.log("------------------------ ", node)
+                    // console.log("------------------------ ", node)
                     
                     let url = node.url;
                     let src_url = node.src_url;
@@ -82,7 +82,7 @@ export default class CommunityDetection extends React.Component {
                     if (type1 === "boolean") {
                         
                         let new_node = {
-                            "id":src_url,
+                            "id":url,
                             "step":step,
                             "url":url,
                             "src_url":src_url
@@ -94,14 +94,14 @@ export default class CommunityDetection extends React.Component {
                             // console.log(new_nodes.length)
                             new_nodes.push(new_node)                            
                             nodes.push(new_node)
-                            // console.log("new_node", new_node)
+                            console.log("new_node", new_node)
 
-                            var edge = {
-                                id: src_url + "-" + node.url,
-                                source: src_url,
-                                target: node.url,
-                                r: 10
-                            }
+                            // var edge = {
+                            //     id: src_url + "-" + node.url,
+                            //     source: src_url,
+                            //     target: node.url,
+                            //     r: 10
+                            // }
                             
                             // console.log("new_edge?", edge)
                             
@@ -156,7 +156,7 @@ export default class CommunityDetection extends React.Component {
     componentDidMount() 
     {
         this.initializeGraph(this.state.nodes, this.state.links)
-        this.firstRequest();
+        // this.firstRequest();
 
         this.socket.on("connect", () => {
             this.socket.emit('consumer')
@@ -175,43 +175,45 @@ export default class CommunityDetection extends React.Component {
         //     this.transformData(dataa) 
         // });
 
-        this.socket.on("step", (msg) => {            
-            // console.log('step: ', msg);
-            msg.id = msg.current_url;
+        this.socket.on("step", (msg) => { 
+            console.log('step: ', msg, msg.data);            
+            // msg.id = msg.current_url;
             var data = {};
-
             data.vertices = [msg]
-            data.edges = [{
-                id: this.lastAdded + "-" + msg.current_url,
-                source: msg.current_url,
-                target: this.lastAdded,
-                r: 10
-            }]
+            data.edges = [{}]
+            
+            // data.edges = [{
+            //     id: this.lastAdded + "-" + msg.current_url,
+            //     source: msg.current_url,
+            //     target: this.lastAdded,
+            //     r: 10
+            // }]
 
             var currentNodes = this.state.nodes
             var newNodes = this.transformData(data).nodes
             var updatedNodes = currentNodes.concat(newNodes)
-            var currentLinks = this.state.links
-            var newLinks = this.transformData(data).links
 
+            // var currentLinks = this.state.links
+            // var newLinks = this.transformData(data).links
             // console.log("updatedNodes", updatedNodes)
             // filter new edges to have only the ones that have source and target node
-            var filteredLinks = newLinks.filter((link) => {
-                return (
-                    updatedNodes.find((node) => node.id === link.source) &&
-                    updatedNodes.find((node) => node.id === link.target)
-                );
-            })
+            // var filteredLinks = newLinks.filter((link) => {
+            //     return (
+            //         updatedNodes.find((node) => node.id === link.source) &&
+            //         updatedNodes.find((node) => node.id === link.target)
+            //     );
+            // })
 
             // get all edges (old + new)
-            var updatedLinks = currentLinks.concat(filteredLinks)
+            // var updatedLinks = currentLinks.concat(filteredLinks)
             // set source and target to appropriate node -> they exists since we filtered the edges
-            updatedLinks.forEach((link) => {
-                link.source = this.findNode(link.source, updatedNodes)
-                link.target = this.findNode(link.target, updatedNodes)
-            })
+            // updatedLinks.forEach((link) => {
+                // link.source = this.findNode(link.source, updatedNodes)
+                // link.target = this.findNode(link.target, updatedNodes)
+            // })
             // update state with new nodes and edges
-            this.setState({ nodes: updatedNodes, links: updatedLinks, url: msg.current_url})
+            // this.setState({ nodes: updatedNodes, links: updatedLinks, url: msg.current_url})
+            this.setState({ nodes: updatedNodes })
         });
 
     }
@@ -290,10 +292,8 @@ export default class CommunityDetection extends React.Component {
             // .call(zoom.translateTo, 0.5 * width, 0.5 * height)
             // .on("zoom", this.handleZoom)
         
-        this.initZoom(zoom)
-        
-        d3.select("svg")
-            .call(zoom)
+        this.initZoom(zoom)        
+        d3.select("svg").call(zoom)
 
         // initialize tooltip
         tooltip = this.createTooltip()
@@ -311,7 +311,7 @@ export default class CommunityDetection extends React.Component {
             // .force("charge", d3.forceManyBody().strength(-5))
             // .force("collide", d3.forceCollide().radius(40.2)) 
             .force("center", d3.forceCenter(width / 2, height / 2))
-            .force('link', d3.forceLink(links).id(function (n) { return n.id; }).strength(function (d) {return weightScale(d.weight)}).distance(20))
+            // .force('link', d3.forceLink(links).id(function (n) { return n.id; }).strength(function (d) {return weightScale(d.weight)}).distance(20))
             // .force("radial", d3.forceRadial(340, 0/2, 0/2));
 
         // var ff = d3.force();
@@ -328,16 +328,16 @@ export default class CommunityDetection extends React.Component {
 
         node = svg.append("g")
             .selectAll("circle")
-            .data(nodes)
+            .data(this.state.nodes)
             .join("circle")
-            .attr("r", function (d) {return 20;})
+            .attr("r", function (d) {return 40;})
             .attr("class", "node")
-            .attr('fill', function (d) {
-                if (!clusterColors.hasOwnProperty(d.cluster)) {
-                    clusterColors[d.cluster] = "#" + Math.floor(Math.random() * 16777215).toString(16)
-                }
-                return clusterColors[d.cluster]
-            })
+            // .attr('fill', function (d) {
+            //     if (!clusterColors.hasOwnProperty(d.cluster)) {
+            //         clusterColors[d.cluster] = "#" + Math.floor(Math.random() * 16777215).toString(16)
+            //     }
+            //     return clusterColors[d.cluster]
+            // })
             .on("mouseover", function (d) {
                 tooltip.text(d.srcElement["__data__"]["username"])
                 tooltip.style("visibility", "visible")
@@ -366,12 +366,12 @@ export default class CommunityDetection extends React.Component {
         console.log("updateGraph")
 
         // Update existing nodes
-        node.selectAll('circle').style('fill', function (d) {
-            if (!clusterColors.hasOwnProperty(d.cluster)) {
-                clusterColors[d.cluster] = "#ff0000"; // + Math.floor(Math.random() * 16777215).toString(16);
-            }
-            return clusterColors[d.cluster];
-        });
+        // node.selectAll('circle').style('fill', function (d) {
+        //     if (!clusterColors.hasOwnProperty(d.cluster)) {
+        //         clusterColors[d.cluster] = Math.floor(Math.random() * 16777215).toString(16);
+        //     }
+        //     return clusterColors[d.cluster];
+        // });
 
         // Remove old nodes
         node.exit().remove();
@@ -381,8 +381,7 @@ export default class CommunityDetection extends React.Component {
         node = node
             .enter()
             .append('circle')
-            .attr("r", function (d) {
-                return 10;})
+            .attr("r", function (d) {return 27;})
             .attr('fill', function (d) {
                 if (!clusterColors.hasOwnProperty(d.cluster)) {
                     // clusterColors[d.cluster] = "#" + Math.floor(Math.random() * 16777215).toString(16)
@@ -421,6 +420,7 @@ export default class CommunityDetection extends React.Component {
                 .nodes(nodes)
                 .force('link', d3.forceLink(links).id(function (n) { return n.id; }).distance(50))
                 .force('charge', d3.forceManyBody())
+                .force('center', d3.forceCenter(width / 2, height / 2));
         } catch (err) {
             console.log('err', err);
         }
@@ -433,7 +433,7 @@ export default class CommunityDetection extends React.Component {
                 .attr('x2', (d) => d.target.x)
                 .attr('y2', (d) => d.target.y);
         });
-        simulation.alphaTarget(0.1).restart();
+        // simulation.alphaTarget(0.1).restart();
     }
 
     
@@ -442,14 +442,16 @@ export default class CommunityDetection extends React.Component {
         return (<div>
             <h1><code>{this.state.url}</code></h1>
             <p><code>nodes:{this.state.nodes.length}</code></p>
-            <svg ref={this.myReference}
+            <svg
+                className="svg" 
+                ref={this.myReference}
                 onMouseUp={this.handleClick}
                 style={{
                     height: "800",
                     width: "100%",
                     marginRight: "0px",
                     marginLeft: "0px",
-                    background: "#000000"
+                    background: "black"
                 }}></svg></div>
         );
     }

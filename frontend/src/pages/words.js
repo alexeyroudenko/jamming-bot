@@ -30,27 +30,45 @@ class Words extends Component {
           highlightColor: "lightblue"
         }
       };
+
       const reactRef = this;
       const onDoubleClickNode = function(nodeId) {
-        let modData = { ...reactRef.state.data };
-        let selectNode = modData.nodes.filter(item => {
-          return item.id === nodeId;
-        });
-        selectNode.forEach(item => {
-          if (item.color && item.color === "red") item.color = "blue";
-          else item.color = "red";
-        });
-        reactRef.setState({ data: modData });
+        alert(`onDoubleClickNode node ${nodeId}`);
+        
+        // let modData = { ...reactRef.state.data };
+        // let selectNode = modData.nodes.filter(item => {
+        //   return item.id === nodeId;
+        // });
+        // selectNode.forEach(item => {
+        //   if (item.color && item.color === "red") item.color = "blue";
+        //   else item.color = "red";
+        // });
+        // reactRef.setState({ data: modData });
       };
+
+      const onClickNode = (nodeId) => {
+          alert(`Clicked node ${nodeId}`);
+      };
+      
+      const onClickLink = (source, target) => {
+          alert(`Clicked link between ${source} and ${target}`);
+      };
+
+      const onClickGraph = (x, y) => {
+          alert(`Clicked canvas ${x}:${y}`);
+      };      
   
       return (
         <div className="App">
-          <h1>Hello CodeSandbox</h1>
+          <h1>Hello Words</h1>
           <Graph
             id="graph-id" // id is mandatory, if no id is defined rd3g will throw an error
             data={this.state.data}
             config={myConfig}
             onDoubleClickNode={onDoubleClickNode}
+            onClickGraph={onClickGraph}
+            onClickNode={onClickNode}
+            onClickLink={onClickLink}
           />
         </div>
       );

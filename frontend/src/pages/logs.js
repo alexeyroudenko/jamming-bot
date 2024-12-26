@@ -18,6 +18,8 @@ export default class Logs extends React.Component {
       error: false,
       events: [],
       logs: [],
+      semantics: [],
+      semantics_log: [],
       step: {},
       struct_text: "..."
     }
@@ -59,12 +61,23 @@ export default class Logs extends React.Component {
     this.socket.on("step", (msg) => {
       let data = this.state.logs
       data.push(msg)      
+      
+      let new_semantics = this.state.semantics_log;
+      if (msg['semantic']) {
+        msg['semantic'].forEach(
+          (element) => new_semantics.push(element['type'] + " : " + element['text'])
+        );
+      }
+      console.log("new_semantics", new_semantics)
+      
       this.setState({
         loaded: true, 
         logs: data,
         step: msg,
+        semantics_log:new_semantics,
         struct_text: msg['struct_text']
       })
+    
     })  
 
     this.socket.on("event", (msg) => {
@@ -73,6 +86,7 @@ export default class Logs extends React.Component {
         this.setState({events: []})
       } else {
         let data = this.state.events
+        
         data.push(msg)
         this.setState({events: data})
       }
@@ -134,6 +148,24 @@ export default class Logs extends React.Component {
             <li><code>{this.state.step['struct_text']}</code></li>
           </ul>
         </div>
+
+        <div className="semantic_log">
+        <ul>
+          {!this.state.semantics_log ? null : [].concat(this.state.semantics_log.slice().reverse()).slice(0, 32).map((step, index) => (
+              <li><code>{step}</code></li>
+          ))}
+        </ul>
+        </div>
+
+
+        {/* <div className="semantic">
+            {!this.state.step['semantic'] ? null : this.state.step['semantic'].slice().reverse().map((step, index) => (
+            <div key={index} className="item">
+              <code className={step['type']}>{step['type']} ::: {step['text']}</code>
+            </div>
+          ))}
+        </div> */}
+
 
       </div>
     )

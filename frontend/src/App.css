@@ -103,13 +103,18 @@ h1 {
 .logs {
   /* border: 1px solid #ff0000; */
   width: 45%;
+  height: 500px;
   float: left;
+  overflow: hidden;
 }
 
 .events {
   /* border: 1px solid #ff0000; */
   width: 45%;
   float: right;
+  position: absolute;
+  bottom:10%;
+  left:10%;  
 }
 
 .struct_text {
@@ -119,8 +124,30 @@ h1 {
   /* border: 1px solid #ff0000; */
   width: 45%;
   float: right;
-  font-size: 18px;
+  font-size: 12px;
 }
+
+.semantic {
+
+  /* border: 1px solid #ff0000; */
+  /* width: 25%; */
+  float: right;
+  font-size: 17px;
+}
+.semantic_log {
+  position: absolute;
+  top:10%;
+  right:10%;
+  /* position: absolute; */
+  /* border: 1px solid #ff0000; */
+  width: 25%;
+  height: 50%;
+  float: left;
+  font-size: 14px;
+  overflow: hidden;
+  }
+
+
 
 .struct_text ul, li {
   list-style-type: none;

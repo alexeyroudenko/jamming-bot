@@ -8661,7 +8661,7 @@ prompts@^2.0.1, prompts@^2.4.2:
     kleur "^3.0.3"
     sisteransi "^1.0.5"
 
-prop-types@^15.6.0, prop-types@^15.8.1:
+prop-types@^15.8.1:
   version "15.8.1"
   resolved "https://registry.yarnpkg.com/prop-types/-/prop-types-15.8.1.tgz#67d87bf1a694f48435cf332c24af10214a3140b5"
   integrity sha512-oj87CgZICdulUohogVAR7AjlC0327U4el4L6eAvOqCeudMDVU0NThNaV+b9Df4dXgSP1gXMTnPdhfe/2qDH5cg==
@@ -8758,12 +8758,10 @@ react-app-polyfill@^3.0.0:
     regenerator-runtime "^0.13.9"
     whatwg-fetch "^3.6.2"
 
-react-d3-graph@2.4.0:
-  version "2.4.0"
-  resolved "https://registry.yarnpkg.com/react-d3-graph/-/react-d3-graph-2.4.0.tgz#a6938f34ee7258264b15e104a79e566fff85c632"
-  integrity sha512-ZlnWUWZXC/U5M9S6aQPAmvoVofv2OHLTU5aM4EpNpdwh0y3osIS/8L1956d5uUjgvTWw3mq7HE8NcRdckTR7tA==
-  dependencies:
-    react-tooltip "^3.11.1"
+react-d3-graph@^2.6.0:
+  version "2.6.0"
+  resolved "https://registry.yarnpkg.com/react-d3-graph/-/react-d3-graph-2.6.0.tgz#b994131e430b568e086970560ba8a26809113173"
+  integrity sha512-U72didZuPuYEqAi1n2bJvnph+9MviIw2x9I0eoxb1IKk3cyEwsJV96n3RL72z/7HDsa1FOvDKuOJE7ujSNZB/Q==
 
 react-dev-utils@^12.0.0:
   version "12.0.1"
@@ -8902,13 +8900,6 @@ react-scripts@5.0.0:
     workbox-webpack-plugin "^6.4.1"
   optionalDependencies:
     fsevents "^2.3.2"
-
-react-tooltip@^3.11.1:
-  version "3.11.6"
-  resolved "https://registry.yarnpkg.com/react-tooltip/-/react-tooltip-3.11.6.tgz#4f9735a2a4aa50580af351ce23e74a56f41afc0c"
-  integrity sha512-nTc1yHHaPCHHURvMpf/VNF17pIZiU4zwUGFJBUVr1fZkezFC7E0VPMMVrCfDjt+IpwTHICyzlyx+1FiQ7lw5LQ==
-  dependencies:
-    prop-types "^15.6.0"
 
 react@^18.3.1:
   version "18.3.1"
