@@ -1,50 +1,10 @@
-# project/server/main/tasks.py
-
-
+#
+#   project/server/main/tasks.py
+#
 from rq.decorators import job
 from rq import get_current_job
 from rq_helpers import redis_connection
 import time
-# import spacy
-
-
-def analyze_text(text):
-    words = []
-    hrases = []
-    import spacy
-    nlp = spacy.load("en_core_web_sm")
-    doc = nlp(text)
-    query = nlp("Jammingbot")
-    similarities = {}
-    for token in doc:
-        if token.has_vector and query.has_vector:
-            similarity = query.similarity(token)
-            if similarity > 0:  # Фильтрация значений, близких к нулю
-                similarities[token.text] = similarity
-    
-    sorted_similarities = sorted(similarities.items(), 
-                                key=lambda x: x[1], 
-                                reverse=True)   
-                
-    # self_job.meta['sorted_similarities'] = sorted_similarities
-    # print(f"similarity сwith'{query.text}':")
-    for word, similarity in sorted_similarities[0:13]:
-        #print(f"{word}: {similarity:.2f}")
-        words.append(word)        
-
-    #
-    # Analyze noun hrases
-    #
-    import spacy
-    nlp = spacy.load("en_core_web_lg")
-    doc = nlp(text)
-    noun_hrases =  [chunk.text for chunk in doc.noun_chunks]            
-    for i in noun_hrases[0:13]:
-        hrases.append(i)
-            
-    return words, hrases
-                
-
 
 # the timeout parameter specifies how long a job may take
 # to execute before it is aborted and regardes as failed
@@ -102,7 +62,6 @@ def pulse():
     
 
 import re
-
 def remove_html_tags(text):
     clean_text = re.sub(r'<.*?>', '', text)
     return clean_text
@@ -110,16 +69,6 @@ def remove_html_tags(text):
 def remove_special_characters(text):
     clean_text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
     return clean_text
-
-
-# def write_data(array, filename):
-#     r = array
-#     if len(r) > 0:
-#         with open(filename, 'a') as file:            
-#             for word in r:
-#                 woord = (str(word['text']).strip().replace("\n", " ").replace("\r", " ").replace("\t", ""))[0:64]
-#                 if not woord.isdigit() and len(woord)>1:
-#                     file.write(f"{step['step']}|{word['type']}|{woord}\n")
 
 #
 #
@@ -181,6 +130,7 @@ def dostep(step):
     #
     # semantic analyze 2
     #
+    from semantic.analyzer import analyze_text
     words, hrases = analyze_text(text)
 
     #
@@ -392,27 +342,30 @@ def analyze(text):
         #
         # Analyze Semantic
         #
-        if i == 2: 
-            import spacy
-            nlp = spacy.load("en_core_web_sm")
-            doc = nlp(text_out)
-            query = nlp("Jammingbot")
-            similarities = {}
-            for token in doc:
-                if token.has_vector and query.has_vector:
-                    similarity = query.similarity(token)
-                    if similarity > 0:  # Фильтрация значений, близких к нулю
-                        similarities[token.text] = similarity
+        if i == 2:
             
-            sorted_similarities = sorted(similarities.items(), 
-                                        key=lambda x: x[1], 
-                                        reverse=True)   
+            words == analyze_sorted_similarity(text_out)
+             
+            # import spacy
+            # nlp = spacy.load("en_core_web_sm")
+            # doc = nlp(text_out)
+            # query = nlp("Jammingbot")
+            # similarities = {}
+            # for token in doc:
+            #     if token.has_vector and query.has_vector:
+            #         similarity = query.similarity(token)
+            #         if similarity > 0:  # Фильтрация значений, близких к нулю
+            #             similarities[token.text] = similarity
+            
+            # sorted_similarities = sorted(similarities.items(), 
+            #                             key=lambda x: x[1], 
+            #                             reverse=True)   
                      
-            # self_job.meta['sorted_similarities'] = sorted_similarities
-            # print(f"similarity сwith'{query.text}':")
-            for word, similarity in sorted_similarities[0:13]:
-                #print(f"{word}: {similarity:.2f}")
-                words.append(word)
+            # # self_job.meta['sorted_similarities'] = sorted_similarities
+            # # print(f"similarity сwith'{query.text}':")
+            # for word, similarity in sorted_similarities[0:13]:
+            #     #print(f"{word}: {similarity:.2f}")
+            #     words.append(word)
                 
             self_job.meta['words'] = words
         

@@ -32,15 +32,6 @@ async def get_tag(id: int):
         raise HTTPException(status_code=404, detail="tag not found")
     return tag
 
-@tags.get('/find/{name}/', response_model=TagOut)
-async def get_by_name(name: str):
-    print(name)
-    tag = await db_manager.get_by_name(name)
-    #tag = await db_manager.get_tag(1000)
-    if not tag:
-        raise HTTPException(status_code=404, detail=f"tag not found {name}")
-    return tag
-
 @tags.put('/{id}/', response_model=TagOut)
 async def update_tag(id: int, payload: TagUpdate):
     tag = await db_manager.get_tag(id)

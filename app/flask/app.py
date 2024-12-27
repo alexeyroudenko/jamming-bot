@@ -207,7 +207,7 @@ def all_jobs():
         if job.meta.get('type'):            
             app.logger.info(f"job.result {job.result}") 
             job_type = job.meta.get('type')
-            if job_type == "step":
+            if job_type == "step" and job.result:
                 l.append({
                     'id': job.get_id(),
                     'type': job.meta.get('type'), 
