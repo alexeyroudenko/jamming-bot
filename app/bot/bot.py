@@ -142,7 +142,7 @@ class NetSpider():
         #broadcast = [(ioctet | ~moctet) & 0xff for ioctet, moctet in zip(ip, mask)]
         #print(broadcast)
 
-        self.osc = udp_client.SimpleUDPClient(osc_address, 8000)
+        self.osc = udp_client.SimpleUDPClient(osc_address, 7001)
         pass
     
     '''

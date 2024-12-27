@@ -129,9 +129,9 @@ def remove_special_characters(text):
 def dostep(step):    
     self_job = get_current_job()    
     self_job.meta['progress'] = {
-        'num_iterations': 3,
+        'num_iterations': 4,
         'iteration': 1,
-        'percent': 33
+        'percent': 25
     }                
     self_job.meta['type'] = "step"        
     self_job.meta['url'] = step['current_url']
@@ -155,9 +155,9 @@ def dostep(step):
         self_job.meta['text'] = text_out
         
     self_job.meta['progress'] = {
-        'num_iterations': 3,
+        'num_iterations': 4,
         'iteration': 2,
-        'percent': 66
+        'percent': 50
     }
     self_job.save_meta()
                 
@@ -197,16 +197,40 @@ def dostep(step):
                     file.write(f"{step['step']}|{word['type']}|{woord}\n")
                 
     
-    from flask import jsonify
+
     with open(f'data/txt/{step["step"].zfill(4)}_words.json', 'w') as file:
         file.write(json.dumps(words))
 
     with open(f'data/txt/{step["step"].zfill(4)}_hrases.json', 'w') as file:
         file.write(json.dumps(hrases))
+        
+    self_job.meta['progress'] = {
+        'num_iterations': 4,
+        'iteration': 3,
+        'percent': 100
+    }    
+    self_job.save_meta()
+    
+    
+    #
+    # Calculate cloud
+    #
+    print(f"words: {words}")
+    for w in words:
+        print(f"word: {w}")
+        word = w        
+        import json
+        import requests
+        url = "http://tags_service:8000/api/v1/tags/"
+        headers = {'content-type': 'application/json'}
+        data = {'name': word, "count": 0}
+        response = requests.post(url, data=json.dumps(data), headers=headers)
+        r = response.json()     
+        
                 
     self_job.meta['progress'] = {
-        'num_iterations': 3,
-        'iteration': 3,
+        'num_iterations': 4,
+        'iteration': 4,
         'percent': 100
     }    
     self_job.save_meta()

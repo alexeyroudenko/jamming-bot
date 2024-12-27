@@ -47,28 +47,9 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading") 
 cors = CORS(app)
-
-
-
-
-
-#
-# words cloud
-# TODO: Move do database
-#
-words_stat = {"jammingbot":1}
-def calc_counts(words):
-    for word in words:
-        if word not in words_stat.keys():
-            words_stat[word] = 1
-        else:
-            words_stat[word] = words_stat[word]+1
-    app.logger.info(f"words_stat: --------- {str(words_stat)}")
-    return words_stat
-                    
+                  
     
-    
-    
+  
     
 
 
@@ -320,6 +301,46 @@ def get_status(job_id):
 #
 # Controlling BOT
 #
+@app.route("/test/service/", methods=["GET"])
+def test_service():
+    for idd in range(0, 48):
+        import requests  
+        url = f"http://tags_service:8000/api/v1/tags/{idd}/"
+        headers = {'content-type': 'application/json'}
+        response = requests.delete(url, headers=headers)
+        r = response.json()
+    return jsonify(r)
+
+@app.route("/test/service_words/", methods=["GET"])
+def words_service():
+    word = "hello"
+    import json
+    import requests
+    # url = "http://spacyapi/ent"
+    url = "http://tags_service:8000/api/v1/tags/"
+    headers = {'content-type': 'application/json'}
+    data = {'name': word, "count": 0}
+    response = requests.post(url, data=json.dumps(data), headers=headers)
+    r = response.json()
+    app.logger.info(r)
+    return jsonify(["ok"])
+        
+    # words = ["1111", "2222", "3333", "4444"]
+    # for w in words:
+    #     import requests
+    #     url = f"http://tags_service:8000/api/v1/tags/"        
+    #     headers = {'content-type': 'application/json'}
+    #     d = {'name': w}
+    #     r = requests.post(url, json=json.dumps(d), headers=headers)
+    #     app.logger.info(r.headers)
+    #     # return jsonify(response.json())
+    #     return jsonify(["ok"])
+
+
+
+#
+# Controlling BOT
+#
 @app.route("/ctrl/<action>/", methods=["GET"])
 def ctrl_action(action):
     redis.publish('ctrl', json.dumps(action))
@@ -439,8 +460,7 @@ def step():
             data['url'] = data['current_url']
             data['id'] = data['url']
             data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"       
-            
-            
+                        
             # app.logger.info(f"step {data.keys()}") 
             job = jobs.dostep.delay(data)
             while True:
@@ -451,11 +471,9 @@ def step():
                     data['struct_text'] = struct_text
                     data['semantic'] = job.result['semantic']
                     data['semantic_words'] = job.result['semantic_words']                    
-                    semantic_words_array = data['semantic_words']                
-                                        
+                    # semantic_words_array = data['semantic_words']                                        
                     # words_cloud = calc_counts(semantic_words_array)
-                    # data['words_cloud'] = words_cloud
-                                        
+                    # data['words_cloud'] = words_cloud                                        
                     socketio.emit('step', data)
                     break          
         
