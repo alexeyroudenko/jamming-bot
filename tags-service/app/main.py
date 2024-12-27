@@ -16,3 +16,4 @@ async def shutdown():
 
 
 app.include_router(tags, prefix='/api/v1/tags', tags=['tags'])
+# app.include_router(tags, prefix='/api/v1/tags/group', tags=['tags'])

@@ -57,3 +57,9 @@ async def delete_tag(id: int):
     if not tag:
         raise HTTPException(status_code=404, detail="tag not found")
     return await db_manager.delete_tag(id)
+
+
+
+@tags.get('/tags/group/', response_model=List[TagOut])
+async def get_tags_group():
+    return await db_manager.get_grouped_tags()

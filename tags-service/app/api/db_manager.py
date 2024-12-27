@@ -47,3 +47,14 @@ async def update_tag(id: int, payload: TagIn):
         .values(**payload.dict())
     )
     return await database.execute(query=query)
+
+
+async def get_grouped_tags():
+    from sqlalchemy import func, desc
+    query = (
+        tags
+        .select()
+        .order_by(desc('count'))
+        .limit(50)
+    )
+    return await database.fetch_all(query=query)
