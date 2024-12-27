@@ -165,7 +165,7 @@ h1 {
   top:10%;
   right:10%;
   /* position: absolute; */
-  /* border: 1px solid #ff0000; */
+  border: 1px solid #220000;
   width: 25%;
   height: 50%;
   float: left;
@@ -173,7 +173,16 @@ h1 {
   overflow: hidden;
   }
 
-
+.semantic_cloud {
+  position: absolute;
+  top:15%;
+  left:25%;
+  border: 1px solid #220000;
+  width: 50%;
+  height: 50%;
+  /* float: left; */
+  font-size: 12px;
+}
 
 .struct_text ul, li {
   list-style-type: none;

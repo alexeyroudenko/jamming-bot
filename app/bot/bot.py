@@ -28,6 +28,10 @@ import tldextract
 
 config_file = "bot.yaml"
 
+STEP_URL = 'http://flask:5000/bot/step/'
+EVENT_URL = 'http://flask:5000/bot/events'
+SUBLINK_URL = 'http://flask:5000/bot/sublink/add/'
+
 import sentry_sdk
 sentry_sdk.init(
     dsn=os.getenv('SHHH_SENTRY_URL'),
@@ -225,21 +229,20 @@ class NetSpider():
 
 
     
-    
+
+
 
     '''
-    
-    
         notify outside
     '''                        
     def notify_about_step(self, step_data):
-        
         if self.send_events:
-            STEP_URL = 'http://flask:5000/bot/step/'
-            r = requests.post(STEP_URL, data = step_data)            
-        
+            try:
+                r = requests.post(STEP_URL, data = step_data)            
+            except Exception as e0:
+                self.send_events = False
+            
         if self.send_osc:
-            # logging.info(f"osc step_data: {send_data}")
             step_data_osc = [step_data['step'], step_data['current_url'], step_data['src_url']]
             try:   
                 self.osc.send_message("/step", step_data_osc)
@@ -248,15 +251,14 @@ class NetSpider():
 
 
     '''
-    
-    
         notify logic
     '''                            
-    def notify_about_eventp(self, event_name, data):                        
+    def notify_about_eventp(self, event_name, data):
         if self.send_events:
-            # logging.info(event_name)
-            EVENT_URL = f'http://flask:5000/bot/events/{event_name}/'
-            r = requests.post(EVENT_URL, {"data":data})
+            try:
+                r = requests.post(EVENT_URL + f"/{event_name}/", {"data":data})
+            except Exception as e0:
+                self.send_events = False
         if self.send_osc:            
             try:
                 self.osc.send_message(f"/events/{event_name}/", [])
@@ -264,15 +266,21 @@ class NetSpider():
                 logging.error(f"error send OSC: {e0}")
                 
 
-    '''
-    
-    
+    '''    
         notify sublinks
     '''                            
-    def notify_about_sublink(self, data):                        
-        if self.send_sublinks:
-            SUBLINK_URL = f'http://flask:5000/bot/sublink/add/'
-            r = requests.post(SUBLINK_URL, data)
+    def notify_about_sublink(self, data):
+        if self.send_sublinks:      
+            try:      
+                r = requests.post(SUBLINK_URL, data)
+            except Exception as e0:
+                self.send_sublinks = False
+            
+            
+            
+            
+            
+            
             
             
     '''
@@ -359,7 +367,9 @@ class NetSpider():
             #  
             #
             #
+
             self.notify_about_eventp("retrieve_next_url", self.step_number)
+
             #
             query = "SELECT id, hostname, url, src_url, count(visited) FROM Urls where visited==0 GROUP BY hostname ORDER BY count(visited) LIMIT 1"
             rows = await self.database.fetch_all(query=query)            
@@ -624,15 +634,19 @@ async def main():
     
     with open(config_file) as file:
         config = yaml.load(file, Loader=SafeLoader)
-
+        
+    STEP_URL = config["step_url"]
+    EVENT_URL = config["event_url"]
+    SUBLINK_URL = config["sublink_url"]
+    
     logging.info(f"init bot version: {config['version']}")
     
-    from redis import Redis
-    redis = Redis(host='redis', port=6379)
-    
-    pubsub = redis.pubsub()
-    CHANNEL_NAME = 'ctrl'
-    pubsub.subscribe(CHANNEL_NAME)
+    if config['receive_events']:        
+        from redis import Redis
+        redis = Redis(host='redis', port=6379)        
+        pubsub = redis.pubsub()
+        CHANNEL_NAME = 'ctrl'
+        pubsub.subscribe(CHANNEL_NAME)
     
     killer = GracefulKiller()
     
@@ -658,45 +672,49 @@ async def main():
             # CTRL from REDIS
             #
             try:
-                message = pubsub.get_message()                
-                if message:                                        
-                    logging.info(f"message {message} - {message["data"]}")
-                                        
-                    if message["data"] == 1:                        
-                        logging.error(f"skip {message["data"]}")
-                    else:                    
-                        data = json.loads(message["data"])                        
-                        
-                        logging.info(f"message {data}")
-                                                
-                        if data == "start":
-                            spider.is_active = True
-                            
-                        if data == "stop":
-                            spider.is_active = False
-                            
-                        if data == "step":
-                            await spider.step()
+                if config['receive_events']:
+                    message = pubsub.get_message()                                    
+                    if message:                                        
+                        logging.info(f"message {message} - {message["data"]}")
+                          
+                        if message["data"] == 1:                        
+                            logging.error(f"skip {message["data"]}")
+                        else:                    
+                            data = json.loads(message["data"])                                                    
+                            logging.info(f"message {data}")
+                                                    
+                            if data == "start":
+                                logging.info("start") 
+                                spider.is_active = True
                                 
-                        if data == "restart":
-                            logging.info(f"restarting {config['start_url']}") 
-                            await spider.start(config['start_url'], config['src_url'])
+                            if data == "stop":
+                                logging.info("stop") 
+                                spider.is_active = False
+                                
+                            if data == "step":                                
+                                await spider.step()
+                                    
+                            if data == "restart":
+                                logging.info(f"restart") 
+                                await spider.start(config['start_url'], config['src_url'])
 
 
             except Exception as e:
                 logging.error(f"main loop {e}")
 
             #
-            # Step
-            # 
+            # Automative 
+            #
             if spider.is_active:
                 await spider.step()
+            
             # else:
             #     logging.info("iddle")
-                                                                    
+                                          
             spider.reload_config()
-            
-            
+            STEP_URL = config["step_url"]
+            EVENT_URL = config["event_url"]
+            SUBLINK_URL = config["sublink_url"]
             
             time.sleep(spider.sleep_time)
             time.sleep(0.01)

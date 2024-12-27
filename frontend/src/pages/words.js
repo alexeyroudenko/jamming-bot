@@ -9,19 +9,40 @@ import io from "socket.io-client"
 import { Url } from '../constants'
 import '../App.css';
 
-export const socket = io(Url, { transports: ["websocket", "polling"] })
+export const socket = io(Url, { transports: ["websocket", "polling"] });
 
 let rotationSpeed = .6; // Скорость вращения камеры
 let count = 0;
 let angle = 0;
 
-
-
-
 const Words = () => {
+
   const [data, setData] = useState({ nodes: [{ id: 0 }], links: [] });
   const graphRef = useRef();
   const baseRotation = 0.001;
+
+
+  // useEffect(() => {
+  //   console.log("begin");
+  //   setInterval(() => {
+  //     setData(({ tags }) => {
+  //       const id = 1
+  //       fetch(Url + "/api/v1/tags/tags/group/")
+  //           .then((res) => res.json())
+  //           // .then((result) => {
+  //           // //     console.log("firstRequest result:");                
+  //           // //     const id = tags.length;
+  //           // //     count = count + 1;
+  //           // //     if (count % 7 === 6) {
+  //           // //       rotationSpeed += 1.0
+  //           // //     }
+  //           //     };
+  //       return () => {
+  //         tags: [...tags, { source: id, name: Math.round(Math.random() * (id - 1)),  count: 25}]
+  //             };
+  //       });
+  //       }, 10000);
+  // }, []);
 
 
   useEffect(() => {
@@ -59,6 +80,9 @@ const Words = () => {
     animateCamera();
     return () => cancelAnimationFrame(animationFrameId); // Очищаем анимацию при размонтировании
   }, []);
+
+
+
 
 
   useEffect(() => {
@@ -99,9 +123,9 @@ const Words = () => {
       latency = (new Date).getTime() - start_time; 
       counter = counter + 1            
     });
+
     socket.on("step", (msg) => {       
       const data = msg
-
       let step = parseInt(data['step'])
       if (started === 0) {
           startStep = step;
@@ -113,36 +137,33 @@ const Words = () => {
       let struct_text = data['struct_text']
       let text = data['text']
       let words = data['words']
-      let semantic_words = data['semantic_words']
-      
-      console.log("semantic_words", semantic_words)      
-      if (msg['semantic_words']) {
 
-        count = count + 1;
-        if (count % 7 === 6) {
-          rotationSpeed += .3
-        }
 
-        msg['semantic_words'].slice(0, 5).forEach (
+      // let semantic_words = data['semantic_words']      
+      // console.log("semantic_words", semantic_words)      
+      // if (msg['semantic_words']) {
+      //   count = count + 1;
+      //   if (count % 7 === 6) {
+      //     rotationSpeed += .3
+      //   }
+      //   msg['semantic_words'].slice(0, 5).forEach (
+      //     (element) => { 
+      //       console.log(element);
+      //       let text = element;
+      //       setData(({ nodes, links }) => {
+      //         const id = nodes.length;
+      //         return {
+      //           nodes: [...nodes, { id, name: `${text}` }],
+      //           links: [...links, { source: id, target: Math.round(Math.random() * (id - 1)) }]
+      //         };
+      //       });            
+      //     }
+      //   );
+      // }
 
-          (element) => { 
-            console.log(element);
-            let text = element;
 
-            setData(({ nodes, links }) => {
-              const id = nodes.length;
-              return {
-                nodes: [...nodes, { id, name: `${text}` }],
-                links: [...links, { source: id, target: Math.round(Math.random() * (id - 1)) }]
-              };
-            });            
-                        
 
-          }
-        );
-      }
 
-      
       // setData(({ nodes, links }) => {
       //   const id = nodes.length;
       //   return {
@@ -150,8 +171,6 @@ const Words = () => {
       //     links: [...links, { source: id, target: Math.round(Math.random() * (id - 1)) }]
       //   };
       // });
-
-      
       //console.log('step: ', step, url);
     });
 
@@ -213,7 +232,28 @@ const Words = () => {
     context.fillText(text, canvas.width / 2, canvas.height / 2);
 
     return canvas;
-  };  
+  };
+  
+  // const [tagData, setTagData] = useState({ tags: [{ name: 0, count: 0 }] });
+  
+  // useEffect(() => {
+  //   setInterval(() => {
+  //     const url = "http://localhost:8080/api/v1/tags/tags/group/"
+  //     console.log("first request", url)
+  //     fetch(url)        
+  //     .then((res) => res.json())
+  //       .then((result) => {            
+  //           var tags = []                
+  //           result.forEach((tag) => {
+  //             let new_tag = {"name": tag.name, "count": tag.count}
+  //             tags.push(new_tag)
+  //             console.log("------------------------ ", new_tag)                      
+  //           })
+  //           this.setTagData(tags);          
+  //         })
+  //     }, 10000);
+  // });
+
 
   return (
     <div className="Graph3d" style={{ width: '100%', height: '100%' }}>
@@ -230,7 +270,9 @@ const Words = () => {
           return new THREE.Line(geometry, material);
         }}
       />
+
     </div>
+
   );
 };
 

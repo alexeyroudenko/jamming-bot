@@ -55,6 +55,6 @@ async def get_grouped_tags():
         tags
         .select()
         .order_by(desc('count'))
-        .limit(50)
+        .limit(150)
     )
     return await database.fetch_all(query=query)

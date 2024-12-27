@@ -1,5 +1,5 @@
 # pull official base image
-FROM node:14.17.5-alpine
+FROM node:23-alpine
 
 # set working directory
 WORKDIR /app
@@ -9,13 +9,14 @@ ENV PATH /app/node_modules/.bin:$PATH
 
 # install app dependencies
 COPY package.json ./
-COPY package-lock.json ./
-RUN npm install --silent
-RUN npm install react-scripts@3.4.1 -g --silent
-RUN npm install react-d3-graph -g --silent
+# COPY package-lock.json ./
+RUN yarn
+# RUN npm install --silent
+# RUN npm install react-scripts@3.4.1 -g --silent
+# RUN npm install react-d3-graph -g --silent
 
 # add app
 COPY . ./
 
 # start app
-CMD ["npm", "start"]
+CMD ["yarn", "start"]

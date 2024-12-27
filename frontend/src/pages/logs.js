@@ -5,6 +5,38 @@ import '../App.css';
 
 
 
+import { TagCloud } from 'react-tagcloud'
+
+const fontSizeMapper = word => Math.log2(word.value) * 5;
+const rotate = word => { 
+  const positions = [270, 0];
+  return randomFromArray(positions);
+};
+
+
+let data = [
+  { value: 'loading', count: 38 },
+  { value: 'tags', count: 30 },
+  { value: 'cloud', count: 28 },
+]
+
+const randomFromArray = (myArray) =>
+  myArray[Math.floor(Math.random() * myArray.length)];
+const generateRandomData = () => {
+  const weight = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 10000];
+  const words = data(100);
+  let data = [];
+  for (var i = 0; i < 100; i++) {
+    data.push({
+      text: words[i].initCap(),
+      value: randomFromArray(weight),
+    });
+  }
+  return data;
+};
+
+
+
 /**
  * Component that show logs
  */
@@ -20,6 +52,7 @@ export default class Logs extends React.Component {
       logs: [],
       semantics: [],
       semantics_log: [],
+      tags: [],
       step: {},
       struct_text: "..."
     }
@@ -49,34 +82,33 @@ export default class Logs extends React.Component {
   }
 
   initSockets() {
-    console.log("initSockets")
+    // console.log("initSockets")
     this.socket.on("connect", () => {
         this.socket.emit('consumer')
-        console.log("connected to socket v1.0", this.socket.id)
+        // console.log("connected to socket v1.0", this.socket.id)
     });
 
     this.socket.on("connect_error", (err) => { console.log(err) });
     this.socket.on("disconnect", () => {console.log("Disconnected from socket. v1.0")});
 
     this.socket.on("step", (msg) => {
-      let data = this.state.logs
-      data.push(msg)      
+      let data2 = this.state.logs
+      data2.push(msg)      
       
-      let new_semantics = this.state.semantics_log;
-      if (msg['semantic']) {
-        msg['semantic'].forEach(
-          (element) => new_semantics.push(element['type'] + " : " + element['text'])
-        );
-      }
-      console.log("new_semantics", new_semantics)
-      
-      this.setState({
-        loaded: true, 
-        logs: data,
-        step: msg,
-        semantics_log:new_semantics,
-        struct_text: msg['struct_text']
-      })
+      // let new_semantics = this.state.semantics_log;
+      // if (msg['semantic']) {
+      //   msg['semantic'].forEach(
+      //     (element) => new_semantics.push(element['type'] + " : " + element['text'])
+      //   );
+      // }
+      // console.log("new_semantics", new_semantics)      
+      // this.setState({
+      //   loaded: true, 
+      //   logs: data,
+      //   step: msg,
+      //   semantics_log:new_semantics,
+      //   struct_text: msg['struct_text']
+      // })
     
     })  
 
@@ -85,18 +117,51 @@ export default class Logs extends React.Component {
       if (msg['event'] === "say_finish") {
         this.setState({events: []})
       } else {
-        let data = this.state.events
-        data.push(msg)
-        this.setState({events: data})
+        let data2 = this.state.events
+        data2.push(msg)
+        this.setState({events: data2})
       }
     })  
 
+
+
+
+
+    
   }
 
   componentDidMount() {
-    console.log("componentDidMount")
+
+
+
+
+    // console.log("componentDidMount")
     if (this.state.loaded === false) {
       this.fetchAPI();
+
+
+      setInterval(() => {
+        const url = "http://localhost:8080/api/v1/tags/tags/group/"
+        // console.log("first tags request", url)
+
+        let dt = []
+
+        fetch(url)        
+        .then((res) => res.json())
+          .then((result) => {            
+              var tags = []                
+              result.forEach((tag) => {
+                let new_tag = {value: tag.name, count: tag.count}
+                tags.push(new_tag)
+                dt.push(new_tag)
+                
+                // console.log("------------------------ ", new_tag)                      
+              })
+              this.setState({tags: tags})
+              data = dt
+            })
+        }, 2000);
+
     }
   }
 
@@ -107,7 +172,18 @@ export default class Logs extends React.Component {
     this.socket.disconnect();
   }  
 
+
+
+
   render() {
+
+    // custom random color options
+    // see randomColor package: https://github.com/davidmerfield/randomColor
+    const options = {
+      luminosity: 'light',
+      hue: 'blue',
+    }
+
     // console.log("render", this.state)
     if (!this.state.loaded)
     {
@@ -156,16 +232,21 @@ export default class Logs extends React.Component {
         </ul>
         </div>
 
-
-        {/* <div className="semantic">
-            {!this.state.step['semantic'] ? null : this.state.step['semantic'].slice().reverse().map((step, index) => (
-            <div key={index} className="item">
-              <code className={step['type']}>{step['type']} ::: {step['text']}</code>
-            </div>
-          ))}
-        </div> */}
-
-
+        <div className="semantic_cloud">
+        <TagCloud
+          minSize={16}
+          maxSize={96}
+          font={"impact"}
+          padding={0}
+          colorOptions={options}
+          fontSizeMapper={fontSizeMapper} 
+          tags={data}
+          rotate={rotate}
+          disableRandomColor={true}
+          // onClick={tag => alert(`'${tag.value}' was selected!`)}
+        />
+        </div>
+    
       </div>
     )
   }
