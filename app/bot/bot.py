@@ -28,9 +28,9 @@ import tldextract
 
 config_file = "bot.yaml"
 
-STEP_URL = 'http://flask:5000/bot/step/'
-EVENT_URL = 'http://flask:5000/bot/events'
-SUBLINK_URL = 'http://flask:5000/bot/sublink/add/'
+STEP_URL = 'http://node_red:1880/bot/step/'
+EVENT_URL = 'http://node_red:1880/bot/events'
+SUBLINK_URL = 'http://node_red:1880/bot/sublink/add/'
 
 import sentry_sdk
 sentry_sdk.init(
@@ -233,13 +233,15 @@ class NetSpider():
 
 
     '''
-        notify outside
+        notify step
     '''                        
     def notify_about_step(self, step_data):
         if self.send_events:
             try:
                 r = requests.post(STEP_URL, data = step_data)            
+                # logging.info(f"url: {STEP_URL}")
             except Exception as e0:
+                logging.error(f"error send step data")
                 self.send_events = False
             
         if self.send_osc:
@@ -251,13 +253,16 @@ class NetSpider():
 
 
     '''
-        notify logic
+        notify event
     '''                            
     def notify_about_eventp(self, event_name, data):
         if self.send_events:
             try:
-                r = requests.post(EVENT_URL + f"/{event_name}/", {"data":data})
+                url = EVENT_URL + f"/{event_name}/"
+                r = requests.post(url, {"data":data})
+                # logging.info(f"url: {url}")
             except Exception as e0:
+                logging.error(f"error send eventp data")
                 self.send_events = False
         if self.send_osc:            
             try:
@@ -274,6 +279,7 @@ class NetSpider():
             try:      
                 r = requests.post(SUBLINK_URL, data)
             except Exception as e0:
+                logging.error(f"error send sublink data")
                 self.send_sublinks = False
             
             
