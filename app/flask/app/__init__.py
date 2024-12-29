@@ -31,7 +31,7 @@ def create_app():
     from .http_routes import http_bp
     from .socketio_routes import socketio_handlers
     from .json_handlers import json_bp
-
+    
     app.register_blueprint(http_bp)
     app.register_blueprint(json_bp)
 

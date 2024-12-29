@@ -2,16 +2,18 @@ import os
 import time
 import json
 
+import requests
 from flask import jsonify
 from flask import request
 from flask import redirect
 from flask import Flask, render_template
 from flask_cors import CORS, cross_origin
 from flask_socketio import SocketIO, emit
+from collections import Counter
 
+import spacy
 import jobs
 from rq_helpers import queue, get_all_jobs
-
 from flask import Blueprint, request, jsonify
 
 
@@ -20,7 +22,6 @@ from config import getConfig, getRedis
 cfg = getConfig()
 redis = getRedis()
     
-
 
 json_bp = Blueprint('json', __name__)
 
@@ -197,3 +198,132 @@ def get_status(job_id):
         response_object = {"message": "job not found"}
         status_code = 500
     return jsonify(response_object), status_code
+
+
+
+@json_bp.route('/analyze/data/', methods=['POST'])
+def analyze():
+    data = request.get_json()
+    return jsonify({"analyze": data})
+
+
+
+
+
+
+# json_bp = Blueprint('json_semantic', __name__ + "_semantic")
+#
+#
+#
+#
+#
+def get_base_text():
+    return "Jammingbot is a fantasy about a post-apocalyptic future, when the main functions of the Internet and assistant bots are defeated and only one self-replicating bot remains, aimlessly plowing the Internet. This is a bot that has no goal, only a path. Currently, spiders, crawlers and bots have a service purpose. They act as search engines, collect information, automate Internet infrastructure. Jammingbot is a fantasy about a post-apocalyptic future where the core functions of the internet and assistant bots have been defeated and only one self-replicating bot remains, aimlessly browsing the internet, perhaps studying the general mood of humanity in the fragments of meaning on the pages of the internet. It is a bot that has no goal, only a path."
+
+text = get_base_text()
+
+@json_bp.route("/semantic/vars/", methods=['GET', 'POST']) 
+def semantic_vars():    
+    text = get_base_text()    
+    if request.method == 'POST':
+        data = request.form.to_dict()
+        if "text" in  data.keys():
+            text = data['text']
+
+    headers = {'content-type': 'application/json'}
+    d = {'text': text, 'model': 'en_core_web_md'}    
+    return jsonify(d)
+   
+@json_bp.route("/semantic/ent/", methods=['GET', 'POST'])
+def semantic_ent():    
+    url = "http://spacyapi/ent"
+    headers = {'content-type': 'application/json'}
+    d = {'text': text, 'model': 'en_core_web_md'}
+    response = requests.post(url, data=json.dumps(d), headers=headers)
+    return jsonify(response.json())
+
+
+@json_bp.route("/semantic/keywords/", methods=['GET', 'POST'])
+def semantic_keywords():
+    text = get_base_text()    
+    if request.method == 'POST':
+        data = request.form.to_dict()
+        if "text" in  data.keys():
+            text = data['text']
+    
+    nlp = spacy.load("en_core_web_lg")
+    doc = nlp(text)
+    keywords = [token.text.lower() for token in doc if token.pos_ in ["NOUN", "ADJ"] and not token.is_stop]
+    keyword_counts = Counter(keywords)
+    # print("Top-5 Keywords:")
+    return jsonify(keyword_counts.most_common(20))
+
+
+@json_bp.route("/semantic/phrases_verbs/", methods=['GET', 'POST'])
+def phrases_verbs():    
+    text = get_base_text()
+    if request.method == 'POST':
+        data = request.form.to_dict()
+        if "text" in  data.keys():
+            text = data['text']
+            
+    nlp = spacy.load("en_core_web_lg")                   
+    doc = nlp(text)
+    noun_hrases = [chunk.text for chunk in doc.noun_chunks]
+    noun_hrases_out = []
+    for i in noun_hrases:
+        if len(i) > 5:
+            noun_hrases_out.append(i)
+    
+    verbs = [token.lemma_ for token in doc if token.pos_ == "VERB"]
+    # Find named entities, phrases and concepts
+    # Найти именованные сущности, фразы и концепции
+    entity_out = []
+    for entity in doc.ents:
+        entity_out.append([entity.text, entity.label_])
+        
+    data = {
+        "noun_hrases":noun_hrases, 
+        "noun_hrases_out":noun_hrases_out, 
+        "verbs":[token.lemma_ for token in doc if token.pos_ == "VERB"],
+        "entity_out":entity_out
+    }          
+    return jsonify(data)
+
+
+@json_bp.route("/semantic/similarities/", methods=['GET', 'POST'])
+def similarities_bp():
+            
+    text = get_base_text()            
+    if request.method == 'POST':
+        data = request.form.to_dict()        
+        if "text" in  data.keys():
+            text = data['text']    
+            
+    nlp = spacy.load("en_core_web_sm")
+    doc = nlp(text)
+    query = nlp("Jammingbot")
+    similarities = {}
+
+    for token in doc:
+        if token.has_vector and query.has_vector:
+            similarity = query.similarity(token)
+            if similarity > 0:  # Фильтрация значений, близких к нулю
+                similarities[token.text] = similarity
+
+    sorted_similarities = sorted(similarities.items(), key=lambda x: x[1], reverse=True)
+        
+    data = {
+        "sorted_similarities":sorted_similarities, 
+        # "noun_hrases_out":noun_hrases_out, 
+        # "verbs":[token.lemma_ for token in doc if token.pos_ == "VERB"],
+        # "entity_out":entity_out
+    }        
+        
+    return jsonify(data) 
+
+
+
+
+
+

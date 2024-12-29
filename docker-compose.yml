@@ -87,6 +87,7 @@ services:
 
   
   spacyapi:
+    container_name: spacyapi
     image: bbieniek/spacyapi:en_v3
     ports:
       - "127.0.0.1:7010:80"
@@ -103,6 +104,7 @@ services:
       - app_network      
 
 
+
   tags_service:
     build: ./tags-service
     container_name: tags_service
@@ -116,6 +118,8 @@ services:
       - CAST_SERVICE_HOST_URL=http://tags_service:8000/api/v1/casts/
     networks:
       - app_network
+    depends_on:
+      - tags_db      
 
   tags_db:
     image: postgres:12.1-alpine

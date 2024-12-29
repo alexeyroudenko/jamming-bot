@@ -9,7 +9,7 @@ from flask_cors import CORS, cross_origin
 from flask import Flask, render_template
 from rq_helpers import queue, get_all_jobs
 import jobs
-
+import requests
 
 from config import getConfig, getRedis
 cfg = getConfig()
@@ -22,23 +22,26 @@ socketio = get_socketio()
 
 http_bp = Blueprint('http', __name__)
 
+
+
+
+
 @http_bp.route('/')
 @cross_origin()
 def bot():
     return render_template('bot.html')
 
+
 @http_bp.route('/status')
 def status():
     return jsonify({"status": "ok"})
+
 
 @http_bp.route('/help/')
 def help():
     return render_template('help.html')
 
 
-
-
-# endpoint for deleting a job
 @http_bp.route('/delete_job/<job_id>', methods=["GET"])
 def deletejob(job_id):
     job = queue.fetch_job(job_id)
@@ -46,8 +49,6 @@ def deletejob(job_id):
     return redirect('/queue/')
 
 
-
-# endpoint for getting a job
 @http_bp.route("/jobs/<job_id>", methods=["GET"])
 def get_status(job_id):
     job = queue.fetch_job(job_id)
@@ -67,7 +68,6 @@ def get_status(job_id):
     return jsonify(response_object), status_code
 
 
-# endpoint for monitoring all job status
 @http_bp.route("/queue/", methods=["GET"])
 def index():
     joblist = reversed(get_all_jobs())
@@ -150,61 +150,9 @@ def ctrl():
 
 
 
-#
-#   Tests
-#
-@http_bp.route("/test/service/", methods=["GET"])
-def test_service():
-    for idd in range(0, 48):
-        import requests  
-        url = f"http://tags_service:8000/api/v1/tags/{idd}/"
-        headers = {'content-type': 'application/json'}
-        response = requests.delete(url, headers=headers)
-        r = response.json()
-    return jsonify(r)
-
-@http_bp.route("/test/service_words/", methods=["GET"])
-def words_service():
-    word = "hello"
-    import json
-    import requests
-    # url = "http://spacyapi/ent"
-    url = "http://tags_service:8000/api/v1/tags/"
-    headers = {'content-type': 'application/json'}
-    data = {'name': word, "count": 0}
-    response = requests.post(url, data=json.dumps(data), headers=headers)
-    r = response.json()
-    return jsonify(["ok"])
-
-@http_bp.route('/set_tick/', methods=['GET', 'POST'])
-def set_tick():
-    # # http_bp.logger.info(request.args['tick'])    
-    # tick = request.args['tick']
-    CHANNEL_NAME = 'ctrl'
-    redis.publish(CHANNEL_NAME, json.dumps("restart"))
-    return redirect('/ctrl/')
-
-@http_bp.route("/add_analyze_job/", methods=['GET', 'POST'])
-def add_analyze_job():
-    if request.method == 'POST':        
-        data = request.form        
-        text = data['text']        
-        job = jobs.analyze.delay(text)
-    status_code = 200
-    response_object = {"message": "hello"}        
-    return jsonify(response_object), status_code
-
-
-
-
-
-
-
-
-
-
 
 #
+# Forward http to redis message for   
 # Controlling BOT
 #
 @http_bp.route("/ctrl/<action>/", methods=["GET"])
@@ -213,34 +161,32 @@ def ctrl_action(action):
     return redirect('/ctrl/')
 
 
-# STEP_URL = 'http://flask:5000/bot/step/'
-# EVENT_URL = 'http://flask:5000/bot/events'
-# SUBLINK_URL = 'http://flask:5000/bot/sublink/add/'
 
 
 
 
-EVENTS_URL = 'http://node_red:1880/events/'
 
-import requests
+
+
+
+
+
 #
-#   EVENTS FROM BOT
-# '''
 #    EVENTS
 @http_bp.route('/bot/events/<event_id>/', methods=['POST'])
-def bot_event(event_id):
-    
+def bot_event(event_id):    
     url = "http://node_red:1880/hello"
     r1 = requests.post(url + "/", data = event_id)    
-    r2 = requests.post(url + "/" + event_id + "/", data = event_id)
-    
+    r2 = requests.post(url + "/" + event_id + "/", data = event_id)    
     if request.method == 'POST':
         data = {}
+        EVENTS_URL = 'http://node_red:1880/events/'
         r = requests.post(EVENTS_URL + event_id + "/", data = data)
         socketio.emit('event', {"event":event_id, "data":data})
     return "event"
 
-# '''
+
+# 
 #    SUBLINKS
 @http_bp.route('/bot/sublink/add/', methods=['POST'])
 def sublink_add():
@@ -263,53 +209,9 @@ def sublink_add():
 
 
 
-@http_bp.route("/spacy/", methods=['GET', 'POST'])
-def spacy():    
-    """ Semantic """    
-    # http_bp.logger.info("hello from spacy")        
-    message_text = "Jammingbot is a fantasy about a post-apocalyptic future."
-    import json
-    import requests
-    url = "http://spacyapi/ent"
-    headers = {'content-type': 'application/json'}
-    d = {'text': message_text, 'model': 'en_core_web_md'}
-    response = requests.post(url, data=json.dumps(d), headers=headers)
-    r = response.json()
-        
-
-
-@http_bp.route("/screenshoter/", methods=['GET', 'POST'])
-def screenshoter():    
-    """ Semantic """    
-    # http_bp.logger.info("hello from spacy")        
-    message_text = "Jammingbot is a fantasy about a post-apocalyptic future."
-    import json
-    import requests
-    # url = "http://screenshoter:8080/take"
-    url = "http://screenshoter:8080/take?url=https%3A%2F%2Fhub.docker.com%2Fr%2Fmingalevme%2Fscreenshoter%2F"
-    response = requests.get(url)
-    with open("response.jpg", "wb") as f:
-        f.write(response.content)
-        
-    status_code = 200    
-    return "hello", status_code
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-# '''
 #
 #   Called from container
 #   do_save = float(cfg['do_save'])
@@ -431,86 +333,94 @@ def step():
         #     else:
         #         print("Ждем завершения задачи...")
         
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@http_bp.route("/spacy/", methods=['GET', 'POST'])
+def spacy():    
+    """ Semantic """    
+    # http_bp.logger.info("hello from spacy")        
+    message_text = "Jammingbot is a fantasy about a post-apocalyptic future."
+    import json
+    import requests
+    url = "http://spacyapi/ent"
+    headers = {'content-type': 'application/json'}
+    d = {'text': message_text, 'model': 'en_core_web_md'}
+    response = requests.post(url, data=json.dumps(d), headers=headers)
+    r = response.json()
+    return jsonify(r)
         
+
+
+@http_bp.route("/screenshoter/", methods=['GET', 'POST'])
+def screenshoter():    
+    """ Semantic """    
+    # http_bp.logger.info("hello from spacy")        
+    message_text = "Jammingbot is a fantasy about a post-apocalyptic future."
+    import json
+    import requests
+    # url = "http://screenshoter:8080/take"
+    url = "http://screenshoter:8080/take?url=https%3A%2F%2Fhub.docker.com%2Fr%2Fmingalevme%2Fscreenshoter%2F"
+    response = requests.get(url)
+    with open("response.jpg", "wb") as f:
+        f.write(response.content)
         
+    status_code = 200    
+    return "hello", status_code
 
-        # endpoint for monitoring all job status
-        # @http_bp.route("/rq/", methods=["GET"])
-        # def rq():
-        #     joblist = get_all_jobs()
-
-        #     l = []
-        #     # work on copy of joblist
-        #     for job in list(joblist):
-        #         l.append({
-        #             'id': job.get_id(),            
-        #             'state': job.get_status(),
-        #             'type': job.meta.get('type'),
-        #             'progress': job.meta.get('progress'),
-        #             'result': job.result
-        #         })
-        #     return render_template('index.html', joblist=l)
-        # endpoint for getting a job
-        # endpoint for getting a job
-        # @http_bp.route("/api/step/<step_num>", methods=["GET"])
-        # def get_step(step_num):
-        #     joblist = get_all_jobs()    
-        #     l = []
-        #     for job in list(joblist):
-        #         if job.meta.get('type'):            
-        #             # http_bp.logger.info(f"job.result {job.result}") 
-        #             job_type = job.meta.get('type')
-        #             if job_type == "step":
-        #                 if int(job.result['step']) == int(step_num):
-        #                     l.append({
-        #                         'id': job.get_id(),
-        #                         'type': job.meta.get('type'), 
-        #                         'step': int(job.result['step']),
-        #                         'status_code': int(job.result['code']),
-        #                         'status_string': "ok" if str(job.result['code']) == "200" else "error",
-        #                         'url': job.result['url'],
-        #                         'src_url': job.result['src_url'],
-        #                             # 'state': job.get_status(),
-        #                             # 'progress': job.meta.get('progress'),
-        #                             # 'step': job.meta.get('step'),
-        #                             # 'username': job.meta.get('step')['current_url'],
-        #                             # 'r': job.result['words_count'],
-        #                         'result': job.result
-        #                         })
-        #     return jsonify(l)
-
-        # endpoint for adding job
-        # @http_bp.route("/add_wait_job/<num_iterations>", methods=["GET"])
-        # def run_wait_job_get(num_iterations):
-        #     num_iterations = int(num_iterations)
-        #     job = jobs.wait.delay(num_iterations)
-        #     response_object = {
-        #         "status": "success",
-        #         "data": {
-        #             "job_id": job.get_id()
-        #         }
-        #     }
-        #     status_code = 200
-        #     return redirect('/queue/')
-        # @http_bp.route('/bot/page/add/', methods=['GET', 'POST'])
-        # def page_addd():
-        #     if request.method == 'POST':
-        #         data = request.form.to_dict()
-        #         # id = data['id']
-        #         # url = data['url']
-        #         # src = data['src_url']
-        #         socketio.emit('page', data)
-        #     return "step"
+#
+#   Tests
+@http_bp.route("/test/service/", methods=["GET"])
+def test_service():
+    for idd in range(0, 48):
+        import requests  
+        url = f"http://tags_service:8000/api/v1/tags/{idd}/"
+        headers = {'content-type': 'application/json'}
+        response = requests.delete(url, headers=headers)
+        r = response.json()
+    return jsonify(r)
 
 
+@http_bp.route("/test/service_words/", methods=["GET"])
+def words_service():
+    word = "hello"
+    import json
+    import requests
+    # url = "http://spacyapi/ent"
+    url = "http://tags_service:8000/api/v1/tags/"
+    headers = {'content-type': 'application/json'}
+    data = {'name': word, "count": 0}
+    response = requests.post(url, data=json.dumps(data), headers=headers)
+    r = response.json()
+    return jsonify(["ok"])
 
 
+@http_bp.route('/set_tick/', methods=['GET', 'POST'])
+def set_tick():
+    # # http_bp.logger.info(request.args['tick'])    
+    # tick = request.args['tick']
+    CHANNEL_NAME = 'ctrl'
+    redis.publish(CHANNEL_NAME, json.dumps("restart"))
+    return redirect('/ctrl/')
 
 
-
-
-
-        
-        
- 
-    return "step"
+@http_bp.route("/add_analyze_job/", methods=['GET', 'POST'])
+def add_analyze_job():
+    if request.method == 'POST':        
+        data = request.form        
+        text = data['text']        
+        job = jobs.analyze.delay(text)
+    status_code = 200
+    response_object = {"message": "hello"}        
+    return jsonify(response_object), status_code
