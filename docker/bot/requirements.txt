@@ -9,4 +9,5 @@ pyyaml
 numpy
 tldextract
 redis
+omegaconf
 sentry-sdk[flask]

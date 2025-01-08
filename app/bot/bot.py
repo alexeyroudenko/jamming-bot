@@ -663,6 +663,15 @@ async def main():
     spider.resume_at_restart = config['resume_at_restart']
     spider.is_active = config['is_active']
     
+    
+    from omegaconf import OmegaConf
+    from osc_server import OSCServer
+    osc_config = OmegaConf.load("osc_server.yml")
+    osc_server = OSCServer(osc_config)
+    osc_server.run_osc_reciver()
+    
+    #feature_states = self.osc_feature_controler.feature_states
+    
     await spider.start(config['start_url'], config['src_url'])
     
     
@@ -678,6 +687,7 @@ async def main():
             # CTRL from REDIS
             #
             try:
+                                
                 if config['receive_events']:
                     message = pubsub.get_message()                                    
                     if message:                                        
@@ -726,9 +736,11 @@ async def main():
             time.sleep(0.01)
             
             if killer.kill_now:
+                osc_server.stop_osc_receiver()
                 break
             
     except KeyboardInterrupt as ex:
+        osc_server.stop_osc_receiver()
         print('goodbye!')
 
 
