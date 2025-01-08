@@ -175,13 +175,15 @@ def ctrl_action(action):
 #    EVENTS
 @http_bp.route('/bot/events/<event_id>/', methods=['POST'])
 def bot_event(event_id):    
-    url = "http://node_red:1880/hello"
-    r1 = requests.post(url + "/", data = event_id)    
-    r2 = requests.post(url + "/" + event_id + "/", data = event_id)    
     if request.method == 'POST':
-        data = {}
-        EVENTS_URL = 'http://node_red:1880/events/'
-        r = requests.post(EVENTS_URL + event_id + "/", data = data)
+        
+        # url = "http://node_red:1880/hello"
+        # r1 = requests.post(url + "/", data = event_id)    
+        # r2 = requests.post(url + "/" + event_id + "/", data = event_id)    
+        # EVENTS_URL = 'http://node_red:1880/events/'
+        # r = requests.post(EVENTS_URL + event_id + "/", data = data)
+
+        data = {}        
         socketio.emit('event', {"event":event_id, "data":data})
     return "event"
 
@@ -332,6 +334,8 @@ def step():
         #         break
         #     else:
         #         print("Ждем завершения задачи...")
+    
+    return "done"        
         
 
 

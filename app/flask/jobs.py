@@ -31,11 +31,11 @@ def remove_special_characters(text):
 @job('default', connection=redis_connection, timeout=90, result_ttl=120)
 def dostep(step): 
     
-    try:
-        RED_URL = "http://172.18.0.4:1880/events/step/"
-        r = requests.get(RED_URL) 
-    except Exception as e:
-        print("error ", e)  
+    # try:
+    #     RED_URL = "http://172.18.0.4:1880/events/step/"
+    #     r = requests.get(RED_URL) 
+    # except Exception as e:
+    #     print("error ", e)  
     
     self_job = get_current_job()    
     self_job.meta['progress'] = {
