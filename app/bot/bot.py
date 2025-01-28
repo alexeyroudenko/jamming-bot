@@ -450,7 +450,7 @@ class NetSpider():
                                                     'Accept-Language': 'en-US, en;q=0.5',
                                                     'Accept-Charset':  'utf-8',
                                                 },
-                                            timeout=5, 
+                                            timeout=10, 
                                             stream=True)                    
                     ip = response.raw._connection.sock.getpeername()
                         
@@ -580,20 +580,16 @@ class NetSpider():
 
 
                 except Exception as e1:
-                    # logging.error(f"exception step 1 {e1} line:{e1.__traceback__.tb_lineno}")
-                    # print("Exception in step 1:", e1, traceback.print_exc())                    
-                    logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t line {e1.__traceback__.tb_lineno}")
+                    logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t e1 line {e1.__traceback__.tb_lineno}")
                     self.notify_about_eventp("error_retrieve_url", {})                    
                     step_data = {
                         "step":self.step_number, 
                         "src_url": src_url, 
-                        "current_url": current_url
+                        "current_url": current_url,
+                        "status_code": "000"
                     } 
-                    step_data["status_code"] = "000"
-                    self.notify_about_step(step_data)
+                    # self.notify_about_step(step_data)
                     
-                    pass
-
         except Exception as e2:
             self.count_errors += 1
             logging.error(f"Exception step 2 {e2} line:{e2.__traceback__.tb_lineno}")
@@ -602,7 +598,6 @@ class NetSpider():
             #     logging.error(f"Exception self.count_errors {self.count_errors} .... finish")
             #     self.stop()
             #     exit()
-            pass
 
     """
         Controls

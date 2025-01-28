@@ -139,27 +139,27 @@ const Words = () => {
       let words = data['words']
 
 
-      // let semantic_words = data['semantic_words']      
-      // console.log("semantic_words", semantic_words)      
-      // if (msg['semantic_words']) {
-      //   count = count + 1;
-      //   if (count % 7 === 6) {
-      //     rotationSpeed += .3
-      //   }
-      //   msg['semantic_words'].slice(0, 5).forEach (
-      //     (element) => { 
-      //       console.log(element);
-      //       let text = element;
-      //       setData(({ nodes, links }) => {
-      //         const id = nodes.length;
-      //         return {
-      //           nodes: [...nodes, { id, name: `${text}` }],
-      //           links: [...links, { source: id, target: Math.round(Math.random() * (id - 1)) }]
-      //         };
-      //       });            
-      //     }
-      //   );
-      // }
+      let semantic_words = data['semantic_words']      
+      console.log("semantic_words", semantic_words)      
+      if (msg['semantic_words']) {
+        count = count + 1;
+        if (count % 7 === 6) {
+          rotationSpeed += .3
+        }
+        msg['semantic_words'].slice(0, 5).forEach (
+          (element) => { 
+            console.log(element);
+            let text = element;
+            setData(({ nodes, links }) => {
+              const id = nodes.length;
+              return {
+                nodes: [...nodes, { id, name: `${text}` }],
+                links: [...links, { source: id, target: Math.round(Math.random() * (id - 1)) }]
+              };
+            });            
+          }
+        );
+      }
 
 
 
@@ -171,7 +171,7 @@ const Words = () => {
       //     links: [...links, { source: id, target: Math.round(Math.random() * (id - 1)) }]
       //   };
       // });
-      //console.log('step: ', step, url);
+      console.log('step: ', step, url);
     });
 
   }, []);
@@ -197,6 +197,7 @@ const Words = () => {
       linewidth: 1 // Это игнорируется в WebGL (для информации)
     });
   };
+
   const createNodeLabel = (node) => {
     const group = new THREE.Group();
     const circleGeometry = new THREE.SphereGeometry(3, 16, 16);
@@ -253,7 +254,6 @@ const Words = () => {
   //         })
   //     }, 10000);
   // });
-
 
   return (
     <div className="Graph3d" style={{ width: '100%', height: '100%' }}>
