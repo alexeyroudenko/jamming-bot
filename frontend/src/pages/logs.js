@@ -35,8 +35,6 @@ const generateRandomData = () => {
   return data;
 };
 
-
-
 /**
  * Component that show logs
  */
@@ -92,9 +90,8 @@ export default class Logs extends React.Component {
     this.socket.on("disconnect", () => {console.log("Disconnected from socket. v1.0")});
 
     this.socket.on("step", (msg) => {
-      let data2 = this.state.logs
-      data2.push(msg)      
-      
+      // let data = this.state.logs
+      // data2.push(msg)      
       // let new_semantics = this.state.semantics_log;
       // if (msg['semantic']) {
       //   msg['semantic'].forEach(
@@ -102,13 +99,14 @@ export default class Logs extends React.Component {
       //   );
       // }
       // console.log("new_semantics", new_semantics)      
-      // this.setState({
-      //   loaded: true, 
-      //   logs: data,
-      //   step: msg,
-      //   semantics_log:new_semantics,
-      //   struct_text: msg['struct_text']
-      // })
+      let step_data = msg;
+      this.setState({
+        // loaded: true, 
+        // logs: data,
+        step: step_data,
+        // semantics_log:new_semantics,
+        // struct_text: msg['struct_text']
+      })
     
     })  
 
