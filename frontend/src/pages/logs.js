@@ -1,5 +1,6 @@
 import React from "react";
 import { Url } from '../constants'
+import { CloudUrl } from '../constants'
 import io from "socket.io-client"
 import '../App.css';
 
@@ -139,7 +140,7 @@ export default class Logs extends React.Component {
 
 
       setInterval(() => {
-        const url = "http://localhost:8080/api/v1/tags/tags/group/"
+        const url = CloudUrl
         // console.log("first tags request", url)
 
         let dt = []

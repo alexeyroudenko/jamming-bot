@@ -95,13 +95,13 @@ services:
     networks:
       - app_network
 
-  screenshoter:
-    image: mingalevme/screenshoter
-    ports:
-      - "5020:8080"
-    restart: always
-    networks:
-      - app_network      
+  # screenshoter:
+  #   image: mingalevme/screenshoter
+  #   ports:
+  #     - "5020:8080"
+  #   restart: always
+  #   networks:
+  #     - app_network      
 
 
 
@@ -187,19 +187,6 @@ services:
       
 
 
-
-
-
-
-
-      
-
-
-
-
-
-
-
 volumes:
   postgres_data_movie:
   postgres_data_cast:
@@ -211,4 +198,3 @@ volumes:
 
 networks:
   app_network:
-    driver: bridge
