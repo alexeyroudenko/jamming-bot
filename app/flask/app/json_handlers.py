@@ -136,9 +136,9 @@ def get_step(step_num):
     l = []
     for job in list(joblist):
         if job.meta.get('type'):            
-            app.logger.info(f"job.result {job.result}") 
+            # app.logger.info(f"job.result {job.result}") 
             job_type = job.meta.get('type')
-            if job_type == "step":
+            if job_type == "step" and job.result['step']:
                 if int(job.result['step']) == int(step_num):
                     l.append({
                         'id': job.get_id(),
