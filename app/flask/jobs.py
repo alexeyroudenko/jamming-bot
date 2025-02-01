@@ -30,21 +30,17 @@ def remove_special_characters(text):
 #   
 @job('default', connection=redis_connection, timeout=90, result_ttl=120)
 def dostep(step): 
-    
-    try:
-        RED_URL = "http://node_red:1880/events/step/"
-        r = requests.get(RED_URL) 
-    except Exception as e:
-        print("error ", e)  
-    
+        
     self_job = get_current_job()    
     self_job.meta['progress'] = {
         'num_iterations': 4,
         'iteration': 1,
         'percent': 25
-    }                
-    self_job.meta['type'] = "step"        
-    self_job.meta['url'] = step['current_url']
+    }  
+                 
+    self_job.meta['type'] = "step"
+    if "current_url" in step.keys():         
+        self_job.meta['url'] = step['current_url']
 
     ip = "0.0.0.0" 
     if "ip" in step.keys():     
@@ -97,6 +93,7 @@ def dostep(step):
     #
     # write to file
     #
+    # print(step)
     filename = f'data/semantic.txt'    
     self_job.meta['filename'] = filename
     self_job.save_meta()        
@@ -126,7 +123,8 @@ def dostep(step):
     #
     # Calculate cloud
     #
-    print(f"words: {words}")
+    # print(f"words: {words}")
+    tags = {}
     for w in words:
         print(f"word: {w}")
         word = w[0:50]        
@@ -136,26 +134,41 @@ def dostep(step):
         headers = {'content-type': 'application/json'}
         data = {'name': word, "count": 0}
         response = requests.post(url, data=json.dumps(data), headers=headers)
-        r = response.json()     
-        
-                
+        tags = response.json()     
+    
+    # try:
+    #     RED_URL = "http://node_red:1880/events/step/"
+    #     r = requests.post(RED_URL, words) 
+    #     print(RED_URL)
+    # except Exception as e:
+    #     print("error ", e)    
+              
     self_job.meta['progress'] = {
         'num_iterations': 4,
         'iteration': 4,
         'percent': 100
     }    
     self_job.save_meta()
-    return {    
+    
+    return_obj = {    
             "step": step['step'],             
             "code": step['status_code'], 
             "ip": ip, 
-            "url": step['current_url'],                
+            "url": step['url'],                
             "src_url": step['src_url'],
-            "semantic": r,
+            "semantic": tags,
             "semantic_words": words,
             "semantic_hrases": hrases,
             "text":text_out[0:1024] + "..."
         }
+    
+    # try:
+    #     RED_URL = "http://node_red:1880/events/semantic_step/"
+    #     red_request = requests.post(RED_URL, return_obj) 
+    # except Exception as e:
+    #     print("error ", e)
+           
+    return return_obj
 
 
 

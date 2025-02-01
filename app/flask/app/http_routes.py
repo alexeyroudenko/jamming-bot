@@ -23,7 +23,12 @@ socketio = get_socketio()
 http_bp = Blueprint('http', __name__)
 
 
-
+def send_node_red_event(event):
+    try:
+        RED_URL = "http://node_red:1880/events/debug/"
+        red_request = requests.post(RED_URL, {"event": event}) 
+    except Exception as e:
+        print("error ", e)
 
 
 @http_bp.route('/')
@@ -207,13 +212,6 @@ def sublink_add():
 
 
 
-
-
-
-
-
-
-
 #
 #   Called from container
 #   do_save = float(cfg['do_save'])
@@ -224,75 +222,76 @@ def step():
     
     if request.method == 'POST':
         data = request.form.to_dict()
-        cfg = getConfig()  
+        
+        try:
+            RED_URL = "http://node_red:1880/events/bot_step/"
+            red_request = requests.post(RED_URL, data) 
+        except Exception as e:
+            print("error ", e)
+         
+        # cfg = getConfig()
+        # send_node_red_event(f"do_pass: {cfg['do_pass']}")  
 
         #
         # PASS
         # 
-        if float(cfg['do_pass']) == 1.0:
-            
-            # socketData = {}
-            # socketData['id'] = data['current_url']
-            # socketData['step'] = int(data['step'])
-            # socketData['url'] = data['current_url']
-            # socketData['src_url'] = data['src_url']
-            # socketData['text'] = data['text']            
-            # socketData['src_url'] = data['src_url']
-            
-            data['url'] = data['current_url']
-            data['id'] = data['url']
-            data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"       
-                        
-            # # http_bp.logger.info(f"step {data.keys()}") 
-            job = jobs.dostep.delay(data)
-            while True:
-                time.sleep(0.01)
-                job.refresh()  
-                if job.is_finished:                    
-                    struct_text = job.result['text']                        
-                    data['struct_text'] = struct_text
-                    data['semantic'] = job.result['semantic']
-                    data['semantic_words'] = job.result['semantic_words']                    
-                    # semantic_words_array = data['semantic_words']                                        
-                    # words_cloud = calc_counts(semantic_words_array)
-                    # data['words_cloud'] = words_cloud                                        
-                    socketio.emit('step', data)
-                    break          
+        # if float(cfg['do_pass']) == 1.0:   
+        #     data['id'] = data['current_url']
+        #     data['url'] = data['current_url']
+        #     data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"                        
+        #     send_node_red_event("bot_step_finish")
+        #     job = jobs.dostep.delay(data)
+        #     while True:
+        #         time.sleep(0.01)
+        #         job.refresh()
+        #         if job.is_finished:                        
+        #             data['struct_text'] = job.result['text']
+        #             data['semantic'] = job.result['semantic']
+        #             data['semantic_words'] = job.result['semantic_words']                                     
+        #             socketio.emit('step', data)
+        #             break          
         
-        
-        #
         # GEO
         #                   
-        if float(cfg['do_geo']) == 1.0:
-            if "ip" in data.keys():
-                ip = data['ip']
-                url = data['current_url']
-                ## http_bp.logger.info(f"dopass retrieve ip {ip}") 
-                if ip != "0":
-                    job = jobs.do_geo.delay(ip)
-                    while True:
-                        time.sleep(0.01)
-                        job.refresh()  
-                        if job.is_finished:                    
-                            location = job.result                        
-                            # location['url'] == url                
-                            socketio.emit('location', location)                
+        # if float(cfg['do_geo']) == 1.0:
+        #     send_node_red_event(f"try {data.keys()}")
+        #     if "ip" in data.keys():
+        #         ip = data['ip']
+        #         # url = data['current_url']
+        #         ## http_bp.logger.info(f"dopass retrieve ip {ip}") 
+        #         if ip != "0":
+        #             job = jobs.do_geo.delay(ip)
+        #             while True:
+        #                 time.sleep(0.01)
+        #                 job.refresh()  
+        #                 if job.is_finished:                    
+        #                     location = job.result                        
+        #                     # location['url'] == url                
+        #                     socketio.emit('location', location)
+                            
+                            
+        # else:
+        #     send_node_red_event(f"skip")                
 
 
         #
         # SAVE
         #      
-        if float(cfg['do_save']) == 1.0:
-            # socketio.emit('step', data)
-            job = jobs.save.delay(data)
-            while True:
-                time.sleep(0.01)
-                job.refresh() 
-                if job.is_finished:
-                    # socketio.emit('step', data)
-                    filename = job.meta.get('filename')
-                    # http_bp.logger.info(f"added save {filename}")
-                    break
+        # if float(cfg['do_save']) == 1.0:
+        #     # socketio.emit('step', data)
+        #     job = jobs.save.delay(data)
+        #     while True:
+        #         time.sleep(0.01)
+        #         job.refresh() 
+        #         if job.is_finished:
+        #             # socketio.emit('step', data)
+        #             filename = job.meta.get('filename')
+        #             # http_bp.logger.info(f"added save {filename}")
+        #             break
+
+
+
+
 
 
 

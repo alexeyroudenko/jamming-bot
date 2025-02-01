@@ -103,7 +103,7 @@ def all_jobs():
         if job.meta.get('type'):            
             # app.logger.info(f"job.result {job.result}") 
             job_type = job.meta.get('type')
-            if job_type == "step" and job.result:
+            if job_type == "step":
                 l.append({
                     'id': job.get_id(),
                     'type': job.meta.get('type'), 
@@ -153,7 +153,7 @@ def get_step(step_num):
                             # 'step': job.meta.get('step'),
                             # 'username': job.meta.get('step')['current_url'],
                             # 'r': job.result['words_count'],
-                        'result': job.result
+                        # 'result': job.result
                         })
     return jsonify(l)
 

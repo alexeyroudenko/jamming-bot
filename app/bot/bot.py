@@ -142,9 +142,10 @@ class NetSpider():
 
         logging.info(f"my ip {ip}")
         logging.info(f"osc address ip {osc_address}")
-        #mask = [0,0,0,255]
-        #broadcast = [(ioctet | ~moctet) & 0xff for ioctet, moctet in zip(ip, mask)]
-        #print(broadcast)
+        
+        # mask = [0,0,0,255]
+        # broadcast = [(ioctet | ~moctet) & 0xff for ioctet, moctet in zip(ip, mask)]
+        # logging.info(broadcast)
 
         self.osc = udp_client.SimpleUDPClient(osc_address, 7001)
         pass
@@ -659,11 +660,11 @@ async def main():
     spider.is_active = config['is_active']
     
     
-    from omegaconf import OmegaConf
-    from osc_server import OSCServer
-    osc_config = OmegaConf.load("osc_server.yml")
-    osc_server = OSCServer(osc_config)
-    osc_server.run_osc_reciver()
+    # from omegaconf import OmegaConf
+    # from osc_server import OSCServer
+    # osc_config = OmegaConf.load("osc_server.yml")
+    # osc_server = OSCServer(osc_config)
+    # osc_server.run_osc_reciver()
     
     #feature_states = self.osc_feature_controler.feature_states
     
@@ -731,11 +732,11 @@ async def main():
             time.sleep(0.01)
             
             if killer.kill_now:
-                osc_server.stop_osc_receiver()
+                # osc_server.stop_osc_receiver()
                 break
             
     except KeyboardInterrupt as ex:
-        osc_server.stop_osc_receiver()
+        # osc_server.stop_osc_receiver()
         print('goodbye!')
 
 

@@ -50,7 +50,22 @@ services:
     depends_on:
       - redis
     networks:
-      - app_network       
+      - app_network   
+
+  # adapter:
+  #   build: 
+  #     dockerfile: docker/adapter/Dockerfile
+  #   container_name: adapter
+  #   ports:
+  #     - "4000:4000"
+  #   volumes:
+  #     - type: bind
+  #       source: ./adapter
+  #       target: /app
+  #   depends_on:
+  #     - flask
+  #   networks:
+  #     - app_network    
 
   worker:    
     build: 
@@ -83,7 +98,15 @@ services:
   #       source: ./data
   #       target: /app/data    
   #   depends_on:
-  #     - redis    
+  #     - redis  
+
+  # dashboard:
+  #   image: master-image
+  #   ports:
+  #     - 5555:5555
+  #   depends_on:
+  #     - redis
+  #   command: rq-dashboard --port 5555 --redis-url redis://redis:6379/0  
 
   
   spacyapi:
@@ -143,7 +166,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080"
+      - "5001:5001"
     volumes:
       - type: bind
         source: ./data/certbot/www
@@ -168,21 +191,23 @@ services:
     networks:
       - app_network
     volumes:
-      - node_red_data:/data
+      - type: bind
+        source: ./data/node_red
+        target: /data
     environment:
       - NODE_OPTIONS=--max-old-space-size=256
     restart: unless-stopped
 
 
-  frontend:
-    build: ./frontend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    ports:
-      - "3000:3000"
-    networks:
-      - app_network 
+  # frontend:
+  #   build: ./frontend
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+  #   ports:
+  #     - "3000:3000"
+  #   networks:
+  #     - app_network 
 
       
 
@@ -198,3 +223,4 @@ volumes:
 
 networks:
   app_network:
+    driver: bridge
