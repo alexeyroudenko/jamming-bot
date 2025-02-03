@@ -235,21 +235,21 @@ def step():
         #
         # PASS
         # 
-        # if float(cfg['do_pass']) == 1.0:   
-        #     data['id'] = data['current_url']
-        #     data['url'] = data['current_url']
-        #     data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"                        
-        #     send_node_red_event("bot_step_finish")
-        #     job = jobs.dostep.delay(data)
-        #     while True:
-        #         time.sleep(0.01)
-        #         job.refresh()
-        #         if job.is_finished:                        
-        #             data['struct_text'] = job.result['text']
-        #             data['semantic'] = job.result['semantic']
-        #             data['semantic_words'] = job.result['semantic_words']                                     
-        #             socketio.emit('step', data)
-        #             break          
+        if float(cfg['do_pass']) == 1.0:   
+            data['id'] = data['current_url']
+            data['url'] = data['current_url']
+            data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"                        
+            send_node_red_event("bot_step_finish")
+            job = jobs.dostep.delay(data)
+            while True:
+                time.sleep(0.01)
+                job.refresh()
+                if job.is_finished:                        
+                    data['struct_text'] = job.result['text']
+                    data['semantic'] = job.result['semantic']
+                    data['semantic_words'] = job.result['semantic_words']                                     
+                    socketio.emit('step', data)
+                    break          
         
         # GEO
         #                   
