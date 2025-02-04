@@ -1,6 +1,6 @@
 
 #The Flask application container will use python:3.10-alpine as the base image
-FROM python:3.7
+FROM python:3.6-stretch
 
 
 #This command will create the working directory for our Python Flask application Docker image
