@@ -210,7 +210,7 @@ def sublink_add():
 
 
 
-
+DO_RED = False
 
 #
 #   Called from container
@@ -223,11 +223,12 @@ def step():
     if request.method == 'POST':
         data = request.form.to_dict()
         
-        try:
-            RED_URL = "http://node_red:1880/events/bot_step/"
-            red_request = requests.post(RED_URL, data) 
-        except Exception as e:
-            print("error ", e)
+        if DO_RED:
+            try:
+                RED_URL = "http://node_red:1880/events/bot_step/"
+                red_request = requests.post(RED_URL, data) 
+            except Exception as e:
+                print("error ", e)
          
         # cfg = getConfig()
         # send_node_red_event(f"do_pass: {cfg['do_pass']}")  
@@ -238,8 +239,10 @@ def step():
         if float(cfg['do_pass']) == 1.0:   
             data['id'] = data['current_url']
             data['url'] = data['current_url']
-            data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"                        
-            send_node_red_event("bot_step_finish")
+            data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"
+            if DO_RED:                        
+                send_node_red_event("bot_step_finish")
+            
             job = jobs.dostep.delay(data)
             while True:
                 time.sleep(0.01)
