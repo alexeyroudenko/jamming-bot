@@ -24,7 +24,7 @@
       .textClass {
           stroke: #ffffff;
           font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
-          font-weight: normal;
+          font-weight: thin;
           stroke-width: .5;
           font-size: 12px;
           padding-left:120px;
@@ -34,18 +34,50 @@
 
       #log_img {
         position: absolute;
-        top:128px;
-        right:128px;
+        font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
+        top:64px;
+        right:40%;
         z-index:100;
-        width:20%;
-        height:80%;
-        border:1px solid #aaa;
-        font-size:6px;
+        width:512px;
+        height:40%;
+        /*border:1px solid #aaa;*/
+        font-size:11px;
         color:#aaa;
         overflow:hidden;
         valign:bottom;
-        opacity:0.5;
+        opacity:1.5;
+        white-space: pre-wrap;
+        /*display:none;*/
       }
+
+      #log_words {
+        position: absolute;
+        font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
+        bottom:20%;
+        right:20%;
+        z-index:100;
+        width:256px;
+        height:128px;
+        /*border:1px solid #aaa;*/
+        font-size:16px;
+        color:#fff;
+        opacity:1.5;
+        white-space: pre-wrap;
+      }
+
+      #nodes{
+        position:absolute;
+        z-index:200;
+        /*border:1px solid #aaa;*/
+        width: 512px;
+        height: 512px;
+        display: none;
+      }
+
+      #log {
+        display:none;
+    }
+
       .update_item {
         border:1px solid #ffffff;
         float:left;
@@ -55,6 +87,10 @@
         position: absolute;
         top:32px;
         right:32px;
+        z-index:110;
+        width:30%;
+        height:64px;
+        /*border:1px solid #aaa;*/
       }
 
       button {
@@ -76,7 +112,11 @@
 
 
 <script>
+    var nodes = []
     var graph;
+
+
+
     function myGraph() {
 
         // Add and remove elements on the graph object
@@ -142,6 +182,12 @@
         // set up the D3 visualisation in the specified element
         var w = window.innerWidth,
         h = window.innerHeight;
+        var aspect = w / h;
+
+        // const container = d3.select(graph.node().parentNode)
+        
+
+
 
         var color = d3.scale.category10();
 
@@ -153,12 +199,36 @@
                 .attr("pointer-events", "all")
                 .attr("viewBox", "0 0 " + w + " " + h)
                 .attr("perserveAspectRatio", "xMinYMid")
-                .append('svg:g');
+                //.append('svg:g');
 
+
+        
+                function resize() {
+                    var w = window.innerWidth;
+                    var h = window.innerHeight;
+                    //const targetWidth = window.innerWidth;
+                    //graph.attr('width', w);
+                    //graph.attr('height', Math.round(w / aspect));        
+                    vis.attr("width", w).attr("height", h)
+        
+                }
+        
+                window.addEventListener('resize', function (event) {
+                    //console.log('Произошло событие', event.type)
+                    resize();
+                })
+
+                resize()
+                console.log(w, h)
+
+
+                
+        
+        
         var force = d3.layout.force();
 
         var nodes = force.nodes(),
-                links = force.links();
+        links = force.links();
 
         var update = function () {
             var link = vis.selectAll("line")
@@ -231,7 +301,7 @@
 
             // Restart the force layout.
             force
-              .gravity(.06)
+              .gravity(.03)
               .charge(-80000)
               .friction(0.004)
               .linkDistance( function(d) { return d.value * 10 } )
@@ -245,17 +315,7 @@
     }
 
     graph = new myGraph("#svgdiv");
-
-    function drawGraph() {
-
-        
-
-
-
-
-
-    }
-
+    function drawGraph() {}
     drawGraph();
 
     // because of the way the network is created, nodes are created first, and links second,
@@ -266,18 +326,9 @@
             gnode.parentNode.appendChild(gnode);
         });
     }
-    function addNodes() {
-        d3.select("svg")
-                .remove();
-         drawGraph();
-    }
-
-
-</script>
 
 
 
-<script type="text/javascript" charset="utf-8">
 
   var server = window.location.protocol + "//" + window.location.host;
   console.log(server)
@@ -298,27 +349,47 @@
         socket.emit('my_ping');
     }, 250);
   });
-  prev = -1
+  
   socket.on('step', function(data) {
+    step = data[0]['step']
     url = data[0]['current_url'];
-      info = data[0]['step'] + "::::" + url; // + "::::" + data[0]['src_url']
-      text = data[0]['text']
-      console.log("data", data, info)
-      
-      step = data[0]['step']
+    from_url = data[0]['src_url'];
+    info = data[0]['step'] + "::::" + url; // + "::::" + data[0]['src_url']
+    text = data[0]['text']
+    //console.log("data", data, info)
+    
+    node = graph.addNode(url);
+    // console.log(node)
+    if (nodes.lastIndexOf(from_url)>-1){
+        graph.addLink(from_url, url, '10');    
+    }
+    
+    keepNodesOnTop();
 
-      graph.addNode(step);
-      if (prev!=-1) {
-        graph.addLink(step, prev, '10');
-      }
-      prev = step
-      keepNodesOnTop();
-      
-        var log_view = document.getElementById('tittle'); 
-        log_view.innerHTML = url;
+    var log_view = document.getElementById('tittle');     
+    log_view.innerHTML = url;
 
-      log_msg(info)
-      log_img(text)
+    nodes.push(url)
+    // nodes.removeChild(url);
+    function updateData(selectedNode)  {
+        diff.removed.forEach((node) => nodes.splice(nodes.indexOf(node), 1))
+        console.log(graph)
+    }
+
+    //
+    //
+    // Limit Npdes
+    //
+
+    if (nodes.length > 256) {        
+        node_to_delete = nodes[0]        
+        graph.removeNode(node_to_delete)
+        console.log(graph)        
+        nodes.pop();
+    }
+
+    log_msg(info)
+    log_img(text)
   });
 
   socket.on('my_pong', function () {
@@ -331,20 +402,51 @@
     console.log('Disconnected from server');
   });
 
+ 
+ 
+  function getRandomWords(text, numWords = 7) {
+    const words = text.split(/\s+/).filter(word => word.trim() !== '');
+    for (let i = words.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [words[i], words[j]] = [words[j], words[i]];
+    }
+    return words.slice(0, numWords);
+ }
+
   function log_msg(msg) {
     var log_view = document.getElementById('log'); 
     log_view.innerHTML = msg + "<br />" + log_view.innerHTML;
   }
 
   function log_img(msg) {
+    var cuts = getRandomWords(msg)
+    log_words(cuts.join(", "))
+
     var log_view = document.getElementById('log_img'); 
-    log_view.innerHTML = msg;
+    // log_view.innerHTML = "<pre><code>"+msg+"</code></pre>";
+    log_view.innerHTML = "<code>"+msg+"</code>";
+  }
+
+  function log_words(msg) {
+    var log_view = document.getElementById('log_words'); 
+    // log_view.innerHTML = "<pre><code>"+msg+"</code></pre>";
+    log_view.innerHTML = "<code>"+msg+"</code>";
+  }
+
+  function reset() {
+    //d3.select("svg").remove();
+    //drawGraph();
+    socket.emit('reset');
   }
 
 
 </script>
 
+<div id="nodes"></div>
+
   <div id="debug">
+    <!--button onclick="reset()">reset</button></br-->
+    <button onclick="reset()">reset</button>
     <a href="/help">counter:<span id="counter"></span> | latency:<span id="latency"></span> | tag:<span id="tag"></span></a>
   </div>
 
@@ -352,11 +454,13 @@
 
   <div id="log_img"></div>
 
+  <div id="log_words"></div>
+
   <span id="tittle"></span>
 
   <div class="errors"></div>
 
-  <button onclick="addNodes()">Restart</button>
+
 
 </body>
 </html>

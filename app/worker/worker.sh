@@ -1,0 +1,1 @@
+rq worker --url redis://10.0.0.11:6379/0

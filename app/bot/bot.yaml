@@ -1,8 +1,8 @@
 start_url: 'https://arthew0.online/'
 osc_adress: "192.168.1.125"
-sleep_time: 1
+sleep_time: 0.1
 max_errors: 100000
 color_log: True
 count_per_domain: 20
 resolve_coords: False
-do_verbs: False
+do_verbs: True

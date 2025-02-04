@@ -23,8 +23,7 @@ RUN pip install Flask
 RUN pip install rq==1.2.0
 RUN pip install rq-dashboard==0.5.1
 RUN pip install gunicorn==19.9.0
-# RUN pip install "click>=7,<8"
-RUN pip install click
+RUN pip install "click>=7,<8"
 
 # RUN pip install Flask-SocketIO=="4.3.1"
 # RUN pip install python-engineio=="3.13.2"
@@ -44,8 +43,6 @@ ENV NAME World
 
 #This command will copy the files and source code required to run the application
 # COPY app/flask/ /app
-
 #This command will start the Python Flask application Docker container
 # CMD python app.py
-
-# ENTRYPOINT ["python", "app.py"]
+ENTRYPOINT ["worker.sh"]

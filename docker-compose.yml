@@ -6,27 +6,17 @@ networks:
 
 services:
 
-  redis: 
-    image: redislabs/redismod
-    container_name: redis
-    networks:
-      mynetwork:
-        ipv4_address: 10.0.0.11    
-    ports:
-      - '6379:6379'
-    volumes:
-    - /data/redis:/data
-    restart: always       
-
   flask:
     build: 
-      dockerfile: docker/flask/Dockerfile
-    container_name: flask
+      dockerfile: docker/flask/Dockerfile    
+    image: master-image
+    container_name: jflask
     networks:
       mynetwork:
         ipv4_address: 10.0.0.10
     ports:
       - "5000:5000"
+    command: python app.py
     volumes:
       - type: bind
         source: ./app/flask
@@ -42,7 +32,7 @@ services:
   bot:
     build: 
       dockerfile: docker/bot/Dockerfile
-    container_name: bot
+    container_name: jbot
     networks:
       mynetwork:
         ipv4_address: 10.0.0.7
@@ -57,7 +47,83 @@ services:
         target: /app/data 
       #- .:/code
     depends_on:
-      - redis      
+      - redis    
+
+
+  # server:
+  #   build: ./project
+  #   image: master-image
+  #   ports:
+  #     - 5000:5000
+  #   command: gunicorn --workers 4 --bind 0.0.0.0:5001 --timeout 120 'server:create_app()'
+  #   stdin_open: true
+  #   tty: true
+
+  # worker:
+  #   image: master-image
+  #   depends_on:
+  #     - redis
+  #   command: rq worker --name worker --url redis://redis:6379/0
+
+# uncomment to have a another worker
+#  worker2:
+#    image: master-image
+#    depends_on:
+#      - redis
+#    command: rqworker --name worker2 --url redis://redis:6379/0
+
+
+
+
+
+
+  redis: 
+    image: redislabs/redismod
+    container_name: redis    
+    networks:
+      mynetwork:
+        ipv4_address: 10.0.0.11    
+    ports:
+      - '6379:6379'
+    volumes:
+    - /data/redis:/data
+    restart: always            
+
+
+  worker:    
+    build: 
+      dockerfile: docker/worker/Dockerfile    
+    image: worker-image
+    command: ./worker.sh
+    volumes:
+      - type: bind
+        source: ./app/worker
+        target: /app    
+    depends_on:
+      - redis
+
+  dashboard:
+    image: master-image
+    ports:
+      - 5555:5555
+    depends_on:
+      - redis
+    command: rq-dashboard --port 5555 --redis-url redis://10.0.0.11:6379/0      
+
+#    command: rq worker --name worker --url redis://redis:6379/0
+#    command: rq worker --name worker --url redis://redis@redis:6379/0
+
+
+  # frontend-app:
+  #   build: ./frontend
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+  #   ports:
+  #     - "3000:3000"
+
+
+
 
 volumes:
   shared:

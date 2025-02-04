@@ -156,6 +156,8 @@ class NetSpider():
     async def step(self):
         #logging.debug(f"self.step {str(self.step_number)}")
         self.step_number = self.step_number + 1
+        
+        # get next step
         query = "SELECT id, hostname, url, src_url, count(visited) FROM Urls where visited==0 GROUP BY hostname ORDER BY count(visited) LIMIT 1"        
         rows = await self.database.fetch_all(query=query)
         try:
@@ -182,14 +184,14 @@ class NetSpider():
                     response = requests.get(current_url, timeout=1, stream=True)
                     ip, port = response.raw._connection.sock.getpeername()                    
                     soup = BeautifulSoup(response.content, "html.parser", from_encoding="utf-8")                    
-                    text = soup.get_text(" ", strip=True)
+                    text = soup.get_text("</br>", strip=True)
                     
                     
                     # logging.info(f"text {text}")
                     
                     if self.do_verbs:
                         doc = self.nlp(text)
-                        print("Verbs:", [token.lemma_ for token in doc if token.pos_ == "VERB"])
+                        print("verbs:", [token.lemma_ for token in doc if token.pos_ == "VERB"])
 
                     link_elements = soup.select("a[href]")
                     
@@ -231,52 +233,71 @@ class NetSpider():
                                         
                     stored_links_for_domain = await self.retrieve_stored_links_for_domain(current_base_domain)
                     
+                    
+                    import mimetypes
+                    # >>> mimetypes.guess_type('test.py')
+                    # # ('text/x-python', None)
+                    # >>> mimetypes.guess_type('test.txt')
+                    # # ('text/plain', None)
+                    # >>> mimetypes.guess_type('test.html')
+                    # # ('text/html', None)
+                    # >>> mimetypes.guess_type('test.jpg')
+                    # # ('image/jpeg', None)
+                    # >>> mimetypes.guess_type('test.doc')
+                    # # ('application/msword', None)
+                    
+                    
                     for link_element in link_elements:
                         
                         url = link_element['href']
-                        href = link_element['href']
-                                                
-                        new_link_element = ""
-                        if not "javascript" in url and not "mailto" in url:
-                            new_hostname = urlparse(url).hostname
-                            # new_hostname = get_second_level_domain(new_hostname)
-                            if not new_hostname:
-                                full_url = requests.compat.urljoin(current_site, url)
-                                url = self.filter.clean_url(full_url)
+                        href = link_element['href'] 
+                        mimetype = mimetypes.guess_type(url)
+                        
+                        # logging.info(f"check {url} mimetype {mimetype}")
+                        
+                        #if mimetype[0] != "video/mp4":
+                        if mimetype[0] == "text/html" or mimetype[0] == None:
+                            new_link_element = ""
+                            if not "javascript" in url and not "mailto" in url:
+                                new_hostname = urlparse(url).hostname
+                                # new_hostname = get_second_level_domain(new_hostname)
+                                if not new_hostname:
+                                    full_url = requests.compat.urljoin(current_site, url)
+                                    url = self.filter.clean_url(full_url)
+                                    
+                                if not new_hostname: 
+                                    new_link_element = self.filter.get_values(full_url)['url']
+                                else:
+                                    if self.filter.clean_url(new_hostname) in self.filter.filters:
+                                        #logging.debug(f"skip href {href} because host {new_hostname}")
+                                        ...
+                                    else:   
+                                        new_link_element = href
+                                                                                                
+                            # logging.info(f"new_link_element {new_link_element}")
+                                                    
+                            if new_link_element not in stored_links_for_domain and new_link_element != "":
                                 
-                            if not new_hostname: 
-                                new_link_element = self.filter.get_values(full_url)['url']
-                            else:
-                                if self.filter.clean_url(new_hostname) in self.filter.filters:
-                                    #logging.debug(f"skip href {href} because host {new_hostname}")
-                                    ...
-                                else:   
-                                    new_link_element = href
-                                                                                               
-                        # logging.info(f"new_link_element {new_link_element}")
-                                                
-                        if new_link_element not in stored_links_for_domain and new_link_element != "":
-                            
-                            hostname = get_second_level_domain(new_link_element)
-                            
-                            # check count links for domain in db
-                            stored_links_for_domain = await self.retrieve_stored_links_for_domain(hostname)
-                            logging.debug(f"hostname {hostname} -- {stored_links_for_domain}")                    
-                            count_stored_links_for_domain = len(stored_links_for_domain)
-                            count_elements = count_stored_links_for_domain
-                            logging.debug(f"{count_elements} ? {self.count_per_domain}")
-                            
-                            if count_elements > self.count_per_domain:
-                                logging.debug(f"skip add")
-                            else:
-                                # add url to database
-                                values = self.filter.get_values(href)
-                                values['url'] = new_link_element
-                                values['src_url'] = current_url                                                                                            
-                                values['hostname'] = hostname
-                                logging.debug(f"add new_link_element {new_link_element} because host {hostname} \t values{values}")
-                                query = "INSERT OR IGNORE INTO Urls(hostname, url, src_url, visited) VALUES (:hostname, :url, :src_url, :visited)"
-                                await self.database.execute(query=query, values=values)
+                                hostname = get_second_level_domain(new_link_element)
+                                
+                                # check count links for domain in db
+                                stored_links_for_domain = await self.retrieve_stored_links_for_domain(hostname)
+                                logging.debug(f"hostname {hostname} -- {stored_links_for_domain}")                    
+                                count_stored_links_for_domain = len(stored_links_for_domain)
+                                count_elements = count_stored_links_for_domain
+                                logging.debug(f"{count_elements} ? {self.count_per_domain}")
+                                
+                                if count_elements > self.count_per_domain:
+                                    logging.debug(f"skip add")
+                                else:
+                                    # add url to database
+                                    values = self.filter.get_values(href)
+                                    values['url'] = new_link_element
+                                    values['src_url'] = current_url                                                                                            
+                                    values['hostname'] = hostname
+                                    logging.debug(f"add new_link_element {new_link_element} because host {hostname} \t values{values}")
+                                    query = "INSERT OR IGNORE INTO Urls(hostname, url, src_url, visited) VALUES (:hostname, :url, :src_url, :visited)"
+                                    await self.database.execute(query=query, values=values)
 
 
                 except Exception as e1:
