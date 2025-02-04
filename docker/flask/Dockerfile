@@ -26,10 +26,10 @@ RUN pip install gunicorn==19.9.0
 # RUN pip install "click>=7,<8"
 RUN pip install click
 RUN pip install sentry-sdk[flask]
+RUN pip install requests
 
-
-# RUN pip install -U spacy
-# RUN python -m spacy download en_core_web_sm
+RUN pip install -U spacy
+RUN python -m spacy download en_core_web_sm
 
 # RUN pip install Flask-SocketIO=="4.3.1"
 # RUN pip install python-engineio=="3.13.2"

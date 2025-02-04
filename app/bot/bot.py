@@ -28,11 +28,9 @@ import tldextract
 
 config_file = "bot.yaml"
 
-
-
-
-
-
+STEP_URL = "http://flask:5000/bot/step/"
+EVENT_URL = "http://flask:5000/bot/events"
+SUBLINK_URL = "http://flask:5000/bot/sublink/add/"
 
 import sentry_sdk
 sentry_sdk.init(
@@ -63,8 +61,16 @@ sentry_sdk.profiler.stop_profiler()
 
 
 
-
-
+exclude_tlds = {
+    "ru", "cn", "es", "mx", "ar", "pt", "br", "kr", "jp", "de", "fr", "it", "in", "id", "ph",
+    "tr", "th", "vn", "gr", "pl", "ua", "by", "kz", "ir", "pk", "eg", "sa", "ae", "il", "ma",
+    "ng", "za", "ke", "tz", "co", "cl", "pe", "ve", "uy", "bo", "ec", "cr", "gt", "hn", "ni",
+    "sv", "py", "do", "cu", "hk", "tw", "my", "lk", "bd"
+}
+def domain_is_en(domain):
+    tld = tldextract.extract(domain).suffix
+    return tld not in exclude_tlds
+        
 
 def get_second_level_domain(url):
     extracted = tldextract.extract(url)
@@ -124,6 +130,7 @@ class NetSpider():
         self.count_per_domain = count_per_domain
         self.do_verbs = False
         self.send_events = False
+        self.send_osc = False
         self.send_sublinks = False
         self.resume_at_restart = False
 
@@ -135,11 +142,12 @@ class NetSpider():
 
         logging.info(f"my ip {ip}")
         logging.info(f"osc address ip {osc_address}")
-        #mask = [0,0,0,255]
-        #broadcast = [(ioctet | ~moctet) & 0xff for ioctet, moctet in zip(ip, mask)]
-        #print(broadcast)
+        
+        # mask = [0,0,0,255]
+        # broadcast = [(ioctet | ~moctet) & 0xff for ioctet, moctet in zip(ip, mask)]
+        # logging.info(broadcast)
 
-        self.osc = udp_client.SimpleUDPClient(osc_address, 8000)
+        self.osc = udp_client.SimpleUDPClient(osc_address, 7001)
         pass
     
     '''
@@ -150,6 +158,7 @@ class NetSpider():
             config = yaml.load(file, Loader=SafeLoader)                
             self.sleep_time = config['sleep_time']
             self.send_events = config['send_events']
+            self.send_osc = config['send_osc']
             self.send_sublinks = config['send_sublinks']
             self.resume_at_restart = config['resume_at_restart']
             #self.is_active = config['is_active']
@@ -221,40 +230,64 @@ class NetSpider():
 
 
     
-    
+
+
 
     '''
-    
-    
-        notify outside
+        notify step
     '''                        
     def notify_about_step(self, step_data):
         if self.send_events:
-            STEP_URL = 'http://flask:5000/bot/step/'
-            r = requests.post(STEP_URL, data = step_data)
+            try:
+                r = requests.post(STEP_URL, data = step_data)            
+                # logging.info(f"url: {STEP_URL}")
+            except Exception as e0:
+                logging.error(f"error send step data {STEP_URL}")
+                self.send_events = False
+            
+        if self.send_osc:
+            step_data_osc = [step_data['step'], step_data['current_url'], step_data['src_url']]
+            try:   
+                self.osc.send_message("/step", step_data_osc)
+            except Exception as e0:
+                logging.error(f"error send OSC: {e0} {step_data.items()}")
 
 
     '''
-    
-    
-        notify logic
+        notify event
     '''                            
-    def notify_about_eventp(self, event_name, data):                        
+    def notify_about_eventp(self, event_name, data):
         if self.send_events:
-            # logging.info(event_name)
-            EVENT_URL = f'http://flask:5000/bot/events/{event_name}/'
-            r = requests.post(EVENT_URL, {"data":data})
+            try:
+                url = EVENT_URL + f"/{event_name}/"
+                r = requests.post(url, {"data":data})
+                # logging.info(f"url: {url}")
+            except Exception as e0:
+                logging.error(f"error send eventp data {url}")
+                self.send_events = False
+        if self.send_osc:            
+            try:
+                self.osc.send_message(f"/events/{event_name}/", [])
+            except Exception as e0:
+                logging.error(f"error send OSC: {e0}")
                 
 
-    '''
-    
-    
+    '''    
         notify sublinks
     '''                            
-    def notify_about_sublink(self, data):                        
-        if self.send_sublinks:
-            SUBLINK_URL = f'http://flask:5000/bot/sublink/add/'
-            r = requests.post(SUBLINK_URL, data)
+    def notify_about_sublink(self, data):
+        if self.send_sublinks:      
+            try:      
+                r = requests.post(SUBLINK_URL, data)
+            except Exception as e0:
+                logging.error(f"error send sublink data {SUBLINK_URL}")
+                self.send_sublinks = False
+            
+            
+            
+            
+            
+            
             
             
     '''
@@ -298,7 +331,7 @@ class NetSpider():
                         else:   
                             new_link_element = href
                                                                                     
-                if new_link_element not in stored_links_for_domain and new_link_element != "":
+                if new_link_element not in stored_links_for_domain and new_link_element != "" and domain_is_en(new_link_element):
                     
                     hostname = get_second_level_domain(new_link_element)
                     stored_links_for_domain = await self.retrieve_stored_links_for_domain(hostname)
@@ -341,7 +374,9 @@ class NetSpider():
             #  
             #
             #
+
             self.notify_about_eventp("retrieve_next_url", self.step_number)
+
             #
             query = "SELECT id, hostname, url, src_url, count(visited) FROM Urls where visited==0 GROUP BY hostname ORDER BY count(visited) LIMIT 1"
             rows = await self.database.fetch_all(query=query)            
@@ -369,7 +404,25 @@ class NetSpider():
                         
             if valid:
                 
-                res = get_tld(current_url, as_object=True)
+                import tld 
+                try:
+                    res = get_tld(current_url, as_object=True)
+                except tld.exceptions.TldBadUrl: 
+                    logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t bad url")
+                    self.notify_about_eventp("error_retrieve_url", {})                    
+                    step_data = { "step":self.step_number, "src_url": src_url, "current_url": current_url} 
+                    step_data["status_code"] = "000"
+                    self.notify_about_step(step_data)
+                    return
+                
+                except tld.exceptions.TldDomainNotFound:
+                    logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t domain not found")
+                    self.notify_about_eventp("error_retrieve_url", {})                    
+                    step_data = {"step":self.step_number, "src_url": src_url, "current_url": current_url} 
+                    step_data["status_code"] = "000"
+                    self.notify_about_step(step_data)
+                    return
+
                 current_base_domain = res.fld
                 current_base_domain = get_second_level_domain(current_base_domain)
                 
@@ -398,7 +451,7 @@ class NetSpider():
                                                     'Accept-Language': 'en-US, en;q=0.5',
                                                     'Accept-Charset':  'utf-8',
                                                 },
-                                            timeout=5, 
+                                            timeout=10, 
                                             stream=True)                    
                     ip = response.raw._connection.sock.getpeername()
                         
@@ -528,21 +581,16 @@ class NetSpider():
 
 
                 except Exception as e1:
-                    # logging.error(f"exception step 1 {e1} line:{e1.__traceback__.tb_lineno}")
-                    # print("Exception in step 1:", e1, traceback.print_exc())                    
-                    logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t line {e1.__traceback__.tb_lineno}")
-                    self.notify_about_eventp("error_retrieve_url", {})
-                    
+                    logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t e1 line {e1.__traceback__.tb_lineno}")
+                    self.notify_about_eventp("error_retrieve_url", {})                    
                     step_data = {
                         "step":self.step_number, 
                         "src_url": src_url, 
-                        "current_url": current_url
+                        "current_url": current_url,
+                        "status_code": "000"
                     } 
-                    step_data["status_code"] = "000"
-                    self.notify_about_step(step_data)
+                    # self.notify_about_step(step_data)
                     
-                    pass
-
         except Exception as e2:
             self.count_errors += 1
             logging.error(f"Exception step 2 {e2} line:{e2.__traceback__.tb_lineno}")
@@ -551,7 +599,6 @@ class NetSpider():
             #     logging.error(f"Exception self.count_errors {self.count_errors} .... finish")
             #     self.stop()
             #     exit()
-            pass
 
     """
         Controls
@@ -589,15 +636,19 @@ async def main():
     
     with open(config_file) as file:
         config = yaml.load(file, Loader=SafeLoader)
-
+        
+    STEP_URL = config["step_url"]
+    EVENT_URL = config["event_url"]
+    SUBLINK_URL = config["sublink_url"]
+    
     logging.info(f"init bot version: {config['version']}")
     
-    from redis import Redis
-    redis = Redis(host='redis', port=6379)
-    
-    pubsub = redis.pubsub()
-    CHANNEL_NAME = 'ctrl'
-    pubsub.subscribe(CHANNEL_NAME)
+    if config['receive_events']:        
+        from redis import Redis
+        redis = Redis(host='redis', port=6379)        
+        pubsub = redis.pubsub()
+        CHANNEL_NAME = 'ctrl'
+        pubsub.subscribe(CHANNEL_NAME)
     
     killer = GracefulKiller()
     
@@ -606,10 +657,20 @@ async def main():
                        config['resolve_coords'], 
                        count_per_domain = config['count_per_domain'])
     spider.resume_at_restart = config['resume_at_restart']
-
+    spider.is_active = config['is_active']
+    
+    
+    # from omegaconf import OmegaConf
+    # from osc_server import OSCServer
+    # osc_config = OmegaConf.load("osc_server.yml")
+    # osc_server = OSCServer(osc_config)
+    # osc_server.run_osc_reciver()
+    
+    #feature_states = self.osc_feature_controler.feature_states
+    
     await spider.start(config['start_url'], config['src_url'])
     
-    spider.is_active = config['is_active']
+    
         
     try:
         
@@ -622,53 +683,60 @@ async def main():
             # CTRL from REDIS
             #
             try:
-                message = pubsub.get_message()                
-                if message:                                        
-                    logging.info(f"message {message} - {message["data"]}")
-                                        
-                    if message["data"] == 1:                        
-                        logging.error(f"skip {message["data"]}")
-                    else:                    
-                        data = json.loads(message["data"])                        
-                        
-                        logging.info(f"message {data}")
-                                                
-                        if data == "start":
-                            spider.is_active = True
-                            
-                        if data == "stop":
-                            spider.is_active = False
-                            
-                        if data == "step":
-                            await spider.step()
                                 
-                        if data == "restart":
-                            logging.info(f"restarting {config['start_url']}") 
-                            await spider.start(config['start_url'], config['src_url'])
+                if config['receive_events']:
+                    message = pubsub.get_message()                                    
+                    if message:                                        
+                        logging.info(f"message {message} - {message["data"]}")
+                          
+                        if message["data"] == 1:                        
+                            logging.error(f"skip {message["data"]}")
+                        else:                    
+                            data = json.loads(message["data"])                                                    
+                            logging.info(f"message {data}")
+                                                    
+                            if data == "start":
+                                logging.info("start") 
+                                spider.is_active = True
+                                
+                            if data == "stop":
+                                logging.info("stop") 
+                                spider.is_active = False
+                                
+                            if data == "step":                                
+                                await spider.step()
+                                    
+                            if data == "restart":
+                                logging.info(f"restart") 
+                                await spider.start(config['start_url'], config['src_url'])
 
 
             except Exception as e:
                 logging.error(f"main loop {e}")
 
             #
-            # Step
-            # 
+            # Automative 
+            #
             if spider.is_active:
                 await spider.step()
+            
             # else:
             #     logging.info("iddle")
-                                                                    
+                                          
             spider.reload_config()
-            
-            
+            STEP_URL = config["step_url"]
+            EVENT_URL = config["event_url"]
+            SUBLINK_URL = config["sublink_url"]
             
             time.sleep(spider.sleep_time)
             time.sleep(0.01)
             
             if killer.kill_now:
+                # osc_server.stop_osc_receiver()
                 break
             
     except KeyboardInterrupt as ex:
+        # osc_server.stop_osc_receiver()
         print('goodbye!')
 
 

@@ -1,13 +1,11 @@
 <!doctype html>
 <html>
 <head>
-  <meta name="viewport" content="width=device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=no">    
+  <meta name="viewport" content="width=device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=no"/>    
   <script src="https://code.jquery.com/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
   <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
-  <!-- <title>Jamming bot</title> -->
-
-
+  <title>Jamming bot v2.1.0</title>
   <script src="https://d3js.org/d3.v3.min.js"></script>
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
   
@@ -15,31 +13,31 @@
 
 
 
-        body, table {
-            margin: 0px;
-            padding: 0px;
-            font-family:"Conv_Gals-Light", "Lucida Grande","Lucida Sans Unicode", Arial, Verdana, sans-serif;
-            font-size:32px;
-            color:#ffffff;
-        }
+    body, table {
+        margin: 0px;
+        padding: 0px;
+        font-family:"Conv_Gals-Light", "Lucida Grande","Lucida Sans Unicode", Arial, Verdana, sans-serif;
+        font-size:32px;
+        color:#ffffff;
+    }
 
-        html, body {
+    html, body {
         overflow:hidden;
         background-color:#000000;
         color: #fff;
-        }
+    }
 
 
-        .caption{
+    .caption{
         position: absolute;      
         vertical-align: middle;
         margin: 10px;
         padding: 10px;
         width: 256px;
         height: 256px;      
-        }
+    }
 
-        .ctxt{
+    .ctxt{
         padding-top:40px;
         font-size: 4px;
         text-shadow: 2px 2px #333333;
@@ -48,45 +46,45 @@
         width: 80%;
         height: 128px;
         border:0px solid #333;
-        }
+    }
 
-        .ajax-result {
+    .ajax-result {
         width: inherit;
         height: inherit;
         animation: primary 3s linear infinite;
-        }
+    }
 
-        #animate {
+    #animate {
         width: 50px;
         height: 50px;
         position: absolute;
         background: red;
-        }
+    }
 
-        #debug {
-        position:absolute;
+    #debug {
+    position:absolute;
         bottom:50px;
-        margin20px;
-        padding20px;
+        margin:20px;
+        padding:20px;
         font-size:12px;
-        }
+    }
 
-        #log {
+    #log {
         position:absolute;
         bottom:100px;
         margin:20px;
         padding:20px;
         font-size:10px;
         height:80%;
-        }
+    }
 
-        .sqr {
+    .sqr {
         width:128px;
         height:128px;
         border:1px solid #222222;
-        }
+    }
 
-        .errors {
+    .errors {
         position:absolute;
         text-align:left;
         vertical-align:bottom;
@@ -94,16 +92,16 @@
         width:100%;
         height:32px;
         border:0px solid #330000;
-        }
+    }
 
-        a {
+    a {
         background-color: white;
         border: 1px solid white;
-        }
+    }
 
-        a:visited {
-        color: ;
-        }
+    a:visited {
+        color: aaa;
+    }
 
 
 
@@ -183,35 +181,43 @@
     }
 
     #log_words {
+        /* border: 1px solid #ffffff; */
         position: absolute;
         font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
         bottom:10%;
         right:284px;
         z-index:100;
         width:512px;
-        height:384px;
-        font-size:11px;
-        color:#fff;
+        height:184px;
+        vertical-align: bottom;
+        /* font-size:22px; */
+        color:#eee;
         opacity:1.5;
-        white-space: pre-wrap;
-        font-size: 20px;
+        /* white-space: pre-wrap; */
+        font-size: .4cm;
         overflow: hidden;
+        display: table-cell;  
     }
 
     #log_phrases {
         position: absolute;
+        /* border: 1px solid #ffffff; */
         font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
-        top:10%;
-        right:284px;
+        bottom:40%;
+        right:184px;
         z-index:100;
         width:512px;
-        height:512px;
+        height:256px;
         font-size:11px;
+        vertical-align: bottom;
         color:#fff;
         opacity:1.5;
         white-space: pre-wrap;
-        font-size: 20px;
+        font-size: .4cm;
         overflow: hidden;
+        color:#888;
+        /* border:1px solid #aaa;   */
+        display: table-cell;  
     }
 
     #log_events {
@@ -448,8 +454,8 @@
             .attr("pointer-events", "all")
             .attr("viewBox", "0 0 " + Math.floor(w*scale) + " " + Math.floor(h*scale))
             .attr("perserveAspectRatio", "xMinYMid")
-            //.on("mouseover", handleMouseOver)
-            //.on("mouseout", handleMouseOut); -->
+            // .on("mouseover", handleMouseOver)
+            // .on("mouseout", handleMouseOut); 
             //.append('svg:g');
 
         function handleMouseOver(d, i) {
@@ -504,10 +510,10 @@
                 })
                 .attr("class", "link");
 
-            //link.append("title")
-            //        .text(function (d) {
-            //            return d.value;
-            //        });
+            link.append("title")
+                   .text(function (d) {
+                       return d.value;
+                   });
 
             link.exit().remove();
 
@@ -531,7 +537,7 @@
                 .attr("class", "textClass")
                 .attr("x", 28)
                 .attr("y", ".31em")
-                .text(function (d) {return "" //d.step  + ": " + d.id;
+                .text(function (d) {return d.step  + ": " + d.id;
                 });
 
             node.exit().remove();
@@ -724,12 +730,14 @@
     let last_added = "";
     socket.on('step', function(data) {
         clearTimeout(timeoutId);
-        
+        console.log(data)
         step = data['step']
         url = data['url'];
         from_url = data['src_url'];    
+        struct_text = data['struct_text']
         text = data['text']
         words = data['words']
+
 
         if (data.analyzed) {
             words_count = data.analyzed.words_count;
@@ -803,12 +811,56 @@
         if (data.analyzed) {
             document.getElementById("log_words").innerHTML = "<code>" + data.analyzed.words.join(', ') + "</code>";
         }
+        if (struct_text) {
+            document.getElementById("log_phrases").innerHTML = "<code>" + struct_text + "</code>";
+        }
         document.getElementById("log_headers").innerHTML = "<code>" + headers + "</code>";
         //typeString(url, "log_url", 1); //log_msg(info)
+
+
+        // console.log("semantic_words", data['semantic_words'])
+        set_semantic_woords_from_array(step, data['semantic_words'])
+
+
     }); // socket on step
 
 
 
+
+    //
+    //
+    //
+    function set_semantic_woords_from_array(step_number, semantic_words_array) {
+        let words = semantic_words_array
+        let sindex = 0;
+        let stimeoutId = 0
+        words_all = "END" 
+
+        function sanimateText() {            
+            if (sindex < words.length) {     
+                swords = words.slice(sindex, sindex+1)[0];            
+                if (swords != "") {
+                    words_all = swords + ", " + words_all;
+                }
+                sindex += 1;
+                document.getElementById("log_words").innerHTML = "<code><h3>Step " + step_number + " semantic</h3>" + words_all + "</code>";
+                stimeoutId = setTimeout(sanimateText, 150);
+            } else {
+                clearTimeout(stimeoutId);
+            }
+        }    
+        sanimateText();
+
+        document.getElementById("log_phrases").innerHTML = "<code><h3>noun_phrases</h3>" + data['noun_phrases'].join('<br>') + "</code>";
+
+        //words_all = data['words_str'] + words_all
+        //words = data['words']
+        //node = graph.findNode(data.url);
+        //node.data = data;
+        //node.r = data.sentences;
+        //console.log(node, node.data); 
+        //document.getElementById("log_words").innerHTML = "<code>" + words_all + "</code>";        
+    }
 
 
 
@@ -846,8 +898,6 @@
         sanimateText();
 
         document.getElementById("log_phrases").innerHTML = "<code><h3>noun_phrases</h3>" + data['noun_phrases'].join('<br>') + "</code>";
-
-        
 
         //words_all = data['words_str'] + words_all
         //words = data['words']
@@ -924,22 +974,29 @@
 <div id="nodes"></div>
 
   <div id="debug">
+    
     <code>
         | counter:<span id="counter"></span>
         | latency:<span id="latency"></span> 
-        | v2.0.0 |
+        | <a href="http://docs.arthew0.online:32768/" target="_blank">v2.1.0</a> |
+        
+        <!-- {% if admin %} -->
+        <button onclick="restart()">restart</button>
+        <a href="/api/steps/">api<span id="api"></span></a>|
+        <a href="/ctrl/">dashboard:<span id="dashboard"></span></a>|
+        <a href="/queue/">queue:<span id="queue"></span></a>
+        <!-- {% endif %} -->
+
     </code>
 
-    {% if admin %}
     <button onclick="do_step()">step</button>
-    <button onclick="stop()">stop</button>
-    <button onclick="restart()">restart</button>
+    <button onclick="stop()">stop</button>    
     <button onclick="start()">start</button>
-    <button onclick="do_add()" style="display:none">add</button>::
-    <a href="/api/steps/">api<span id="api"></span></a>::
-    <a href="/ctrl/">dashboard:<span id="dashboard"></span></a>::
-    <a href="/queue/">queue:<span id="queue"></span></a>  ::::
-    {% endif %}  
+    <button onclick="do_add()" style="display:none">add</button>|
+    <a href="/api/steps/">api<span id="api"></span></a>|
+    <a href="/ctrl/">dashboard:<span id="dashboard"></span></a>|
+    <a href="/queue/">queue:<span id="queue"></span></a>
+    
   </div>
 
   <div id="log"></div>
@@ -948,12 +1005,12 @@
 
     <span id="log_url" class="text"></span>
     <div id="log_text" class="text"></div>
-    <div id="log_phrases" class="text"></div>
-    <div id="log_words" class="text"></div> 
+    <div id="log_phrases" class="text"></div>    
     <div id="log_sub" class="text"></div> 
     <div id="log_events" class="text"></div> 
     <div id="log_headers" class="text"></div>  
     <div id="log_urls" class="text"></div>  
+    <div id="log_words" class="text"></div> 
 
   <span id='s2'>Second</span>
 

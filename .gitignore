@@ -9,7 +9,7 @@ __pycache__/
 rnd/txt*
 # editors
 .idea/
-
+adapter/node_modules/*
 # env vars
 .env
 .local/
