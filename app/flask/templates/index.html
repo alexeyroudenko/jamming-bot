@@ -15,14 +15,14 @@
   <style>
       .link {
           stroke: #2E2E2E;
-          stroke-width: 2px;
+          stroke-width: 1px;
       }
       .node {
           stroke: #fff;
           stroke-width: 5px;
       }
       .textClass {
-          stroke: #ffffff;
+          stroke: #aaaaaa;
           font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
           font-weight: thin;
           stroke-width: .5;
@@ -32,20 +32,31 @@
           left:120px;
       }
 
-      #log_img {
+      #log_url {
+        position: absolute;
+        top:32px;
+        left:32px;
+        z-index:110;
+        width:90%;
+        height:64px;
+        font-size: 0.5em;
+        /*border:1px solid #aaa;*/        
+      }
+
+
+      #log_text {
         position: absolute;
         font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
         top:64px;
-        right:40%;
+        left:32px;
         z-index:100;
         width:512px;
         height:40%;
-        /*border:1px solid #aaa;*/
         font-size:11px;
         color:#aaa;
         overflow:hidden;
         valign:bottom;
-        opacity:1.5;
+        opacity:.5;
         white-space: pre-wrap;
         /*display:none;*/
       }
@@ -58,11 +69,11 @@
         z-index:100;
         width:256px;
         height:128px;
-        /*border:1px solid #aaa;*/
         font-size:16px;
         color:#fff;
         opacity:1.5;
         white-space: pre-wrap;
+        font-size:24px;
       }
 
       #nodes{
@@ -83,15 +94,6 @@
         float:left;
       }
 
-      #tittle {
-        position: absolute;
-        top:32px;
-        right:32px;
-        z-index:110;
-        width:30%;
-        height:64px;
-        /*border:1px solid #aaa;*/
-      }
 
       button {
         position: absolute;
@@ -100,6 +102,16 @@
         z-index:100;
       }
     
+      ::-moz-selection { 
+        color: white;
+        background: red;
+      }
+      
+      ::selection {
+        color: white;
+        background: red;
+      }
+
   </style>
 
   
@@ -238,6 +250,7 @@
 
             link.enter().append("line")
                     .attr("id", function (d) {
+                        if (d.source && d.target)
                         return d.source.id + "-" + d.target.id;
                     })
                     .attr("stroke-width", function (d) {
@@ -350,13 +363,21 @@
     }, 250);
   });
   
+
+  //
+  //
+  //
+  let timeoutId = -1;
+
   socket.on('step', function(data) {
-    step = data[0]['step']
-    url = data[0]['current_url'];
-    from_url = data[0]['src_url'];
-    info = data[0]['step'] + "::::" + url; // + "::::" + data[0]['src_url']
-    text = data[0]['text']
-    //console.log("data", data, info)
+    clearTimeout(timeoutId);
+    step = data['step']
+    url = data['current_url'];
+    from_url = data['src_url'];    
+    text = data['text']
+    words = data['words']
+    
+    console.log(data)
     
     node = graph.addNode(url);
     // console.log(node)
@@ -366,7 +387,7 @@
     
     keepNodesOnTop();
 
-    var log_view = document.getElementById('tittle');     
+    var log_view = document.getElementById('log_url');     
     log_view.innerHTML = url;
 
     nodes.push(url)
@@ -376,11 +397,12 @@
         console.log(graph)
     }
 
+
+
     //
     //
     // Limit Npdes
     //
-
     if (nodes.length > 256) {        
         node_to_delete = nodes[0]        
         graph.removeNode(node_to_delete)
@@ -388,19 +410,64 @@
         nodes.pop();
     }
 
-    log_msg(info)
-    log_img(text)
-  });
-
-  socket.on('my_pong', function () {
-    const latency = (new Date).getTime() - start_time;
-    $('#latency').html(latency);
-    $('#counter').html(counter);
-  });
+      
+      let textLength = 2048;
+      if (textLength < 2048) {
+          textLength = text.length
+      }
+      let delay = 1
+      let index = 0;
+      function type() {            
+        const element = document.getElementById( "log_text")
+        if (index < text.length) {              
+            element.innerHTML = "<code>"+text.slice(0, index)+"</code>";
+            var rng = document.createRange();
+            rng.setStartBefore( document.getElementById('s1') );
+            rng.setEndAfter( document.getElementById('s2') );
+            document.getSelection().addRange(rng);    
+            index+=5;
+            timeoutId = setTimeout(type, delay);
+        } else {
+            clearTimeout(timeoutId);
+        }
+      }    
+      type();
+      
+    //typeString(text, "log_text", 2); //log_img(text)
     
-  socket.on('disconnect', function() {
-    console.log('Disconnected from server');
-  });
+    document.getElementById("log_words").innerHTML = "<code></code>";
+
+    //typeString(url, "log_url", 1); //log_msg(info)
+
+   }); // socket on step
+
+
+
+
+    socket.on('analyzed', function(data) {
+
+        console.log("analyzed", data)
+        step = data['step']
+        url = data['current_url'];
+        words = data['job_result'].join("<br>")
+        document.getElementById("log_words").innerHTML = "<code>" + words + "</code>";
+
+    })
+
+
+
+
+
+
+    socket.on('my_pong', function () {
+        const latency = (new Date).getTime() - start_time;
+        $('#latency').html(latency);
+        $('#counter').html(counter);
+    });
+
+    socket.on('disconnect', function() {
+        console.log('Disconnected from server');
+    });
 
  
  
@@ -413,25 +480,6 @@
     return words.slice(0, numWords);
  }
 
-  function log_msg(msg) {
-    var log_view = document.getElementById('log'); 
-    log_view.innerHTML = msg + "<br />" + log_view.innerHTML;
-  }
-
-  function log_img(msg) {
-    var cuts = getRandomWords(msg)
-    log_words(cuts.join(", "))
-
-    var log_view = document.getElementById('log_img'); 
-    // log_view.innerHTML = "<pre><code>"+msg+"</code></pre>";
-    log_view.innerHTML = "<code>"+msg+"</code>";
-  }
-
-  function log_words(msg) {
-    var log_view = document.getElementById('log_words'); 
-    // log_view.innerHTML = "<pre><code>"+msg+"</code></pre>";
-    log_view.innerHTML = "<code>"+msg+"</code>";
-  }
 
   function reset() {
     //d3.select("svg").remove();
@@ -446,17 +494,21 @@
 
   <div id="debug">
     <!--button onclick="reset()">reset</button></br-->
-    <button onclick="reset()">reset</button>
+    <!-- <button onclick="reset()">reset</button> -->
     <a href="/help">counter:<span id="counter"></span> | latency:<span id="latency"></span> | tag:<span id="tag"></span></a>
   </div>
 
   <div id="log"></div>
 
-  <div id="log_img"></div>
+  <span id='s1'>First</span>  
 
-  <div id="log_words"></div>
+    <span id="log_url"></span>
+    <div id="log_text"></div>
+    <div id="log_words"></div>  
 
-  <span id="tittle"></span>
+  <span id='s2'>Second</span>
+
+  
 
   <div class="errors"></div>
 

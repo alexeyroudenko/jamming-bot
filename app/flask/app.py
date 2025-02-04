@@ -156,7 +156,7 @@ def load_state():
 @app.route('/bot/step/', methods=['GET', 'POST'])
 def step():
     if request.method == 'POST':
-        data = request.form
+        data = request.form.to_dict()
         url = data['current_url']
         text = data['text']
         print(f"store {url} {text[0:32]}") 
@@ -181,7 +181,7 @@ def step():
         # print(f"started job {job.get_id()}") 
 
 
-    socketio.emit('step', [request.form])
+    socketio.emit('step', request.form)
     return "step"
 
 @socketio.on('reset')
