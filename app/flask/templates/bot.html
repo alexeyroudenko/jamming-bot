@@ -435,12 +435,17 @@
         var aspect = w / h;
 
         // const container = d3.select(graph.node().parentNode)
-        
-
-
+        function isMobile() {
+            const regex = /Mobi|Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
+            return regex.test(navigator.userAgent);
+        }
 
         var color = d3.scale.category10();
         var scale = 1;
+        
+        if (isMobile()) {
+            scale = 1.5;
+        }
         var vis = d3.select("body")
             .append("svg:svg")
             .attr("width", Math.floor(w*scale))
@@ -653,7 +658,7 @@
     });
   
 
-  function getLength(url1, url2) {
+  function getLinkLength(url1, url2) {
     length = "30"
     if (getDomain(url1,2)==getDomain(url2,2)) {
         length = "10"
@@ -703,7 +708,7 @@
     socket.on('sublink', function(data) {        
         log_sub_line = data['url']
         log_sub_page = log_sub_line  + "\n" + log_sub_page 
-        log_sub_page.substring(0,1024);
+        log_sub_page.substring(0, 1024);
         $('#log_sub').html("<code>" + log_sub_page + "</code>");
         //$('#log_text').html(counter);
         event_sub_time = (new Date).getTime()
@@ -747,7 +752,7 @@
         node_src = graph.findNode(from_url)
         if (!node_src) {
             graph.addNode(from_url, 0);
-            graph.addLink(from_url, url,  getLength(url, from_url));
+            graph.addLink(from_url, url,  getLinkLength(url, from_url));
         }    
 
         if (graph.findNodeIndex(from_url)) {
@@ -755,7 +760,7 @@
         }
 
         if (last_added) {
-            graph.addLink(last_added, url, getLength(url, last_added));
+            graph.addLink(last_added, url, getLinkLength(url, last_added));
         }
 
         last_added = url
