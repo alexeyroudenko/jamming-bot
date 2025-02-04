@@ -1,0 +1,13 @@
+databases
+tld
+bs4
+requests
+validators
+aiosqlite
+python-osc
+coloredlogs
+colorama
+pyyaml
+numpy
+spacy
+tldextract

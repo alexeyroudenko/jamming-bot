@@ -1,0 +1,67 @@
+networks:
+  mynetwork:
+    ipam:
+      config:
+       - subnet: 10.0.0.0/16
+
+services:
+
+  redis: 
+    image: redislabs/redismod
+    container_name: redis
+    networks:
+      mynetwork:
+        ipv4_address: 10.0.0.11    
+    ports:
+      - '6379:6379'
+    volumes:
+    - /data/redis:/data
+    restart: always       
+
+  flask:
+    build: 
+      dockerfile: docker/flask/Dockerfile
+    container_name: flask
+    networks:
+      mynetwork:
+        ipv4_address: 10.0.0.10
+    ports:
+      - "5000:5000"
+    volumes:
+      - type: bind
+        source: ./app/flask
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data 
+      #- .:/code
+    depends_on:
+      - redis
+
+
+  bot:
+    build: 
+      dockerfile: docker/bot/Dockerfile
+    container_name: bot
+    networks:
+      mynetwork:
+        ipv4_address: 10.0.0.7
+    ports:
+      - "5007:5007"
+    volumes:
+      - type: bind
+        source: ./app/bot
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data 
+      #- .:/code
+    depends_on:
+      - redis      
+
+volumes:
+  shared:
+    external: true
+  data:
+    external: true
+  app:

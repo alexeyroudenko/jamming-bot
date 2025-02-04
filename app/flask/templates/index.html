@@ -1,0 +1,362 @@
+<!doctype html>
+<html>
+<head>
+  <script
+  src="https://code.jquery.com/jquery-3.4.1.min.js"
+  integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
+  crossorigin="anonymous"></script>
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
+  <title>DayColor</title>
+
+
+  <script src="http://d3js.org/d3.v3.min.js"></script>
+  <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+  <style>
+      .link {
+          stroke: #2E2E2E;
+          stroke-width: 2px;
+      }
+      .node {
+          stroke: #fff;
+          stroke-width: 5px;
+      }
+      .textClass {
+          stroke: #ffffff;
+          font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
+          font-weight: normal;
+          stroke-width: .5;
+          font-size: 12px;
+          padding-left:120px;
+          margin-left:120px;
+          left:120px;
+      }
+
+      #log_img {
+        position: absolute;
+        top:128px;
+        right:128px;
+        z-index:100;
+        width:20%;
+        height:80%;
+        border:1px solid #aaa;
+        font-size:6px;
+        color:#aaa;
+        overflow:hidden;
+        valign:bottom;
+        opacity:0.5;
+      }
+      .update_item {
+        border:1px solid #ffffff;
+        float:left;
+      }
+
+      #tittle {
+        position: absolute;
+        top:32px;
+        right:32px;
+      }
+
+      button {
+        position: absolute;
+        bottom:32px;
+        right:32px;
+        z-index:100;
+      }
+    
+  </style>
+
+  
+</head>
+<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}" />
+<body>
+  
+
+
+
+
+<script>
+    var graph;
+    function myGraph() {
+
+        // Add and remove elements on the graph object
+        this.addNode = function (id) {
+            nodes.push({"id": id});
+            update();
+        };
+
+        this.removeNode = function (id) {
+            var i = 0;
+            var n = findNode(id);
+            while (i < links.length) {
+                if ((links[i]['source'] == n) || (links[i]['target'] == n)) {
+                    links.splice(i, 1);
+                }
+                else i++;
+            }
+            nodes.splice(findNodeIndex(id), 1);
+            update();
+        };
+
+        this.removeLink = function (source, target) {
+            for (var i = 0; i < links.length; i++) {
+                if (links[i].source.id == source && links[i].target.id == target) {
+                    links.splice(i, 1);
+                    break;
+                }
+            }
+            update();
+        };
+
+        this.removeallLinks = function () {
+            links.splice(0, links.length);
+            update();
+        };
+
+        this.removeAllNodes = function () {
+            nodes.splice(0, links.length);
+            update();
+        };
+
+        this.addLink = function (source, target, value) {
+            links.push({"source": findNode(source), "target": findNode(target), "value": value});
+            update();
+        };
+
+        var findNode = function (id) {
+            for (var i in nodes) {
+                if (nodes[i]["id"] === id) return nodes[i];
+            }
+            ;
+        };
+
+        var findNodeIndex = function (id) {
+            for (var i = 0; i < nodes.length; i++) {
+                if (nodes[i].id == id) {
+                    return i;
+                }
+            }
+            ;
+        };
+
+        // set up the D3 visualisation in the specified element
+        var w = window.innerWidth,
+        h = window.innerHeight;
+
+        var color = d3.scale.category10();
+
+        var vis = d3.select("body")
+                .append("svg:svg")
+                .attr("width", w)
+                .attr("height", h)
+                .attr("id", "svg")
+                .attr("pointer-events", "all")
+                .attr("viewBox", "0 0 " + w + " " + h)
+                .attr("perserveAspectRatio", "xMinYMid")
+                .append('svg:g');
+
+        var force = d3.layout.force();
+
+        var nodes = force.nodes(),
+                links = force.links();
+
+        var update = function () {
+            var link = vis.selectAll("line")
+                    .data(links, function (d) {
+                        return d.source.id + "-" + d.target.id;
+                    });
+
+            link.enter().append("line")
+                    .attr("id", function (d) {
+                        return d.source.id + "-" + d.target.id;
+                    })
+                    .attr("stroke-width", function (d) {
+                        return d.value / 10;
+                    })
+                    .attr("class", "link");
+
+            link.append("title")
+                .text(function (d) {
+                    return d.value;
+                });
+
+            link.exit().remove();
+
+            var node = vis.selectAll("g.node")
+                    .data(nodes, function (d) {
+                        return d.id;
+                    });
+
+            var nodeEnter = node.enter().append("g")
+                    .attr("class", "node")
+                    .call(force.drag);
+
+            nodeEnter.append("svg:circle")
+                    .attr("r", 6)
+                    .attr("id", function (d) {
+                        return "Node;" + d.id;
+                    })
+                    .attr("class", "nodeStrokeClass");
+                    //.attr("fill", function(d) { return color(d.id); });
+
+            nodeEnter.append("svg:text")
+                    .attr("class", "textClass")
+                    .attr("x", 18)
+                    .attr("y", ".31em")
+                    .text(function (d) {
+                        return d.id;
+                    });
+
+            node.exit().remove();
+
+            force.on("tick", function () {
+
+                node.attr("transform", function (d) {
+                    return "translate(" + d.x + "," + d.y + ")";
+                });
+
+                link.attr("x1", function (d) {
+                    return d.source.x;
+                })
+                .attr("y1", function (d) {
+                    return d.source.y;
+                })
+                .attr("x2", function (d) {
+                    return d.target.x;
+                })
+                .attr("y2", function (d) {
+                    return d.target.y;
+                });
+            });
+
+            // Restart the force layout.
+            force
+              .gravity(.06)
+              .charge(-80000)
+              .friction(0.004)
+              .linkDistance( function(d) { return d.value * 10 } )
+              .size([w, h])
+              .start();
+        };
+
+
+        // Make it all go
+        update();
+    }
+
+    graph = new myGraph("#svgdiv");
+
+    function drawGraph() {
+
+        
+
+
+
+
+
+    }
+
+    drawGraph();
+
+    // because of the way the network is created, nodes are created first, and links second,
+    // so the lines were on top of the nodes, this just reorders the DOM to put the svg:g on top
+    function keepNodesOnTop() {
+        $(".nodeStrokeClass").each(function( index ) {
+            var gnode = this.parentNode;
+            gnode.parentNode.appendChild(gnode);
+        });
+    }
+    function addNodes() {
+        d3.select("svg")
+                .remove();
+         drawGraph();
+    }
+
+
+</script>
+
+
+
+<script type="text/javascript" charset="utf-8">
+
+  var server = window.location.protocol + "//" + window.location.host;
+  console.log(server)
+  
+  var socket = io();
+
+  var counter = 0
+  var tag = 0
+  var imgs = 0
+  var start_time = (new Date).getTime()
+
+  height = 600
+  socket.on('connect', function() {  
+    //var start_time;
+    window.setInterval(function () {
+        counter += 1
+        start_time = (new Date).getTime();
+        socket.emit('my_ping');
+    }, 250);
+  });
+  prev = -1
+  socket.on('step', function(data) {
+    url = data[0]['current_url'];
+      info = data[0]['step'] + "::::" + url; // + "::::" + data[0]['src_url']
+      text = data[0]['text']
+      console.log("data", data, info)
+      
+      step = data[0]['step']
+
+      graph.addNode(step);
+      if (prev!=-1) {
+        graph.addLink(step, prev, '10');
+      }
+      prev = step
+      keepNodesOnTop();
+      
+        var log_view = document.getElementById('tittle'); 
+        log_view.innerHTML = url;
+
+      log_msg(info)
+      log_img(text)
+  });
+
+  socket.on('my_pong', function () {
+    const latency = (new Date).getTime() - start_time;
+    $('#latency').html(latency);
+    $('#counter').html(counter);
+  });
+    
+  socket.on('disconnect', function() {
+    console.log('Disconnected from server');
+  });
+
+  function log_msg(msg) {
+    var log_view = document.getElementById('log'); 
+    log_view.innerHTML = msg + "<br />" + log_view.innerHTML;
+  }
+
+  function log_img(msg) {
+    var log_view = document.getElementById('log_img'); 
+    log_view.innerHTML = msg;
+  }
+
+
+</script>
+
+  <div id="debug">
+    <a href="/help">counter:<span id="counter"></span> | latency:<span id="latency"></span> | tag:<span id="tag"></span></a>
+  </div>
+
+  <div id="log"></div>
+
+  <div id="log_img"></div>
+
+  <span id="tittle"></span>
+
+  <div class="errors"></div>
+
+  <button onclick="addNodes()">Restart</button>
+
+</body>
+</html>

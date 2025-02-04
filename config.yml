@@ -1,0 +1,15 @@
+app:
+  spot_folder   : "./data/spot/"
+  tags_folder   : "./data/tags/"  
+  txt_path      : "./data/txt/"
+  tmp_folder    : "./data/tmp/"
+  chat_ids      : "./data/bot/chat_ids.txt"
+  restart_collect : False
+  limit : 4
+trends:
+  simulate: True
+  sleep_time: 5
+  test_sleep_time: 5
+  count: 2
+img:
+  count_for_spot: 4
