@@ -156,6 +156,7 @@ def dostep(step):
             "ip": ip, 
             "url": step['url'],                
             "src_url": step['src_url'],
+            "tags": tags,
             "semantic": tags,
             "semantic_words": words,
             "semantic_hrases": hrases,

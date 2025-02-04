@@ -64,6 +64,7 @@ def socketio_handlers(socketio):
 
     @socketio.on('restart')
     def handle_restart():
+        socketio.emit('clear')     
         redis.publish('ctrl', json.dumps("restart"))
 
     @socketio.on('step')

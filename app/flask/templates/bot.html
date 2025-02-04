@@ -716,7 +716,13 @@
 
 
 
-
+    socket.on('clear', function(data){
+        console.log("clear")
+        url = ""
+        text = ""    
+        graph.removeAllNodes()
+        graph.removeallLinks()
+    })
 
     //
     // STEP
@@ -798,7 +804,7 @@
                 var rng = document.createRange();
                 rng.setStartBefore( document.getElementById('s1') );
                 rng.setEndAfter( document.getElementById('s2') );
-                document.getSelection().addRange(rng);    
+                //document.getSelection().addRange(rng);    
                 index+=10;
                 timeoutId = setTimeout(animateText, delay);
             } else {
@@ -851,7 +857,7 @@
         }    
         sanimateText();
 
-        document.getElementById("log_phrases").innerHTML = "<code><h3>noun_phrases</h3>" + data['noun_phrases'].join('<br>') + "</code>";
+        // document.getElementById("log_phrases").innerHTML = "<code><h3>noun_phrases</h3>" + data['noun_phrases'].join('<br>') + "</code>";
 
         //words_all = data['words_str'] + words_all
         //words = data['words']
@@ -946,10 +952,10 @@
 
   function restart() {
     console.log("restart")
-    url = ""
-    text = ""    
-    graph.removeAllNodes()
-    graph.removeallLinks()
+    // url = ""
+    // text = ""    
+    // graph.removeAllNodes()
+    // graph.removeallLinks()
     socket.emit('restart');
   }
 

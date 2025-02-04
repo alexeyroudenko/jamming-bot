@@ -163,7 +163,8 @@ def ctrl():
 @http_bp.route("/ctrl/<action>/", methods=["GET"])
 def ctrl_action(action):
     redis.publish('ctrl', json.dumps(action))
-    return redirect('/ctrl/')
+    # return redirect('/ctrl/')
+    return json.dumps(action)
 
 
 
@@ -230,7 +231,7 @@ def step():
             except Exception as e:
                 print("error ", e)
          
-        # cfg = getConfig()
+        cfg = getConfig()
         # send_node_red_event(f"do_pass: {cfg['do_pass']}")  
 
         #
