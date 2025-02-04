@@ -130,7 +130,7 @@
         font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
         /*font-weight: thin;*/
         font-family: monospace;
-        font-size: 9px;
+        font-size: 96px;
         padding-left:120px;
         margin-left:120px;
         left:120px;
@@ -528,7 +528,7 @@
                 .call(force.drag);
 
             nodeEnter.append("svg:circle")
-                .attr("r", function (d) {return d.r*1.2;})
+                .attr("r", function (d) {return d.r*1.0;})
                 .attr("id", function (d) {return "Node;" + d.id;})
                 .attr("class", "nodeStrokeClass")
                 //.attr("fill", function(d) { return color(d.id); });
@@ -537,7 +537,8 @@
                 .attr("class", "textClass")
                 .attr("x", 28)
                 .attr("y", ".31em")
-                .text(function (d) {return d.step  + ": " + d.id;
+                //.text(function (d) {return d.step  + ": " + d.id;
+                .text(function (d) {return d.id;
                 });
 
             node.exit().remove();
@@ -562,9 +563,9 @@
 
             // Restart the force layout.
             force.gravity(.01)
-              .charge(-80000)
-              .friction(0.004)
-              .linkDistance( function(d) { return d.value * 13 } )
+              .charge(-1000)
+              .friction(0.1)
+              .linkDistance( function(d) { return d.value * 10 } )
               .size([w, h])
               .start();
         };
@@ -659,7 +660,7 @@
   
 
   function getLinkLength(url1, url2) {
-    length = "30"
+    length = "50" //30
     if (getDomain(url1,2)==getDomain(url2,2)) {
         length = "10"
     }
@@ -762,7 +763,7 @@
         }    
 
         if (graph.findNodeIndex(from_url)) {
-            graph.addLink(from_url, url, '15');
+            graph.addLink(from_url, url, '15');            
         }
 
         if (last_added) {

@@ -243,17 +243,19 @@ def step():
             data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"
             if DO_RED:                        
                 send_node_red_event("bot_step_finish")
+                
+            socketio.emit('step', data)                
             
-            job = jobs.dostep.delay(data)
-            while True:
-                time.sleep(0.01)
-                job.refresh()
-                if job.is_finished:                        
-                    data['struct_text'] = job.result['text']
-                    data['semantic'] = job.result['semantic']
-                    data['semantic_words'] = job.result['semantic_words']                                     
-                    socketio.emit('step', data)
-                    break          
+            # job = jobs.dostep.delay(data)
+            # while True:
+            #     time.sleep(0.01)
+            #     job.refresh()
+            #     if job.is_finished:                        
+            #         data['struct_text'] = job.result['text']
+            #         data['semantic'] = job.result['semantic']
+            #         data['semantic_words'] = job.result['semantic_words']                                     
+            #         socketio.emit('step', data)
+            #         break          
         
         # GEO
         #                   

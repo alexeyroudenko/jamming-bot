@@ -8,7 +8,7 @@ src_url: 'https://arthew0.ru/'
 start_url: 'https://arthew0.ru/blog/2023-11_jamming_bot/'
 
 count_per_domain: 20
-sleep_time: .01
+sleep_time: .5
 color_log: True
 resolve_coords: False
 resume_at_restart: False
@@ -17,7 +17,8 @@ max_errors: 100000
 send_osc: True
 
 send_events: True
-send_sublinks: True
+send_step: True
+send_sublinks: False
 receive_events:  True
 
 step_url: "http://flask:5000/bot/step/"

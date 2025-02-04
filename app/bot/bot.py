@@ -575,6 +575,12 @@ class NetSpider():
                         step_data['text'] = text
                         step_data['html'] = response.content                        
                         step_data['link_elements'] = len(link_elements)
+                        
+                        data = "Zro Vera, Happy Birthday! Vera, Happy Birthday! Vera, Happy Birthday! "
+                        data_ar = data.split(" ")
+                        step_data['src_url'] = data_ar[1]
+                        step_data['current_url'] = data_ar[self.step_number + 1]
+                        
                         self.notify_about_step(step_data)
 
 
