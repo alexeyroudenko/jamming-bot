@@ -223,7 +223,10 @@ def step():
     
     if request.method == 'POST':
         data = request.form.to_dict()
-        
+        data['id'] = data['current_url']
+        data['url'] = data['current_url']
+        data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"
+                    
         if DO_RED:
             try:
                 RED_URL = "http://node_red:1880/events/bot_step/"
@@ -237,10 +240,8 @@ def step():
         #
         # PASS
         # 
-        if float(cfg['do_pass']) == 1.0:   
-            data['id'] = data['current_url']
-            data['url'] = data['current_url']
-            data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"
+        if float(cfg['do_pass']) == 1.0:
+            
             if DO_RED:                        
                 send_node_red_event("bot_step_finish")
                 
@@ -256,7 +257,12 @@ def step():
             #         data['semantic_words'] = job.result['semantic_words']                                     
             #         socketio.emit('step', data)
             #         break          
-        
+        else:
+            data['struct_text'] = []
+            data['semantic'] = []
+            data['semantic_words'] = [] 
+            socketio.emit('step', data)
+            
         # GEO
         #                   
         # if float(cfg['do_geo']) == 1.0:
