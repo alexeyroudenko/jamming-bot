@@ -183,20 +183,20 @@ services:
 
 
 
-  # node_red:
-  #   image: "nodered/node-red:latest"
-  #   container_name: node_red
-  #   ports:
-  #     - "1880:1880"
-  #   networks:
-  #     - app_network
-  #   volumes:
-  #     - type: bind
-  #       source: ./data/node_red
-  #       target: /data
-  #   environment:
-  #     - NODE_OPTIONS=--max-old-space-size=256
-  #   restart: unless-stopped
+  node_red:
+    image: "nodered/node-red:latest"
+    container_name: node_red
+    ports:
+      - "1880:1880"
+    networks:
+      - app_network
+    volumes:
+      - type: bind
+        source: ./data/node_red
+        target: /data
+    environment:
+      - NODE_OPTIONS=--max-old-space-size=256
+    restart: unless-stopped
 
 
   # frontend:

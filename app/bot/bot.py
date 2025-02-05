@@ -129,9 +129,12 @@ class NetSpider():
         self.resolve_coords = resolve_coords
         self.count_per_domain = count_per_domain
         self.do_verbs = False
+        
+        self.send_step = True
         self.send_events = False
         self.send_osc = False
         self.send_sublinks = False
+        
         self.resume_at_restart = False
 
         import socket
@@ -158,6 +161,7 @@ class NetSpider():
             config = yaml.load(file, Loader=SafeLoader)                
             self.sleep_time = config['sleep_time']
             self.send_events = config['send_events']
+            self.send_step = config['send_step']
             self.send_osc = config['send_osc']
             self.send_sublinks = config['send_sublinks']
             self.resume_at_restart = config['resume_at_restart']
@@ -234,14 +238,13 @@ class NetSpider():
         notify step
     '''                        
     def notify_about_step(self, step_data):
-        if self.send_events:
+        if self.send_step:
             try:
                 r = requests.post(STEP_URL, data = step_data)            
                 # logging.info(f"url: {STEP_URL}")
             except Exception as e0:
                 logging.error(f"error send step data {STEP_URL}")
-                self.send_events = False
-            
+                self.send_step = False
         if self.send_osc:
             step_data_osc = [step_data['step'], step_data['current_url'], step_data['src_url']]
             try:   
@@ -253,7 +256,7 @@ class NetSpider():
     '''
         notify event
     '''                            
-    def notify_about_eventp(self, event_name, data):
+    def notify_about_eventp(self, event_name, data):        
         if self.send_events:
             try:
                 url = EVENT_URL + f"/{event_name}/"
@@ -261,7 +264,7 @@ class NetSpider():
                 # logging.info(f"url: {url}")
             except Exception as e0:
                 logging.error(f"error send eventp data {url}")
-                self.send_events = False
+                self.send_events = False  
         if self.send_osc:            
             try:
                 self.osc.send_message(f"/events/{event_name}/", [])

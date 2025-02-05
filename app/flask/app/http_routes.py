@@ -23,12 +23,7 @@ socketio = get_socketio()
 http_bp = Blueprint('http', __name__)
 
 
-def send_node_red_event(event):
-    try:
-        RED_URL = "http://node_red:1880/events/debug/"
-        red_request = requests.post(RED_URL, {"event": event}) 
-    except Exception as e:
-        print("error ", e)
+
 
 
 @http_bp.route('/')
@@ -200,18 +195,16 @@ def bot_event(event_id):
 def sublink_add():
     if request.method == 'POST':
         data = request.form.to_dict()
+        
         # http_bp.logger.info(data)
         # id = data['id']
         # url = data['url']
         # src = data['src_url']
         # hostname = data['hostname']
+        
         socketio.emit('sublink', data)
     return "step"
 
-
-
-
-DO_RED = False
 
 #
 #   Called from container
@@ -224,12 +217,7 @@ def step():
     if request.method == 'POST':
         data = request.form.to_dict()
         
-        if DO_RED:
-            try:
-                RED_URL = "http://node_red:1880/events/bot_step/"
-                red_request = requests.post(RED_URL, data) 
-            except Exception as e:
-                print("error ", e)
+
          
         cfg = getConfig()
         # send_node_red_event(f"do_pass: {cfg['do_pass']}")  
@@ -238,13 +226,12 @@ def step():
         # PASS
         # 
         if float(cfg['do_pass']) == 1.0:   
+            
             data['id'] = data['current_url']
             data['url'] = data['current_url']
             data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"
-            if DO_RED:                        
-                send_node_red_event("bot_step_finish")
             
-            job = jobs.dostep.delay(data)
+            job = jobs.dostep.delay(data)            
             while True:
                 time.sleep(0.01)
                 job.refresh()
@@ -253,7 +240,16 @@ def step():
                     data['semantic'] = job.result['semantic']
                     data['semantic_words'] = job.result['semantic_words']                                     
                     socketio.emit('step', data)
-                    break          
+                    break
+                
+        else:
+            data['id'] = data['current_url']
+            data['url'] = data['current_url']
+            data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"
+            data['struct_text'] = []
+            data['semantic'] = []
+            data['semantic_words'] = []
+            socketio.emit('step', data)
         
         # GEO
         #                   

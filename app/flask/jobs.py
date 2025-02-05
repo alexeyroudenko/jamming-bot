@@ -6,8 +6,7 @@ from rq import get_current_job
 from rq_helpers import redis_connection
 import time
 import json
-
-
+import requests
 
 import re
 def remove_html_tags(text):
@@ -20,6 +19,15 @@ def remove_special_characters(text):
 
 
 
+DO_RED = True
+
+def send_node_red_event(event):
+    try:
+        RED_URL = "http://node_red:1880/events/debug/"
+        red_request = requests.post(RED_URL, {"event": event}) 
+    except Exception as e:
+        print("error ", e)
+
 
 
 
@@ -29,7 +37,16 @@ def remove_special_characters(text):
 #  1. STEP
 #   
 @job('default', connection=redis_connection, timeout=90, result_ttl=120)
-def dostep(step): 
+def dostep(step):
+    
+    if DO_RED:
+        try:
+            RED_URL = "http://node_red:1880/events/bot_step/"
+            red_request = requests.post(RED_URL, step) 
+        except Exception as e:
+            print("error ", e)
+                
+ 
         
     self_job = get_current_job()    
     self_job.meta['progress'] = {
@@ -163,12 +180,20 @@ def dostep(step):
             "text":text_out[0:1024] + "..."
         }
     
-    # try:
-    #     RED_URL = "http://node_red:1880/events/semantic_step/"
-    #     red_request = requests.post(RED_URL, return_obj) 
-    # except Exception as e:
-    #     print("error ", e)
-           
+    
+    if DO_RED:
+        # try:
+        #     RED_URL = "http://node_red:1880/events/bot_step_finish/"
+        #     red_request = requests.post(RED_URL, return_obj) 
+        # except Exception as e:
+        #     print("error ", e)
+    
+        try:
+            RED_URL = "http://node_red:1880/events/semantic_step/"
+            red_request = requests.post(RED_URL, {"hrases": hrases}) 
+        except Exception as e:
+            print("error ", e)
+    
     return return_obj
 
 

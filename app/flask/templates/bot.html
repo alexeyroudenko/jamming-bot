@@ -659,7 +659,7 @@
   
 
   function getLinkLength(url1, url2) {
-    length = "30"
+    length = "0"
     if (getDomain(url1,2)==getDomain(url2,2)) {
         length = "10"
     }
@@ -786,7 +786,7 @@
         //
         // Limit Nodes
         //
-        let MAX_NODES = 15
+        let MAX_NODES = 60
         if (graph.getNodes().length > MAX_NODES) {
             graph.removeNode(graph.getNodes()[0].id)
         }
@@ -956,6 +956,7 @@
     // text = ""    
     // graph.removeAllNodes()
     // graph.removeallLinks()
+    
     socket.emit('restart');
   }
 

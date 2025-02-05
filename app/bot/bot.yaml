@@ -1,4 +1,4 @@
-version: "2.1.0"
+version: "2.2.0"
 is_active: True
 osc_adress: "192.168.31.18"
 #osc_adress: "10.0.0.255"
@@ -15,9 +15,9 @@ resume_at_restart: False
 max_errors: 100000
 
 send_osc: True
-
 send_events: True
 send_sublinks: True
+send_step: True
 receive_events:  True
 
 step_url: "http://flask:5000/bot/step/"
