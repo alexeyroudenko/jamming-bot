@@ -13,8 +13,6 @@ function getDomain(url, subdomain) {
 }
 
 
-var graph;
-
 function myGraph() {
 
     var nodes = []
@@ -60,7 +58,7 @@ function myGraph() {
     };
 
     this.removeAllNodes = function () {
-        nodes.splice(0, links.length);
+        nodes.splice(0, nodes.length);
         update();
     };
 
@@ -119,6 +117,7 @@ function myGraph() {
     if (isMobile()) {
         scale = 1.5;
     }
+    scale = 1.0;
     var vis = d3.select("body")
         .append("svg:svg")
         .attr("width", Math.floor(w*scale))
@@ -158,8 +157,15 @@ function myGraph() {
 
     var force = d3.layout.force();
 
-    var nodes = force.nodes(),
+
+    nodes = force.nodes();
     links = force.links();
+
+    this.get_all = function() {
+        var force = d3.layout.force();
+        nodes = force.nodes();
+        return nodes
+    }
 
     var update = function () {
 
@@ -167,8 +173,12 @@ function myGraph() {
         
         links = force.links();
 
+        // console.log("----------line selectAll")
         var link = vis.selectAll("line")
-            .data(links, function (d) {                    
+            .data(links, function (d) {
+                // if (d.source && d.target)
+                // console.log(d.source.id + "-" + d.target.id) 
+                // console.log(d.source + "-" + d.target)                    
                 return d.source.id + "-" + d.target.id;
             });
 
@@ -235,12 +245,33 @@ function myGraph() {
         });
 
         // Restart the force layout.
+        // force.gravity(.001)
+        // .nodes(nodes)
+        // .links(links)
+        // .charge(-100000)
+        // .chargeDistance(100)
+        // .friction(0.4)
+        // .theta(1.8)
+        // .alpha(1.1)
+        // .linkStrength(0.2)
+        // .linkDistance( function(d) { return d.value * 10 } )
+        // .size([w, h])
+        // .start();
+
+
         force.gravity(.01)
-          .charge(-1000)
-          .friction(0.1)
-          .linkDistance( function(d) { return d.value * 10 } )
-          .size([w, h])
-          .start();
+        .nodes(nodes)
+        .links(links)
+        .charge(-3000)
+        .chargeDistance(250)
+        .linkStrength(0.1)
+        .linkDistance( function(d) { return d.value * 20 } )
+        .friction(0.4)
+        .theta(.1)
+        .alpha(.1)
+        .size([w, h])
+        .start();
+
     };
 
 
@@ -251,7 +282,12 @@ function myGraph() {
     }
 };
 
-graph = new myGraph("#svgdiv");
+
+
+
+
+
+var graph = new myGraph("#svgdiv");
 //function drawGraph() {}
 //drawGraph();
 
@@ -265,7 +301,25 @@ function keepNodesOnTop() {
 };
 
 
+function clear_graph() {
+    console.log("clear_graph")
 
+    // graph.removeAllNodes()
+    // graph.removeallLinks()
+    while (graph.getNodes().length > 0) {
+        graph.removeNode(graph.getNodes()[0].id)
+        graph.upd()
+    }
+
+    // console.log(graph)
+    // console.log(graph.nodes)
+    // console.log(graph.links)
+    // console.log(graph.getNodes())
+    // console.log(graph.upd())
+    // console.log(graph.get_all())
+
+    window.location.reload();
+}
 
 
 
@@ -317,16 +371,36 @@ socket.on('node', function(node_data) {
     src = node_data['src'];    
     node_id = graph.addNode(url, node_data['step'], node_data['size']);
     node_src = graph.findNode(src)
+
     if (!node_src) {
         graph.addNode(src, 0);
         graph.addLink(src, url,  getLinkLength(url, src));
-    }    
+    }  
+
     if (graph.findNodeIndex(src)) {
         graph.addLink(src, url, '15');            
     }
+
     if (last_added) {
         graph.addLink(last_added, url, getLinkLength(url, last_added));
     }
+
     last_added = url
     keepNodesOnTop();
+
+    //
+    // Limit Nodes
+    //
+    let MAX_NODES = 64
+    if (graph.getNodes().length > MAX_NODES) {
+        graph.removeNode(graph.getNodes()[0].id)
+    }
 });
+
+
+
+
+
+window.setInterval(function () {
+    simulate()
+}, 500);

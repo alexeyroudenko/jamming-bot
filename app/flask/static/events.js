@@ -86,9 +86,8 @@ socket.on('sublink', function(data) {
 socket.on('clear', function(data){
     console.log("clear")
     url = ""
-    text = ""    
-    graph.removeAllNodes()
-    graph.removeallLinks()
+    text = ""
+    clear_graph()    
 })
 
 //
@@ -149,14 +148,7 @@ socket.on('step', function(data) {
 
 
 
-    //
-    //
-    // Limit Nodes
-    //
-    let MAX_NODES = 15
-    if (graph.getNodes().length > MAX_NODES) {
-        graph.removeNode(graph.getNodes()[0].id)
-    }
+
 
     let textLength = 2048;
     if (textLength < 2048) {
@@ -299,8 +291,17 @@ socket.on('disconnect', function() {
     console.log('Disconnected from server');
 });
 
+socket.on('simulate', function () {
+    console.log("socket on simulate")
+    // const latency = (new Date).getTime() - start_time;
+    // $('#latency').html(latency);
+    // $('#counter').html(counter);
+});
 
-
+function simulate() {
+    // console.log("emit simulate")
+    socket.emit('simulate');
+}
 
 function reset() {
     console.log("reset")
@@ -323,15 +324,6 @@ function start() {
     socket.emit('start');
 }
 
-function restart() {
-    console.log("restart")
-    // url = ""
-    // text = ""    
-    // graph.removeAllNodes()
-    // graph.removeallLinks()
-    socket.emit('restart');
-}
-
 function do_step() {
     console.log("step")
     socket.emit('step');
@@ -343,6 +335,15 @@ function do_add() {
     // socket.emit('add');
     graph.addNode(new_id);
     graph.addLink(new_id, "URL1", '10');
+}
+
+function restart() {
+    console.log("restart")
+    // url = ""
+    // text = ""    
+    // graph.removeAllNodes()
+    // graph.removeallLinks()
+    socket.emit('restart');
 }
 
 
