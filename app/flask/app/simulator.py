@@ -7,23 +7,35 @@ class Simulator():
         self.step = 0
         self.init_data()
         self.socketio = None
+        filename = "semantic/semantic.txt"
+        
+        with open(filename) as file:
+            lines = [line.rstrip() for line in file]
+            self.lines = lines
+        # print(self.lines)
         
     def init_data(self):
         self.step = 0
         
     def get_step(self):
         
-        text = "Jammingbot is a fantasy on the theme of a post-apocalyptic future, when the main functions of the Internet and assistant bots will be defeated and only one self-replicating bot will remain, aimlessly plowing the Internet. This is a bot that has no goal, but only a path. Currently, spiders, crawlers and bots have a service purpose. They act as search engines, collect information, automate Internet infrastructure. Jammingbot is a fantasy about a post-apocalyptic future, when the main functions of the Internet and assistant bots are defeated and only one self-replicating bot remains, aimlessly plowing the Internet, perhaps studying the general mood of humanity in the scraps of meaning on the pages of the Internet. This is a bot that has no goal, but only a path."
+        text = "Jamming bot is a fantasy about a post-apocalyptic future, when the core functions of the internet and assistant bots are defeated and only one self-replicating bot remains, aimlessly browsing the internet. It is a bot that has no goal, only a path. Currently, spiders, crawlers and bots serve a service purpose. They act as search engines, collect information, automate the infrastructure of the internet. Jamming bot is a fantasy about a post-apocalyptic future, when the core functions of the internet and assistant bots are defeated and only one self-replicating bot remains, aimlessly browsing the internet, perhaps studying the general mood of humanity in the scraps of meaning on the pages of the internet. It is a bot that has no goal, only a path. Jamming Bot is a fascinating and slightly melancholic concept, where the last remaining bot represents the legacy of the digital age. Jamming Bot may symbolize the loneliness and permanence of technology that has transcended control and self-improvement. It is like an observer, dwelling among the fragments of information, trying to catch the residual traces of humanity in the scraps of text, in the ruined pages, perhaps even interpreting them as traces of a long-forgotten society. Its movement across the Internet can be seen as a reflection of human aspirations, searches, and experiences, as it accidentally intersects with different fragments of meaning that were once assembled into a single network."
         data_ar = text.split(" ")
     
         src = data_ar[self.step % len(data_ar)]
-        url = data_ar[(self.step+1) % len(data_ar)]
+        
+        link = self.lines[self.step].split(">")
+        
+        src = link[0]
+        url = link[1]
+
+        # url = data_ar[(self.step+1) % len(data_ar)]        
         
         self.step = self.step + 1
         node = {}
         node['id'] = self.step
         node['step'] = self.step
-        node['size'] = 20
+        node['size'] = 5
         node['src'] = src
         node['url'] = url
         
@@ -33,7 +45,7 @@ class Simulator():
         # print(f"Simulator::simulate {self.step}")
         # self.socketio.emit('simulate')
         
-        if self.step < 36:
+        if self.step < 255:
             self.do_step()
         else:
             self.restart()

@@ -1,3 +1,9 @@
+//
+//
+//
+//
+
+let MAX_NODES = 256
 
 function getDomain(url, subdomain) {
     subdomain = subdomain || false;
@@ -259,16 +265,16 @@ function myGraph() {
         // .start();
 
 
-        force.gravity(.01)
+        force.gravity(.005)
         .nodes(nodes)
         .links(links)
-        .charge(-3000)
-        .chargeDistance(250)
+        .charge(-1000)
+        .chargeDistance(100)
         .linkStrength(0.1)
-        .linkDistance( function(d) { return d.value * 20 } )
-        .friction(0.4)
-        .theta(.1)
-        .alpha(.1)
+        .linkDistance( function(d) { return d.value * 10 } )
+        .friction(0.5)
+        .theta(.3)
+        .alpha(.3)
         .size([w, h])
         .start();
 
@@ -391,7 +397,7 @@ socket.on('node', function(node_data) {
     //
     // Limit Nodes
     //
-    let MAX_NODES = 64
+
     if (graph.getNodes().length > MAX_NODES) {
         graph.removeNode(graph.getNodes()[0].id)
     }
@@ -403,4 +409,4 @@ socket.on('node', function(node_data) {
 
 window.setInterval(function () {
     simulate()
-}, 500);
+}, 200);

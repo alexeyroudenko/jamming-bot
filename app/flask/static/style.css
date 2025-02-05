@@ -290,11 +290,11 @@ button {
 
 
 .link {
-    stroke: #666;
+    stroke: #555;
     stroke-width: 2px;
 }
 .node {
-    stroke: #aaa;
+    stroke: #fff;
     /*stroke-width: 5px;*/
     font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
 }
@@ -303,9 +303,9 @@ button {
     font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
     /*font-weight: thin;*/
     font-family: monospace;
-    font-size: 32px;
+    font-size: 22px;
     padding-left:120px;
     margin-left:120px;
     left:120px;
-    color:#aaa;
+    color:#ffffff;
 }
