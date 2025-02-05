@@ -100,7 +100,6 @@ socket.on('clear', function(data){
 //
 //
 let timeoutId = -1;
-let last_added = "";
 socket.on('step', function(data) {
     clearTimeout(timeoutId);
     console.log(data)
@@ -121,24 +120,25 @@ socket.on('step', function(data) {
     }
     
     headers = data['headers']        
-    node_id = graph.addNode(url, step, words_count);
-    node_src = graph.findNode(from_url)
-    if (!node_src) {
-        graph.addNode(from_url, 0);
-        graph.addLink(from_url, url,  getLinkLength(url, from_url));
-    }    
+    // node_id = graph.addNode(url, step, words_count);
+    // node_src = graph.findNode(from_url)
+    // if (!node_src) {
+    //     graph.addNode(from_url, 0);
+    //     graph.addLink(from_url, url,  getLinkLength(url, from_url));
+    // }    
 
-    if (graph.findNodeIndex(from_url)) {
-        graph.addLink(from_url, url, '15');            
-    }
+    // if (graph.findNodeIndex(from_url)) {
+    //     graph.addLink(from_url, url, '15');            
+    // }
 
-    if (last_added) {
-        graph.addLink(last_added, url, getLinkLength(url, last_added));
-    }
+    // if (last_added) {
+    //     graph.addLink(last_added, url, getLinkLength(url, last_added));
+    // }
 
-    last_added = url
+    // last_added = url
 
-    keepNodesOnTop();
+    // keepNodesOnTop();
+
 
     var log_view = document.getElementById('log_url');
     log_view.innerHTML = "<code><nobr>" + step + " : " + url + "</nobr></code>";
@@ -198,6 +198,8 @@ socket.on('step', function(data) {
 
 
 }); // socket on step
+
+
 
 
 

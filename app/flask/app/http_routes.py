@@ -226,6 +226,27 @@ def step():
         data['id'] = data['current_url']
         data['url'] = data['current_url']
         data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"
+        
+        
+        
+        
+        text = "Here, there are various classes ranging from 1st to 6th grade elementary school to 1st to 3rd grade junior high school. Facilities at ProEd Global School include sports fields for soccer and basketball, an amphitheater, a music performance venue, and a library."
+        data_ar = text.split(" ")
+        
+        step = int(data['step'])
+        node = {}
+        node['id'] = data['current_url']
+        node['step'] = data['step']
+        node['url'] = data['current_url']
+        node['src'] = data['src_url']
+        node['size'] = 20
+        
+        node['src'] = data_ar[step % 16]
+        node['url'] = data_ar[(step+1) % 16]
+        
+        socketio.emit('node', node)  
+        
+        
                     
         if DO_RED:
             try:

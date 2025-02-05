@@ -298,3 +298,35 @@ if (false) {
 } else {
     // graph.addNode("http://arthew0.online", 0);
 }
+
+
+
+
+
+
+
+
+/*
+    message to create node
+    url, src, step, size
+*/
+let last_added = "";
+socket.on('node', function(node_data) {
+    console.log("node_data", node_data)
+    url = node_data['url'];
+    src = node_data['src'];    
+    node_id = graph.addNode(url, node_data['step'], node_data['size']);
+    node_src = graph.findNode(src)
+    if (!node_src) {
+        graph.addNode(src, 0);
+        graph.addLink(src, url,  getLinkLength(url, src));
+    }    
+    if (graph.findNodeIndex(src)) {
+        graph.addLink(src, url, '15');            
+    }
+    if (last_added) {
+        graph.addLink(last_added, url, getLinkLength(url, last_added));
+    }
+    last_added = url
+    keepNodesOnTop();
+});
