@@ -2,7 +2,7 @@
 <html>
 <head>
     <title>Jamming bot v2.1.0</title>
-    <meta name="viewport" content="width=device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=no"/>    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>    
     <link rel="stylesheet" href="/static/style.css"/>
     <script src="https://code.jquery.com/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
@@ -32,10 +32,11 @@
     </code>
 
     <button onclick="simulate()">simulate</button>
+    <button onclick="restart()">restart</button>
+
     <button onclick="do_step()">step</button>
     <button onclick="stop()">stop</button>    
     <button onclick="start()">start</button>
-    <button onclick="restart()">restart</button>
     <button onclick="do_add()" style="display:none">add</button>|
     <a href="/api/steps/">api<span id="api"></span></a>|
     <a href="/ctrl/">dashboard:<span id="dashboard"></span></a>|
@@ -43,9 +44,9 @@
     
   </div>
 
-  <div id="log"></div>
+    <div id="log"></div>
+    <span id='s1'></span>  
 
-    <span id='s1'>First</span>  
     <span id="log_url" class="text"></span>
     <div id="log_text" class="text"></div>
     <div id="log_phrases" class="text"></div>    
@@ -55,14 +56,11 @@
     <div id="log_urls" class="text"></div>  
     <div id="log_words" class="text"></div> 
 
-  <span id='s2'>Second</span>
+    <span id='s2'></span>
+    <div class="errors"></div>
 
-  <div class="errors"></div>
-
-  <script src="/static/events.js"></script>
-  <script src="/static/graph.js"></script>
-
-
+    <script src="/static/events.js"></script>
+    <script src="/static/graph.js"></script>
 
 </body>
 </html>

@@ -162,8 +162,6 @@ function myGraph() {
     console.log(w, h)
 
     var force = d3.layout.force();
-
-
     nodes = force.nodes();
     links = force.links();
 
@@ -292,6 +290,10 @@ function myGraph() {
 
 
 
+//
+//
+//
+//
 
 var graph = new myGraph("#svgdiv");
 //function drawGraph() {}
@@ -334,38 +336,6 @@ function clear_graph() {
 
 
 
-if (false) {
-    graph.addNode("URL0", 0, 0);
-    graph.addNode("URL1", 0, 10);
-    graph.addNode("URL2", 0, 20);
-    graph.addNode("URL3", 0, 30);
-    graph.addLink("URL0", "URL1", '10');
-    graph.addLink("URL0", "URL2", '10');
-    graph.addLink("URL1", "URL2", '10');
-    graph.addLink("URL1", "URL3", '10');
-    graph.removeNode("URL0")
-    graph.removeLinksForNode("URL0")
-
-    node = graph.findNode("URL1");
-    node.r = 20;
-    node.value = 5
-
-    node = graph.findNode("URL2");
-    node.r = 30;
-    console.log(node);
-    graph.upd();
-
-} else {
-    // graph.addNode("http://arthew0.online", 0);
-}
-
-
-
-
-
-
-
-
 /*
     message to create node
     url, src, step, size
@@ -397,7 +367,6 @@ socket.on('node', function(node_data) {
     //
     // Limit Nodes
     //
-
     if (graph.getNodes().length > MAX_NODES) {
         graph.removeNode(graph.getNodes()[0].id)
     }
@@ -405,8 +374,14 @@ socket.on('node', function(node_data) {
 
 
 
-
-
-window.setInterval(function () {
-    simulate()
+/*
+    auto timer
+*/
+console.log("wait to start 200")
+setTimeout(() => {
+    console.log("start")
+    window.setInterval(function () {
+        // console.log("simulate")
+        simulate()
+    }, 200);
 }, 200);

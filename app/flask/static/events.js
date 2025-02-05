@@ -118,26 +118,22 @@ socket.on('step', function(data) {
         words_count = Math.min(words_count/10+5, 20);
     }
     
-    headers = data['headers']        
+    headers = data['headers'] 
+
     // node_id = graph.addNode(url, step, words_count);
     // node_src = graph.findNode(from_url)
     // if (!node_src) {
     //     graph.addNode(from_url, 0);
     //     graph.addLink(from_url, url,  getLinkLength(url, from_url));
     // }    
-
     // if (graph.findNodeIndex(from_url)) {
     //     graph.addLink(from_url, url, '15');            
     // }
-
     // if (last_added) {
     //     graph.addLink(last_added, url, getLinkLength(url, last_added));
     // }
-
     // last_added = url
-
     // keepNodesOnTop();
-
 
     var log_view = document.getElementById('log_url');
     log_view.innerHTML = "<code><nobr>" + step + " : " + url + "</nobr></code>";
@@ -145,8 +141,6 @@ socket.on('step', function(data) {
     function updateData(selectedNode)  {
         diff.removed.forEach((node) => nodes.splice(nodes.indexOf(node), 1))
     }
-
-
 
 
 
@@ -183,12 +177,8 @@ socket.on('step', function(data) {
     }
     document.getElementById("log_headers").innerHTML = "<code>" + headers + "</code>";
     //typeString(url, "log_url", 1); //log_msg(info)
-
-
     // console.log("semantic_words", data['semantic_words'])
     set_semantic_woords_from_array(step, data['semantic_words'])
-
-
 }); // socket on step
 
 
@@ -345,6 +335,5 @@ function restart() {
     // graph.removeallLinks()
     socket.emit('restart');
 }
-
 
 console.log("loaded js")
