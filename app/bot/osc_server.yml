@@ -1,5 +1,5 @@
 osc_client:
-  adress: '239.255.255.255'
+  adress: '224.0.1.255'
   port: 5005
 
 osc_server:

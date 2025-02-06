@@ -281,16 +281,20 @@ socket.on('disconnect', function() {
     console.log('Disconnected from server');
 });
 
-socket.on('simulate', function () {
-    console.log("socket on simulate")
+socket.on('simulate', function (action) {
+    console.log("socket on simulate", action)
     // const latency = (new Date).getTime() - start_time;
     // $('#latency').html(latency);
     // $('#counter').html(counter);
+    if (action == "step") {
+        console.log("emit simulate")
+        socket.emit('simulate'); 
+    }
 });
 
 function simulate() {
-    // console.log("emit simulate")
-    socket.emit('simulate');
+    console.log("emit simulate")
+    socket.emit('simulate'); 
 }
 
 function reset() {
@@ -298,6 +302,10 @@ function reset() {
     //d3.select("svg").remove();
     //drawGraph();
     socket.emit('reset');
+}
+
+function skip() {
+    console.log("skip")
 }
 
 function stop() {
@@ -337,3 +345,15 @@ function restart() {
 }
 
 console.log("loaded js")
+
+// /*
+//     auto timer
+// */
+// console.log("wait to start 200")
+// setTimeout(() => {
+//     console.log("start")
+//     window.setInterval(function () {
+//         // console.log("simulate")
+//         simulate()
+//     }, 200);
+// }, 200);

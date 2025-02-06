@@ -156,6 +156,7 @@ def ctrl():
 
 
 
+
 #
 # Forward http to redis message for   
 # Controlling BOT
@@ -168,7 +169,14 @@ def ctrl_action(action):
 
 
 
-
+#
+# Forward http to redis message for   
+# Controlling BOT
+#
+@http_bp.route("/simulate/<action>/", methods=["GET"])
+def simulate_action(action):
+    socketio.emit('simulate', action)  
+    return json.dumps(action)
 
 
 

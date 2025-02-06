@@ -374,14 +374,3 @@ socket.on('node', function(node_data) {
 
 
 
-/*
-    auto timer
-*/
-console.log("wait to start 200")
-setTimeout(() => {
-    console.log("start")
-    window.setInterval(function () {
-        // console.log("simulate")
-        simulate()
-    }, 200);
-}, 200);
