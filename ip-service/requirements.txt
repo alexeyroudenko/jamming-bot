@@ -1,0 +1,6 @@
+asyncpg==0.20.1
+fastapi[all]
+SQLAlchemy==1.3.13
+uvicorn==0.11.2
+httpx==0.11.1
+maxminddb
