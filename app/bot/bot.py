@@ -227,7 +227,10 @@ class NetSpider():
         for row in rows:
             stored_lnks.append(row[2])
         return stored_lnks
+
+
     
+
 
 
     '''
@@ -371,16 +374,17 @@ class NetSpider():
             #  
             #
             #
+
             self.notify_about_eventp("retrieve_next_url", self.step_number)
-            # url_id, current_url, src_url = self.retrieve_next_url()            
-            group = "GROUP BY hostname"
-            query = f"SELECT id, hostname, url, src_url, count(visited) FROM Urls where visited==0 {group} ORDER BY count(visited) LIMIT 1"
-            rows = await self.database.fetch_all(query=query)            
+
+            #
+            query = "SELECT id, hostname, url, src_url, count(visited) FROM Urls where visited==0 GROUP BY hostname ORDER BY count(visited) LIMIT 1"
+            rows = await self.database.fetch_all(query=query)   
+                   
             url_id = rows[0][0]
+            # domain = get_second_level_domain(rows[0][1])
             current_url = rows[0][2]
             src_url = rows[0][3]
-        
-        
             
             #
             #  Set visited
@@ -400,11 +404,10 @@ class NetSpider():
             valid = validators.url(current_site)
                         
             if valid:
-                current_base_domain = ""
+                
                 import tld 
                 try:
                     res = get_tld(current_url, as_object=True)
-                
                 except tld.exceptions.TldBadUrl: 
                     logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t bad url")
                     self.notify_about_eventp("error_retrieve_url", {})                    
@@ -593,10 +596,11 @@ class NetSpider():
             self.count_errors += 1
             logging.error(f"Exception step 2 {e2} line:{e2.__traceback__.tb_lineno}")
             print(f"Exception in step 2: {e2}", traceback.print_exc())
-            # if self.count_errors > 10000:
-            #     logging.error(f"Exception self.count_errors {self.count_errors} .... finish")
-            #     self.stop()
-            #     exit()
+            
+        except IndexError as e2:
+            self.count_errors += 1
+            logging.error(f"IndexError step 2 {e2} line:{e2.__traceback__.tb_lineno}")
+            print(f"IndexError in step 2: {e2}", traceback.print_exc())
 
     """
         Controls
