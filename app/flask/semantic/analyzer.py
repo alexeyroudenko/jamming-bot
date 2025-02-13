@@ -1,6 +1,41 @@
 
 
 
+from bs4 import BeautifulSoup, NavigableString, Tag
+def get_text_from_html(html):    
+    soup = BeautifulSoup(html)
+    header = soup.find('header')
+    if header:
+        header.decompose()
+    footer = soup.find('footer')
+    if footer:
+        footer.decompose()
+    text_out = ""
+    for header in soup.find_all('h2'):
+        nextNode = header
+        while True:
+            nextNode = nextNode.nextSibling
+            if nextNode is None:
+                break
+            if isinstance(nextNode, NavigableString):
+                text_out += nextNode.strip().replace("\n","").replace("\r","")
+                break
+            if isinstance(nextNode, Tag):
+                if nextNode.name in {'h1', 'h2', 'h3', 'h4', 'h5'}:
+                    break
+                txt = nextNode.get_text(strip=True).strip().replace("\n","").replace("\r","")
+                if len(txt) > 0:
+                    text_out += nextNode.get_text(strip=True).strip().replace("\n","").replace("\r","")
+                    break
+                    # return text_out
+                    
+    if text_out == "":
+        paragraphs = [p.get_text() for p in soup.find_all('p')]
+        if len(paragraphs) > 0:
+            text_out = paragraphs[0]
+                            
+    return text_out
+
 
 import spacy
 

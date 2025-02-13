@@ -234,14 +234,7 @@ def step():
         data['id'] = data['current_url']
         data['url'] = data['current_url']
         data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"
-        
-        
-        
-        
-        text = "Here, there are various classes ranging from 1st to 6th grade elementary school to 1st to 3rd grade junior high school. Facilities at ProEd Global School include sports fields for soccer and basketball, an amphitheater, a music performance venue, and a library."
-        data_ar = text.split(" ")
-        
-        step = int(data['step'])
+                                
         node = {}
         node['id'] = data['current_url']
         node['step'] = data['step']
@@ -249,13 +242,8 @@ def step():
         node['src'] = data['src_url']
         node['size'] = 20
         
-        node['src'] = data_ar[step % 16]
-        node['url'] = data_ar[(step+1) % 16]
-        
-        socketio.emit('node', node)  
-        
-        
-                    
+        socketio.emit('node', node)
+                   
         if DO_RED:
             try:
                 RED_URL = "http://node_red:1880/events/bot_step/"
@@ -274,18 +262,18 @@ def step():
             if DO_RED:                        
                 send_node_red_event("bot_step_finish")
                 
-            socketio.emit('step', data)                
+            # socketio.emit('step', data)                
             
-            # job = jobs.dostep.delay(data)
-            # while True:
-            #     time.sleep(0.01)
-            #     job.refresh()
-            #     if job.is_finished:                        
-            #         data['struct_text'] = job.result['text']
-            #         data['semantic'] = job.result['semantic']
-            #         data['semantic_words'] = job.result['semantic_words']                                     
-            #         socketio.emit('step', data)
-            #         break          
+            job = jobs.dostep.delay(data)
+            while True:
+                time.sleep(0.01)
+                job.refresh()
+                if job.is_finished:                        
+                    data['struct_text'] = job.result['text']
+                    data['semantic'] = job.result['semantic']
+                    data['semantic_words'] = job.result['semantic_words']                                     
+                    socketio.emit('step', data)
+                    break          
         else:
             data['struct_text'] = []
             data['semantic'] = []
@@ -318,17 +306,15 @@ def step():
         #
         # SAVE
         #      
-        # if float(cfg['do_save']) == 1.0:
-        #     # socketio.emit('step', data)
-        #     job = jobs.save.delay(data)
-        #     while True:
-        #         time.sleep(0.01)
-        #         job.refresh() 
-        #         if job.is_finished:
-        #             # socketio.emit('step', data)
-        #             filename = job.meta.get('filename')
-        #             # http_bp.logger.info(f"added save {filename}")
-        #             break
+        if float(cfg['do_save']) == 1.0:
+            job = jobs.save.delay(data)
+            # while True:
+            #     time.sleep(0.01)
+            #     job.refresh() 
+            #     if job.is_finished:
+            #         filename = job.meta.get('filename')
+            #         # http_bp.logger.info(f"added save {filename}")
+            #         break
 
 
 
