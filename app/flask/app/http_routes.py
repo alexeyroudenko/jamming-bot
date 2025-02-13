@@ -250,24 +250,22 @@ def step():
                     data['semantic_words'] = job.result['semantic_words']                                     
                     socketio.emit('step', data)
                     break          
-        
+        #
         # GEO
         #                   
-        # if float(cfg['do_geo']) == 1.0:
-        #     send_node_red_event(f"try {data.keys()}")
-        #     if "ip" in data.keys():
-        #         ip = data['ip']
-        #         # url = data['current_url']
-        #         ## http_bp.logger.info(f"dopass retrieve ip {ip}") 
-        #         if ip != "0":
-        #             job = jobs.do_geo.delay(ip)
-        #             while True:
-        #                 time.sleep(0.01)
-        #                 job.refresh()  
-        #                 if job.is_finished:                    
-        #                     location = job.result                        
-        #                     # location['url'] == url                
-        #                     socketio.emit('location', location)
+        if float(cfg['do_geo']) == 1.0:
+            send_node_red_event(f"try {data.keys()}")
+            if "ip" in data.keys():
+                ip = data['ip']  
+                url = data['current_url']                
+                if ip != "0":
+                    job = jobs.do_geo.delay(ip)                    
+                    while True:
+                        time.sleep(0.01)
+                        job.refresh()  
+                        if job.is_finished:                    
+                            location = job.result                        
+                            socketio.emit('location', location)
                             
                             
         # else:
