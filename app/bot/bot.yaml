@@ -15,7 +15,7 @@ resume_at_restart: False
 max_errors: 100000
 
 send_osc: True
-
+send_step: True
 send_events: True
 send_sublinks: True
 receive_events:  True

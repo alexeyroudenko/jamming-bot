@@ -116,6 +116,42 @@ class UrlsFilter():
 
 
 
+from bs4 import BeautifulSoup, NavigableString, Tag
+def get_text_from_html(html):    
+    soup = BeautifulSoup(html, "html.parser", from_encoding="utf-8")
+    header = soup.find('header')
+    if header:
+        header.decompose()
+    footer = soup.find('footer')
+    if footer:
+        footer.decompose()
+    text_out = ""
+    for header in soup.find_all('h2'):
+        nextNode = header
+        while True:
+            nextNode = nextNode.nextSibling
+            if nextNode is None:
+                break
+            if isinstance(nextNode, NavigableString):
+                text_out += nextNode.strip().replace("\n","").replace("\r","")
+                break
+            if isinstance(nextNode, Tag):
+                if nextNode.name in {'h1', 'h2', 'h3', 'h4', 'h5'}:
+                    break
+                txt = nextNode.get_text(strip=True).strip().replace("\n","").replace("\r","")
+                if len(txt) > 0:
+                    text_out += nextNode.get_text(strip=True).strip().replace("\n","").replace("\r","")
+                    break
+                    # return text_out
+                    
+    if text_out == "":
+        paragraphs = [p.get_text() for p in soup.find_all('p')]
+        if len(paragraphs) > 0:
+            text_out = paragraphs[0]
+                            
+    return text_out
+
+
 class NetSpider():
     """NetSpider my spider
        TODO: add sites screenshots
@@ -130,6 +166,7 @@ class NetSpider():
         self.count_per_domain = count_per_domain
         self.do_verbs = False
         self.send_events = False
+        self.send_step = False
         self.send_osc = False
         self.send_sublinks = False
         self.resume_at_restart = False
@@ -158,6 +195,7 @@ class NetSpider():
             config = yaml.load(file, Loader=SafeLoader)                
             self.sleep_time = config['sleep_time']
             self.send_events = config['send_events']
+            self.send_step = config['send_step']
             self.send_osc = config['send_osc']
             self.send_sublinks = config['send_sublinks']
             self.resume_at_restart = config['resume_at_restart']
@@ -237,13 +275,13 @@ class NetSpider():
         notify step
     '''                        
     def notify_about_step(self, step_data):
-        if self.send_events:
+        if self.send_step:
             try:
                 r = requests.post(STEP_URL, data = step_data)            
                 # logging.info(f"url: {STEP_URL}")
             except Exception as e0:
                 logging.error(f"error send step data {STEP_URL}")
-                self.send_events = False
+                self.send_step = False
             
         if self.send_osc:
             step_data_osc = [step_data['step'], step_data['current_url'], step_data['src_url']]
@@ -408,6 +446,9 @@ class NetSpider():
                 import tld 
                 try:
                     res = get_tld(current_url, as_object=True)
+                    current_base_domain = res.fld
+                    current_base_domain = get_second_level_domain(current_base_domain)
+                    
                 except tld.exceptions.TldBadUrl: 
                     logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t bad url")
                     self.notify_about_eventp("error_retrieve_url", {})                    
@@ -424,8 +465,8 @@ class NetSpider():
                     self.notify_about_step(step_data)
                     return
 
-                current_base_domain = res.fld
-                current_base_domain = get_second_level_domain(current_base_domain)
+                
+                
                 
                 try:
                     
@@ -489,28 +530,8 @@ class NetSpider():
                         
                     else:
                         
-                        #
-                        #
-                        #
-                        self.notify_about_eventp("analyze_page_fix_codepage", response.encoding)
-                        #
-                        # if response.encoding != 'utf-8':
-                        #     response.encoding = 'utf-8'
-                        # html_content = response.text                        
+                        self.notify_about_eventp("analyze_page_fix_codepage", response.encoding)                       
                         html_content = response.content.decode('utf-8')
-                        
-                        # #
-                        # #
-                        # #    Analyze page
-                        # #
-                        # self.notify_about_eventp("analyze_page_fast_link_coollect", content_type)
-                        
-                        # import re
-                        # def extract_links_fast(html):
-                        #     return set(re.findall(r'href=["\'](https?://[^\s"\'<>]+)', html))                        
-                        # link_elements = extract_links_fast(html_content)
-                        
-                        # logging.info(f"link_elements {link_elements}")
 
 
                         #
@@ -518,16 +539,10 @@ class NetSpider():
                         #   Get Text
                         #
                         self.notify_about_eventp("analyze_page_fast_text_exxtract", content_type)
-                        import re
-                        def extract_text_re(html_content):
-                            return re.sub(r'<[^>]+>', '', html_content)                        
-                        
-                        def remove_css_text_re(html_content):
-                            return re.sub(r'(?s)<style>(.*?)<\/style>', '', html_content)                        
 
-                        text = remove_css_text_re(extract_text_re(html_content))
+                        text = get_text_from_html(html_content)
+                        step_data['text'] = text
 
-                        # logging.debug(f"start parse {current_url}")  
                         soup = BeautifulSoup(response.content, "html.parser", from_encoding="utf-8")                         
                         self.notify_about_eventp("analyze_page_remove_nav", content_type) 
                         
@@ -536,18 +551,9 @@ class NetSpider():
                         for tag in soup(['button', 'nav', 'footer', 'header', 'aside']):
                             tag.decompose()                            
                         
-                        
-                        # self.notify_about_eventp("analyze_page_collect_stripped_strings", content_type) 
-                        # page_text = []
-                        # for element in soup.stripped_strings:
-                        #     if len(element) > 20:
-                        #         page_text.append(element)                                                
-                        # text = ' '.join(page_text)                                                                        
-                        
-                        #
-                        #
+                                                                                           
                         self.notify_about_eventp("analyze_page_collect_links_elements", content_type) 
-                        #
+                        
                         link_elements = soup.select("a[href]")
                         
                         self.notify_about_eventp("analyze_page_finish", content_type)
@@ -582,6 +588,7 @@ class NetSpider():
 
 
                 except Exception as e1:
+                    logging.warning(e1)
                     logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t e1 line {e1.__traceback__.tb_lineno}")
                     self.notify_about_eventp("error_retrieve_url", {})                    
                     step_data = {
