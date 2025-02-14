@@ -3,7 +3,7 @@
 
 from bs4 import BeautifulSoup, NavigableString, Tag
 def get_text_from_html(html):    
-    soup = BeautifulSoup(html)
+    soup = BeautifulSoup(html, "html.parser")
     header = soup.find('header')
     if header:
         header.decompose()
