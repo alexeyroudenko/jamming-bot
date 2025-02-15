@@ -1,0 +1,4 @@
+asyncpg
+fastapi[all]
+uvicorn
+httpx
