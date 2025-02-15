@@ -223,7 +223,23 @@ def sublink_add():
 def step():
     
     if request.method == 'POST':
-        data = request.form.to_dict()
+        
+        data = request.form.to_dict()        
+                
+        with open(f'data/path/steps/{data["number"].zfill(8)}.info', 'w') as file:
+            file.write(data['number']+"\n") 
+            file.write(data['url']+"\n")
+            file.write(data['src']+"\n")
+            file.write(data['status_code']+"\n")
+            file.write(data['ip']+"\n")
+        with open(f'data/path/headers/{data["number"].zfill(8)}.headers', 'w') as file:
+            file.write(data['headers'])
+        
+        # if 'text' in data.keys():    
+        #     with open(f'data/path/txt/{str(data["number"]).zfill(8)}.txt', 'w') as file:
+        #         file.write(data['text'])
+        #     with open(f'data/path/html/{str(data["number"]).zfill(8)}.html', 'w') as file:
+        #         file.write(data['html'])
         
         if DO_RED:
             try:
@@ -232,11 +248,12 @@ def step():
             except Exception as e:
                 print("error ", e)
          
-        cfg = getConfig()
-        # send_node_red_event(f"do_pass: {cfg['do_pass']}")  
-
-        data['id'] = data['current_url']
-        data['url'] = data['current_url']
+        cfg = getConfig() 
+        data['step'] = data['number']
+        data['id'] = data['url']
+        data['url'] = data['url']
+        data['current_url'] = data['url']
+        data['src_url'] = data['src']
         data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"
             
         #
@@ -267,7 +284,7 @@ def step():
             send_node_red_event(f"try {data.keys()}")
             if "ip" in data.keys():
                 ip = data['ip']  
-                url = data['current_url']                
+                # url = data['url']                
                 if ip != "0":
                     job = jobs.do_geo.delay(ip)                    
                     while True:

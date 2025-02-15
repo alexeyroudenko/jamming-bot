@@ -799,17 +799,18 @@
         let index = 0;
         function animateText() {            
             const element = document.getElementById( "log_text")
-            if (index < text.length) {              
-                element.innerHTML = "<code>"+text.slice(0, index)+"</code>";
-                var rng = document.createRange();
-                rng.setStartBefore( document.getElementById('s1') );
-                rng.setEndAfter( document.getElementById('s2') );
-                //document.getSelection().addRange(rng);    
-                index+=10;
-                timeoutId = setTimeout(animateText, delay);
-            } else {
-                clearTimeout(timeoutId);
-            }
+            if (text)
+                if (index < text.length) {              
+                    element.innerHTML = "<code>"+text.slice(0, index)+"</code>";
+                    var rng = document.createRange();
+                    rng.setStartBefore( document.getElementById('s1') );
+                    rng.setEndAfter( document.getElementById('s2') );
+                    //document.getSelection().addRange(rng);    
+                    index+=10;
+                    timeoutId = setTimeout(animateText, delay);
+                } else {
+                    clearTimeout(timeoutId);
+                }
         }    
         animateText();
             

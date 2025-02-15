@@ -4,13 +4,15 @@
 
 import spacy
 
+nlp_sm = spacy.load("en_core_web_sm")
+nlp_lg = spacy.load("en_core_web_lg")
+
 def analyze_text(text):
     words = []
     hrases = []
-    import spacy
-    nlp = spacy.load("en_core_web_sm")
-    doc = nlp(text)
-    query = nlp("Jammingbot")
+    
+    doc = nlp_sm(text)
+    query = nlp_sm("Jammingbot")
     similarities = {}
     for token in doc:
         if token.has_vector and query.has_vector:
@@ -21,19 +23,14 @@ def analyze_text(text):
     sorted_similarities = sorted(similarities.items(), 
                                 key=lambda x: x[1], 
                                 reverse=True)   
-                
-    # self_job.meta['sorted_similarities'] = sorted_similarities
-    # print(f"similarity сwith'{query.text}':")
+            
     for word, similarity in sorted_similarities[0:13]:
-        #print(f"{word}: {similarity:.2f}")
         words.append(word)        
 
     #
     # Analyze noun hrases
     #
-    import spacy
-    nlp = spacy.load("en_core_web_lg")
-    doc = nlp(text)
+    doc = nlp_lg(text)
     noun_hrases =  [chunk.text for chunk in doc.noun_chunks]            
     for i in noun_hrases[0:13]:
         hrases.append(i)
@@ -42,13 +39,10 @@ def analyze_text(text):
 
 
 
-
 def analyze_sorted_similarity_app(text):
-    words = []
-    import spacy
-    nlp = spacy.load("en_core_web_sm")
-    doc = nlp(text)
-    query = nlp("Jammingbot")
+    words = []    
+    doc = nlp_sm(text)
+    query = nlp_sm("Jammingbot")
     similarities = {}
     for token in doc:
         if token.has_vector and query.has_vector:
@@ -60,9 +54,6 @@ def analyze_sorted_similarity_app(text):
                                 key=lambda x: x[1], 
                                 reverse=True)   
                 
-    # self_job.meta['sorted_similarities'] = sorted_similarities
-    # print(f"similarity сwith'{query.text}':")
     for word, similarity in sorted_similarities[0:13]:
-        #print(f"{word}: {similarity:.2f}")
         words.append(word)
     return words
