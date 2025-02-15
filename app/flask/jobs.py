@@ -200,18 +200,28 @@ def do_geo(ip):
     self_job.save_meta()
     
     location = {}
-    city = ""
-    error = ""
+    location['ip'] = ip
+    location['city'] = ""
+    location['latitude'] = 0
+    location['longitude'] = 0
+    location['error'] = ""
     try:
-        import maxminddb
-        with maxminddb.open_database('data/db/dbip-city-lite-2024-11.mmdb') as reader:
-            location = reader.get(ip)            
-            city = location['city']['names']['en']
-    
+
+        import json
+        import requests
+        url = f"http://bots.arthew0.online:8004/api/v1/ip/{ip}/"
+        headers = {'content-type': 'application/json'}
+        data = {'ip': ip}
+        response = requests.get(url, headers=headers)
+        geo = response.json()
+
+        location['city'] = geo['city']
+        location['latitude'] = geo['latitude']
+        location['longitude'] = geo['longitude']
+        location['error'] = geo['error']
+        
     except Exception as e:
-        #location = {"error": e}
         error = str(e)
-        ...
     
     self_job = get_current_job()    
     self_job.meta['progress'] = {
@@ -222,20 +232,8 @@ def do_geo(ip):
     self_job.meta['type'] = "geo"        
     self_job.meta['ip'] = ip
     self_job.save_meta()
-    
-    
-    out_data = {}
-    out_data['ip'] = ip  
-    out_data['city'] = city
-    
-    if 'location' in location.keys(): 
-        out_data['location'] = location['location']        
-
-    if error!="":
-        out_data['error'] = error
-            
-        
-    return out_data
+       
+    return location
 
 
 

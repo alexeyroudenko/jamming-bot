@@ -128,6 +128,28 @@ services:
 
 
 
+  ip_service:
+    build: ./ip-service
+    container_name: ip_service
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8004
+    volumes:
+      - ./ip-service/:/app/
+      - type: bind
+        source: ./ip-service/data
+        target: /app/data
+    ports:
+      - 8004:8004
+    environment:
+      - DATABASE_URI=postgresql://tags_db_username:tags_db_password@tags_db/tags_db_dev
+    networks:
+      - app_network
+    depends_on:
+      - tags_db
+
+
+
+
+
   tags_service:
     build: ./tags-service
     container_name: tags_service
@@ -142,7 +164,9 @@ services:
     networks:
       - app_network
     depends_on:
-      - tags_db      
+      - tags_db
+
+
 
   tags_db:
     image: postgres:12.1-alpine
@@ -217,6 +241,7 @@ volumes:
   data:
     external: true
   app:
+  app-ip:
 
 networks:
   app_network:

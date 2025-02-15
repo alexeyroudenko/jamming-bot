@@ -21,3 +21,7 @@ flask:
 .PHONY: frontend
 frontend:	
 	docker compose up -d frontend --build
+
+.PHONY: ip-service
+ip-service:	
+	docker compose up -d ip-service --build	

@@ -104,22 +104,29 @@ def all_jobs():
             # app.logger.info(f"job.result {job.result}") 
             job_type = job.meta.get('type')
             if job_type == "step":
-                l.append({
-                    'id': job.get_id(),
-                    'type': job.meta.get('type'), 
-                    'step': int(job.result['step']),
-                    'status_code': int(job.result['code']),
-                    'status_string': "ok" if str(job.result['code']) == "200" else "error",
-                    'url': job.result['url'],
-                    'src_url': job.result['src_url'],
-                    'semantic': job.result['semantic'],
-                        # 'state': job.get_status(),
-                        # 'progress': job.meta.get('progress'),
-                        # 'step': job.meta.get('step'),
-                        # 'username': job.meta.get('step')['current_url'],
-                        # 'r': job.result['words_count'],
-                        # 'step': job.result
+                if job.result:
+                    l.append({
+                        'id': job.get_id(),
+                        'type': job.meta.get('type'), 
+                        'step': int(job.result['step']),
+                        'status_code': int(job.result['code']),
+                        'status_string': "ok" if str(job.result['code']) == "200" else "error",
+                        'url': job.result['url'],
+                        'src_url': job.result['src_url'],
+                        'semantic': job.result['semantic'],
+                            # 'state': job.get_status(),
+                            # 'progress': job.meta.get('progress'),
+                            # 'step': job.meta.get('step'),
+                            # 'username': job.meta.get('step')['current_url'],
+                            # 'r': job.result['words_count'],
+                            # 'step': job.result
+                        })
+                else:
+                    l.append({
+                        'id': job.get_id(),
+                        'type': job.meta.get('type'), 
                     })
+                    
     return jsonify(l)
 
 

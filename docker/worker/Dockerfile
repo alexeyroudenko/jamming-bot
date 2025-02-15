@@ -22,4 +22,4 @@ RUN pip install selenium
 RUN pip install chromedriver
 RUN pip install bs4
 RUN pip install sentry-sdk[flask]
-RUN pip install maxminddb 
+RUN pip install maxminddb

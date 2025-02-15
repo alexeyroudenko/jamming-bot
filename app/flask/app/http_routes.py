@@ -22,13 +22,15 @@ socketio = get_socketio()
 
 http_bp = Blueprint('http', __name__)
 
+DO_RED = False
 
 def send_node_red_event(event):
-    try:
-        RED_URL = "http://node_red:1880/events/debug/"
-        red_request = requests.post(RED_URL, {"event": event}) 
-    except Exception as e:
-        print("error ", e)
+    if DO_RED:
+        try:
+            RED_URL = "http://node_red:1880/events/debug/"
+            red_request = requests.post(RED_URL, {"event": event}) 
+        except Exception as e:
+            print("error ", e)
 
 
 @http_bp.route('/')
@@ -164,8 +166,7 @@ def ctrl():
 @http_bp.route("/ctrl/<action>/", methods=["GET"])
 def ctrl_action(action):
     redis.publish('ctrl', json.dumps(action))
-    # return redirect('/ctrl/')
-    return json.dumps(action)
+    return redirect('/ctrl/')
 
 
 
@@ -219,7 +220,7 @@ def sublink_add():
 
 
 
-DO_RED = False
+
 
 #
 #   Called from container
@@ -254,6 +255,10 @@ def step():
         cfg = getConfig()
         # send_node_red_event(f"do_pass: {cfg['do_pass']}")  
 
+        data['id'] = data['current_url']
+        data['url'] = data['current_url']
+        data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"
+            
         #
         # PASS
         # 
@@ -264,6 +269,9 @@ def step():
                 
             # socketio.emit('step', data)                
             
+        if float(cfg['do_pass']) == 1.0:                           
+            send_node_red_event("bot_step_finish")
+
             job = jobs.dostep.delay(data)
             while True:
                 time.sleep(0.01)
@@ -280,20 +288,24 @@ def step():
             data['semantic_words'] = [] 
             socketio.emit('step', data)
             
+                      
+        #
         # GEO
         #                   
-        # if float(cfg['do_geo']) == 1.0:
-        #     # send_node_red_event(f"try {data.keys()}")
-        #     if "ip" in data.keys():
-        #         ip = data['ip']
-        #         if ip != "0":
-        #             job = jobs.do_geo.delay(ip)
-        #             while True:
-        #                 time.sleep(0.01)
-        #                 job.refresh()  
-        #                 if job.is_finished:                    
-        #                     location = job.result                        
-        #                     socketio.emit('location', location)
+        if float(cfg['do_geo']) == 1.0:
+            send_node_red_event(f"try {data.keys()}")
+            if "ip" in data.keys():
+                ip = data['ip']  
+                url = data['current_url']                
+                if ip != "0":
+                    job = jobs.do_geo.delay(ip)                    
+                    while True:
+                        time.sleep(0.01)
+                        job.refresh()  
+                        if job.is_finished:                    
+                            location = job.result                        
+                            socketio.emit('location', location)
+                            break
                             
                             
         # else:

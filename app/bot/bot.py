@@ -150,6 +150,42 @@ class UrlsFilter():
 
 
 
+from bs4 import BeautifulSoup, NavigableString, Tag
+def get_text_from_html(html):    
+    soup = BeautifulSoup(html, "html.parser", from_encoding="utf-8")
+    header = soup.find('header')
+    if header:
+        header.decompose()
+    footer = soup.find('footer')
+    if footer:
+        footer.decompose()
+    text_out = ""
+    for header in soup.find_all('h2'):
+        nextNode = header
+        while True:
+            nextNode = nextNode.nextSibling
+            if nextNode is None:
+                break
+            if isinstance(nextNode, NavigableString):
+                text_out += nextNode.strip().replace("\n","").replace("\r","")
+                break
+            if isinstance(nextNode, Tag):
+                if nextNode.name in {'h1', 'h2', 'h3', 'h4', 'h5'}:
+                    break
+                txt = nextNode.get_text(strip=True).strip().replace("\n","").replace("\r","")
+                if len(txt) > 0:
+                    text_out += nextNode.get_text(strip=True).strip().replace("\n","").replace("\r","")
+                    break
+                    # return text_out
+                    
+    if text_out == "":
+        paragraphs = [p.get_text() for p in soup.find_all('p')]
+        if len(paragraphs) > 0:
+            text_out = paragraphs[0]
+                            
+    return text_out
+
+
 class NetSpider():
     """NetSpider my spider
        TODO: add sites screenshots
@@ -263,7 +299,10 @@ class NetSpider():
         for row in rows:
             stored_lnks.append(row[2])
         return stored_lnks
+
+
     
+
 
 
     '''
@@ -407,16 +446,17 @@ class NetSpider():
             #  
             #
             #
+
             self.notify_about_eventp("retrieve_next_url", self.step_number)
-            # url_id, current_url, src_url = self.retrieve_next_url()            
-            group = "GROUP BY hostname"
-            query = f"SELECT id, hostname, url, src_url, count(visited) FROM Urls where visited==0 {group} ORDER BY count(visited) LIMIT 1"
-            rows = await self.database.fetch_all(query=query)            
+
+            #
+            query = "SELECT id, hostname, url, src_url, count(visited) FROM Urls where visited==0 GROUP BY hostname ORDER BY count(visited) LIMIT 1"
+            rows = await self.database.fetch_all(query=query)   
+                   
             url_id = rows[0][0]
+            # domain = get_second_level_domain(rows[0][1])
             current_url = rows[0][2]
             src_url = rows[0][3]
-        
-        
             
             #
             #  Set visited
@@ -436,11 +476,13 @@ class NetSpider():
             valid = validators.url(current_site)
                         
             if valid:
-                current_base_domain = ""
+                
                 import tld 
                 try:
                     res = get_tld(current_url, as_object=True)
-                
+                    current_base_domain = res.fld
+                    current_base_domain = get_second_level_domain(current_base_domain)
+                    
                 except tld.exceptions.TldBadUrl: 
                     logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t bad url")
                     self.notify_about_eventp("error_retrieve_url", {})                    
@@ -457,8 +499,8 @@ class NetSpider():
                     self.notify_about_step(step_data)
                     return
 
-                current_base_domain = res.fld
-                current_base_domain = get_second_level_domain(current_base_domain)
+                
+                
                 
                 try:
                     
@@ -522,28 +564,8 @@ class NetSpider():
                         
                     else:
                         
-                        #
-                        #
-                        #
-                        self.notify_about_eventp("analyze_page_fix_codepage", response.encoding)
-                        #
-                        # if response.encoding != 'utf-8':
-                        #     response.encoding = 'utf-8'
-                        # html_content = response.text                        
+                        self.notify_about_eventp("analyze_page_fix_codepage", response.encoding)                       
                         html_content = response.content.decode('utf-8')
-                        
-                        # #
-                        # #
-                        # #    Analyze page
-                        # #
-                        # self.notify_about_eventp("analyze_page_fast_link_coollect", content_type)
-                        
-                        # import re
-                        # def extract_links_fast(html):
-                        #     return set(re.findall(r'href=["\'](https?://[^\s"\'<>]+)', html))                        
-                        # link_elements = extract_links_fast(html_content)
-                        
-                        # logging.info(f"link_elements {link_elements}")
 
 
                         #
@@ -551,17 +573,7 @@ class NetSpider():
                         #   Get Text
                         #
                         self.notify_about_eventp("analyze_page_fast_text_exxtract", content_type)
-                        
-                        # import re
-                        # def extract_text_re(html_content):
-                        #     return re.sub(r'<[^>]+>', '', html_content)                                                
-                        # def remove_css_text_re(html_content):
-                        #     return re.sub(r'(?s)<style>(.*?)<\/style>', '', html_content)                        
-                        # text = remove_css_text_re(extract_text_re(html_content))
-                        text = get_text_from_html(html_content)
-                        step_data['text'] = text
-                        # logging.debug(f"start parse {current_url}")  
-                        
+
                         soup = BeautifulSoup(response.content, "html.parser", from_encoding="utf-8")                         
                         self.notify_about_eventp("analyze_page_remove_nav", content_type) 
                         
@@ -570,18 +582,9 @@ class NetSpider():
                         for tag in soup(['button', 'nav', 'footer', 'header', 'aside']):
                             tag.decompose()                            
                         
-                        
-                        # self.notify_about_eventp("analyze_page_collect_stripped_strings", content_type) 
-                        # page_text = []
-                        # for element in soup.stripped_strings:
-                        #     if len(element) > 20:
-                        #         page_text.append(element)                                                
-                        # text = ' '.join(page_text)                                                                        
-                        
-                        #
-                        #
+                                                                                           
                         self.notify_about_eventp("analyze_page_collect_links_elements", content_type) 
-                        #
+                        
                         link_elements = soup.select("a[href]")
                         
                         self.notify_about_eventp("analyze_page_finish", content_type)
@@ -617,6 +620,7 @@ class NetSpider():
 
 
                 except Exception as e1:
+                    logging.warning(e1)
                     logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t e1 line {e1.__traceback__.tb_lineno}")
                     self.notify_about_eventp("error_retrieve_url", {})                    
                     step_data = {
@@ -631,10 +635,11 @@ class NetSpider():
             self.count_errors += 1
             logging.error(f"Exception step 2 {e2} line:{e2.__traceback__.tb_lineno}")
             print(f"Exception in step 2: {e2}", traceback.print_exc())
-            # if self.count_errors > 10000:
-            #     logging.error(f"Exception self.count_errors {self.count_errors} .... finish")
-            #     self.stop()
-            #     exit()
+            
+        except IndexError as e2:
+            self.count_errors += 1
+            logging.error(f"IndexError step 2 {e2} line:{e2.__traceback__.tb_lineno}")
+            print(f"IndexError in step 2: {e2}", traceback.print_exc())
 
     """
         Controls
