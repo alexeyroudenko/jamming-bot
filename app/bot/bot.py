@@ -152,11 +152,29 @@ def get_text_from_html(html):
     return text_out
 
 
+
+class Step():
+    def __init__(self, step_number):
+        self.number: int = step_number
+        self.url: str = ""
+        self.src: str = ""
+        self.ip: str = ""
+        self.status_code: int = 0
+        self.headers: str = ""
+        # self.text: str = ""
+        # self.html: str = ""
+    
+    def to_data(self):
+        return vars(self)
+    
+    
+
 class NetSpider():
     """NetSpider my spider
        TODO: add sites screenshots
     """
     def __init__(self, sleep_time, osc_address, resolve_coords, count_per_domain = 20):
+        self.step = Step(0)
         self.is_active = False
         self.filter = UrlsFilter()
         self.sleep_time = sleep_time
@@ -165,10 +183,13 @@ class NetSpider():
         self.resolve_coords = resolve_coords
         self.count_per_domain = count_per_domain
         self.do_verbs = False
+        
+        self.log_events = False
         self.send_events = False
         self.send_step = False
         self.send_osc = False
         self.send_sublinks = False
+        
         self.resume_at_restart = False
 
         import socket
@@ -194,7 +215,8 @@ class NetSpider():
         with open(config_file) as file:
             config = yaml.load(file, Loader=SafeLoader)                
             self.sleep_time = config['sleep_time']
-            self.send_events = config['send_events']
+            self.log_events = config['log_events']
+            self.send_events = config['send_events']            
             self.send_step = config['send_step']
             self.send_osc = config['send_osc']
             self.send_sublinks = config['send_sublinks']
@@ -274,27 +296,31 @@ class NetSpider():
     '''
         notify step
     '''                        
-    def notify_about_step(self, step_data):
+    def notify_about_step(self, step: Step):
         if self.send_step:
             try:
-                r = requests.post(STEP_URL, data = step_data)            
+                r = requests.post(STEP_URL, data = step.to_data())            
                 # logging.info(f"url: {STEP_URL}")
             except Exception as e0:
                 logging.error(f"error send step data {STEP_URL}")
                 self.send_step = False
             
-        if self.send_osc:
-            step_data_osc = [step_data['step'], step_data['current_url'], step_data['src_url']]
-            try:   
-                self.osc.send_message("/step", step_data_osc)
-            except Exception as e0:
-                logging.error(f"error send OSC: {e0} {step_data.items()}")
+        # if self.send_osc:
+        #     step_data_osc = [step_data['step'], step_data['current_url'], step_data['src_url']]
+        #     try:   
+        #         self.osc.send_message("/step", step_data_osc)
+        #     except Exception as e0:
+        #         logging.error(f"error send OSC: {e0} {step_data.items()}")
 
 
     '''
         notify event
     '''                            
     def notify_about_eventp(self, event_name, data):
+        
+        if self.log_events:
+            logging.info(f"event: {event_name} {data}")
+                        
         if self.send_events:
             try:
                 url = EVENT_URL + f"/{event_name}/"
@@ -401,9 +427,10 @@ class NetSpider():
     #
     #   Step
     #
-    async def step(self):
+    async def do_step(self):
         #logging.info(f"self.step {str(self.step_number)}")
         self.step_number = self.step_number + 1
+        self.step = Step(self.step_number) 
 
         try:
             
@@ -423,6 +450,9 @@ class NetSpider():
             # domain = get_second_level_domain(rows[0][1])
             current_url = rows[0][2]
             src_url = rows[0][3]
+            
+            self.step.url = current_url
+            self.step.src = src_url
             
             #
             #  Set visited
@@ -450,19 +480,17 @@ class NetSpider():
                     current_base_domain = get_second_level_domain(current_base_domain)
                     
                 except tld.exceptions.TldBadUrl: 
-                    logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t bad url")
-                    self.notify_about_eventp("error_retrieve_url", {})                    
-                    step_data = { "step":self.step_number, "src_url": src_url, "current_url": current_url} 
-                    step_data["status_code"] = "000"
-                    self.notify_about_step(step_data)
+                    logging.warning(f"step {self.step_number} \t ERR \t {src_url} > {current_url} \t bad url")
+                    self.step.status_code = 900
+                    self.notify_about_eventp("error_retrieve_url", {})                                        
+                    self.notify_about_step(self.step)
                     return
                 
                 except tld.exceptions.TldDomainNotFound:
-                    logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t domain not found")
-                    self.notify_about_eventp("error_retrieve_url", {})                    
-                    step_data = {"step":self.step_number, "src_url": src_url, "current_url": current_url} 
-                    step_data["status_code"] = "000"
-                    self.notify_about_step(step_data)
+                    logging.warning(f"step {self.step_number} \t ERR \t {src_url} > {current_url} \t domain not found")
+                    self.step.status_code = 901
+                    self.notify_about_eventp("error_retrieve_url", {})                                      
+                    self.notify_about_step(self.step)
                     return
 
                 
@@ -479,21 +507,22 @@ class NetSpider():
                     #
                     logging.debug(f"start load  {current_url}")
                     
-                    step_data = {"step":self.step_number, 
-                            "src_url": src_url, 
-                            "current_url": current_url,
-                            "status_code": 0,
-                            "headers": {},
-                            "link_elements": len({}),
-                            "ip":0,
-                            "text":""}
+                    # step_data = {"step":self.step_number, 
+                    #         "src_url": src_url, 
+                    #         "current_url": current_url,
+                    #         "status_code": 0,
+                    #         "headers": {},
+                    #         "link_elements": len({}),
+                    #         "ip":0,
+                    #         "text":""}
                     
                     response = requests.get(current_url,
                                             headers={
                                                     'Accept-Language': 'en-US, en;q=0.5',
                                                     'Accept-Charset':  'utf-8',
+                                                    'Accept-Encoding': 'gzip'
                                                 },
-                                            timeout=10, 
+                                            timeout=3, 
                                             stream=True)                    
                     ip = response.raw._connection.sock.getpeername()
                         
@@ -506,14 +535,9 @@ class NetSpider():
                     text = ""
                     link_elements = []
                     
-                    step_data = {"step":self.step_number, 
-                            "src_url": src_url, 
-                            "current_url": current_url,
-                            "status_code": response.status_code,
-                            "headers": headers_dump,
-                            "link_elements": len(link_elements),
-                            "ip":ip,
-                            "text":""}
+                    self.step.status_code = response.status_code
+                    self.step.headers = f"{headers_dump}"
+                    self.step.ip = ip
                     
                     content_type = str(response.headers.get("Content-Type", "").lower())
                     
@@ -521,28 +545,40 @@ class NetSpider():
                         
                         logging.warning(f"step {self.step_number} \t {current_url} \t bad content-type: {content_type}")                        
                         self.notify_about_eventp("step_error_content", content_type)                        
-                        self.notify_about_step(step_data)
+                        self.notify_about_step(self.step)
                     
                     elif response.status_code != 200 :
                         logging.warning(f"step {self.step_number} \t {response.status_code} \t {current_base_domain} \t {src_url} > {current_url} \t {ip}")                                                
                         self.notify_about_eventp("step_error_status", response.status_code)                        
-                        self.notify_about_step(step_data)
+                        self.notify_about_step(self.step)
                         
-                    else:
-                        
+                    else:                        
                         self.notify_about_eventp("analyze_page_fix_codepage", response.encoding)                       
-                        html_content = response.content.decode('utf-8')
+                        html_content = response.content.decode('utf-8')                                                    
 
 
-                        #
                         #
                         #   Get Text
                         #
                         self.notify_about_eventp("analyze_page_fast_text_exxtract", content_type)
 
                         text = get_text_from_html(html_content)
-                        step_data['text'] = text
 
+                        
+                        self.notify_about_eventp("save_html_to_file", content_type)
+                        # self.step.html = html_content
+                        # self.step.text = text
+                        html_path = f'data/path/html/{str(self.step.number).zfill(8)}.html'
+                        with open(html_path, 'w') as file:
+                            file.write(html_content)                        
+                        text_path = f'data/path/txt/{str(self.step.number).zfill(8)}.txt'                           
+                        with open(text_path, 'w') as file:
+                            file.write(text)
+                        
+                        
+                        
+                                                
+                        
                         soup = BeautifulSoup(response.content, "html.parser", from_encoding="utf-8")                         
                         self.notify_about_eventp("analyze_page_remove_nav", content_type) 
                         
@@ -554,11 +590,11 @@ class NetSpider():
                                                                                            
                         self.notify_about_eventp("analyze_page_collect_links_elements", content_type) 
                         
-                        link_elements = soup.select("a[href]")
+                        link_elements = soup.select("a[href]")[0:20]
                         
                         self.notify_about_eventp("analyze_page_finish", content_type)
                         
-                        logging.info(f"step {self.step_number} \t {response.status_code} \t {current_base_domain} \t {src_url} > {current_url} \t {len(link_elements)} \t {ip}")
+                        logging.info(f"step {self.step.number} \t {response.status_code} \t {current_base_domain} \t {src_url} > {current_url} \t {len(link_elements)} \t {ip}")
                         
                         
                         
@@ -580,34 +616,29 @@ class NetSpider():
                         #       Say finish
                         #
                         self.notify_about_eventp("say_finish", len(link_elements))
-                        #
-                        step_data['text'] = text
-                        step_data['html'] = response.content                        
-                        step_data['link_elements'] = len(link_elements)
-                        self.notify_about_step(step_data)
+                        self.notify_about_step(self.step)
 
 
                 except Exception as e1:
                     logging.warning(e1)
                     logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t e1 line {e1.__traceback__.tb_lineno}")
                     self.notify_about_eventp("error_retrieve_url", {})                    
-                    step_data = {
-                        "step":self.step_number, 
-                        "src_url": src_url, 
-                        "current_url": current_url,
-                        "status_code": "000"
-                    } 
-                    # self.notify_about_step(step_data)
+                    self.step.status_code = 801         
+                    self.notify_about_step(self.step)
                     
         except Exception as e2:
             self.count_errors += 1
             logging.error(f"Exception step 2 {e2} line:{e2.__traceback__.tb_lineno}")
             print(f"Exception in step 2: {e2}", traceback.print_exc())
+            self.step.status_code = 802
+            self.notify_about_step(self.step)
             
         except IndexError as e2:
             self.count_errors += 1
             logging.error(f"IndexError step 2 {e2} line:{e2.__traceback__.tb_lineno}")
             print(f"IndexError in step 2: {e2}", traceback.print_exc())
+            self.step.status_code = 803
+            self.notify_about_step(self.step)
 
     """
         Controls
@@ -713,7 +744,7 @@ async def main():
                                 spider.is_active = False
                                 
                             if data == "step":                                
-                                await spider.step()
+                                await spider.do_step()
                                     
                             if data == "restart":
                                 logging.info(f"restart") 
@@ -727,7 +758,7 @@ async def main():
             # Automative 
             #
             if spider.is_active:
-                await spider.step()
+                await spider.do_step()
             
             # else:
             #     logging.info("iddle")
