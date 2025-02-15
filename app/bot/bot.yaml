@@ -14,16 +14,13 @@ resolve_coords: False
 resume_at_restart: False
 max_errors: 100000
 
+receive_events:  True
+
 send_osc: True
 send_step: True
 send_events: True
 send_sublinks: True
-receive_events:  True
 
 step_url: "http://flask:5000/bot/step/"
 event_url: "http://flask:5000/bot/events"
 sublink_url: "http://flask:5000/bot/sublink/add/"
-
-# step_url: "http://node_red:1880/bot/step/"
-# event_url: "http://node_red:1880/bot/events"
-# sublink_url: "http://node_red:1880/bot/sublink/add/"

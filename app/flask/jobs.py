@@ -47,16 +47,18 @@ def dostep(step):
         ip = step['ip']        
     self_job.meta['ip'] = ip
     self_job.save_meta()
-    
+        
     text_out = ""    
     if "html" in step.keys():        
-        html = step['html'].encode('utf-8')
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(html, "html.parser", from_encoding="utf-8")           
-        headings = [h.get_text() for h in soup.find_all(['h1', 'h2', 'h3'])]
-        paragraphs = [p.get_text() for p in soup.find_all('p')]
-        head = " ".join(headings)
-        text_out = head + " ".join(paragraphs)
+        html = step['html'].encode('utf-8')                
+        from semantic.analyzer import get_text_from_html
+        text_out = get_text_from_html(html)              
+        # from bs4 import BeautifulSoup
+        # soup = BeautifulSoup(html, "html.parser", from_encoding="utf-8")           
+        # headings = [h.get_text() for h in soup.find_all(['h1', 'h2', 'h3'])]
+        # paragraphs = [p.get_text() for p in soup.find_all('p')]
+        # head = " ".join(headings)
+        # text_out = head + " ".join(paragraphs)
         # text_out = html
         self_job.meta['text'] = text_out
         
@@ -253,6 +255,8 @@ def save(data):
     url = data['current_url']
     step = data['step']
     text = data['text']
+    
+    
     filename = f'data/txt/{step.zfill(4)}.txt'
     
     self_job = get_current_job()    
@@ -266,18 +270,32 @@ def save(data):
     self_job.meta['url'] = url
     self_job.meta['filename'] = filename
     self_job.save_meta()
+    
+    step_data = {}
+    step_data['id'] = data['current_url']
+    step_data['step'] = data['step']
+    step_data['url'] = data['current_url']
+    step_data['src'] = data['src_url']
+    step_data['ip'] = data['ip']
+    step_data['status_code'] = data['status_code']
+    step_data['headers'] = data['headers']
         
-    if len(text) > 0:
-        with open(filename, 'w') as file:
-            file.write(text)
+    with open(f'data/txt/{step.zfill(4)}.txt', 'w') as file:
+        file.write(text)
 
-        with open(f'data/txt/{step.zfill(4)}.html', 'w') as file:
-            file.write(data['html'])
+    with open(f'data/txt/{step.zfill(4)}.html', 'w') as file:
+        file.write(data['html'])
 
-        with open(f'data/txt/{step.zfill(4)}_headers.txt', 'w') as file:
-            file.write(data['current_url']+"\n")
-            file.write(data['ip']+"\n")            
-            file.write(data['headers'])
+    with open(f'data/txt/{step.zfill(4)}.info', 'w') as file:            
+        file.write(step_data['step']+"\n")            
+        file.write(step_data['url']+"\n")
+        file.write(step_data['src']+"\n")            
+        file.write(step_data['ip']+"\n")
+        file.write(step_data['status_code']+"\n")                       
+        file.write(step_data['headers'])
+
+    with open(f'data/txt/{step.zfill(4)}.json', 'w') as file:
+        file.write(json.dumps(step_data))
 
     self_job = get_current_job()    
     self_job.meta['type'] = "save"

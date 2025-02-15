@@ -7,8 +7,15 @@ cfg = getConfig()
 redis = getRedis()
 
 
+    
 
 def socketio_handlers(socketio):
+    
+    from .simulator import Simulator
+    steps_simulator = Simulator()
+    steps_simulator.socketio = socketio
+    
+    
     @socketio.on('connect')
     def handle_connect():
         print('Client connected')
@@ -47,7 +54,12 @@ def socketio_handlers(socketio):
     def handle_message(message):
         print('received message: ' + message)    
         redis.incr('hits')
-    
+   
+    @socketio.on('skip')
+    def handle_skip():
+        print('received skip')
+        socketio.emit('skip')
+            
     # '''
     #     bot controlss
     #     
@@ -64,6 +76,7 @@ def socketio_handlers(socketio):
 
     @socketio.on('restart')
     def handle_restart():
+        # steps_simulator.restart()
         socketio.emit('clear')     
         redis.publish('ctrl', json.dumps("restart"))
 
@@ -109,6 +122,11 @@ def socketio_handlers(socketio):
     @socketio.event
     def my_ping():
         socketio.emit('my_pong')
+        
+    @socketio.on('simulate')
+    def simulate():
+        print(f"steps_simulator {steps_simulator.step}")
+        steps_simulator.simulate() 
 
     def event_trends_handler(msg):
         print(f"flask event_trends_handler {msg} ")

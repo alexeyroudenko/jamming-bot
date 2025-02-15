@@ -158,6 +158,7 @@ def ctrl():
 
 
 
+
 #
 # Forward http to redis message for   
 # Controlling BOT
@@ -169,7 +170,14 @@ def ctrl_action(action):
 
 
 
-
+#
+# Forward http to redis message for   
+# Controlling BOT
+#
+@http_bp.route("/simulate/<action>/", methods=["GET"])
+def simulate_action(action):
+    socketio.emit('simulate', action)  
+    return json.dumps(action)
 
 
 
@@ -224,7 +232,19 @@ def step():
     
     if request.method == 'POST':
         data = request.form.to_dict()
+        data['id'] = data['current_url']
+        data['url'] = data['current_url']
+        data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"
+                                
+        node = {}
+        node['id'] = data['current_url']
+        node['step'] = data['step']
+        node['url'] = data['current_url']
+        node['src'] = data['src_url']
+        node['size'] = 20
         
+        socketio.emit('node', node)
+                   
         if DO_RED:
             try:
                 RED_URL = "http://node_red:1880/events/bot_step/"
@@ -242,8 +262,16 @@ def step():
         #
         # PASS
         # 
+        if float(cfg['do_pass']) == 1.0:
+            
+            if DO_RED:                        
+                send_node_red_event("bot_step_finish")
+                
+            # socketio.emit('step', data)                
+            
         if float(cfg['do_pass']) == 1.0:                           
             send_node_red_event("bot_step_finish")
+
             job = jobs.dostep.delay(data)
             while True:
                 time.sleep(0.01)
@@ -253,12 +281,13 @@ def step():
                     data['semantic'] = job.result['semantic']
                     data['semantic_words'] = job.result['semantic_words']                                     
                     socketio.emit('step', data)
-                    break
+                    break          
         else:
-            data['struct_text'] = ""
-            data['semantic'] = ""
-            data['semantic_words'] = ""                                     
+            data['struct_text'] = []
+            data['semantic'] = []
+            data['semantic_words'] = [] 
             socketio.emit('step', data)
+            
                       
         #
         # GEO
@@ -286,17 +315,15 @@ def step():
         #
         # SAVE
         #      
-        # if float(cfg['do_save']) == 1.0:
-        #     # socketio.emit('step', data)
-        #     job = jobs.save.delay(data)
-        #     while True:
-        #         time.sleep(0.01)
-        #         job.refresh() 
-        #         if job.is_finished:
-        #             # socketio.emit('step', data)
-        #             filename = job.meta.get('filename')
-        #             # http_bp.logger.info(f"added save {filename}")
-        #             break
+        if float(cfg['do_save']) == 1.0:
+            job = jobs.save.delay(data)
+            # while True:
+            #     time.sleep(0.01)
+            #     job.refresh() 
+            #     if job.is_finished:
+            #         filename = job.meta.get('filename')
+            #         # http_bp.logger.info(f"added save {filename}")
+            #         break
 
 
 
