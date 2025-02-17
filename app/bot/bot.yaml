@@ -14,11 +14,12 @@ resolve_coords: False
 resume_at_restart: True
 max_errors: 100000
 
-send_osc: False
+send_osc: True
 send_step: True
-send_events: True
-send_sublinks: True
+send_events: False
+send_sublinks: False
 log_events: False
+
 receive_events:  True
 
 step_url: "http://flask:5000/bot/step/"

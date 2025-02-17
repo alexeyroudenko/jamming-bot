@@ -161,11 +161,15 @@ class Step():
         self.ip: str = ""
         self.status_code: int = 0
         self.headers: str = ""
+        self.timestamp = datetime.now().timestamp()
         # self.text: str = ""
         # self.html: str = ""
-    
+            
     def to_data(self):
         return vars(self)
+    
+    def to_osc(self):
+        return [self.number, self.url, self.src, self.ip, self.status_code, self.timestamp]
     
     
 
@@ -305,12 +309,11 @@ class NetSpider():
                 logging.error(f"error send step data {STEP_URL}")
                 self.send_step = False
             
-        # if self.send_osc:
-        #     step_data_osc = [step_data['step'], step_data['current_url'], step_data['src_url']]
-        #     try:   
-        #         self.osc.send_message("/step", step_data_osc)
-        #     except Exception as e0:
-        #         logging.error(f"error send OSC: {e0} {step_data.items()}")
+        if self.send_osc:
+            try:   
+                self.osc.send_message("/step", step.to_osc())
+            except Exception as e0:
+                logging.error(f"error send OSC: {e0} {step.to_osc()}")
 
 
     '''
@@ -537,7 +540,7 @@ class NetSpider():
                     
                     self.step.status_code = response.status_code
                     self.step.headers = f"{headers_dump}"
-                    self.step.ip = ip
+                    self.step.ip = ip[0]
                     
                     content_type = str(response.headers.get("Content-Type", "").lower())
                     
