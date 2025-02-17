@@ -339,7 +339,14 @@
         return url;
     }
     
-    
+
+    var values = {'v1':0.25, "v2": 0.25, "v3":0.25, "v4":0.25, "v5":0.25, "v6":0.25, "v7":0.25}
+
+
+    function zoomed() {
+        svg.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
+    }
+
     var graph;
 
     function myGraph() {
@@ -454,9 +461,18 @@
             .attr("pointer-events", "all")
             .attr("viewBox", "0 0 " + Math.floor(w*scale) + " " + Math.floor(h*scale))
             .attr("perserveAspectRatio", "xMinYMid")
+            .call(d3.behavior.zoom().on("zoom", zoomed))
             // .on("mouseover", handleMouseOver)
             // .on("mouseout", handleMouseOut); 
             //.append('svg:g');
+
+
+        d3.select("body").append("button")
+        .text("-")
+        .on("click", function() {
+            zoom.scale(zoom.scale() / 1.2);
+            zoom.event(svg.transition().duration(500));
+        });
 
         function handleMouseOver(d, i) {
             console.log("over", d, i)
@@ -560,14 +576,32 @@
                 });
             });
 
+
+            // console.log(force, values); 
             // Restart the force layout.
-            force.gravity(.01)
-              .charge(-80000)
-              .friction(0.004)
-              .linkDistance( function(d) { return d.value * 13 } )
+            force.friction(0.004)
+            //   .linkDistance(2000.0*values['v1'])
+              .linkDistance( function(d) { return d.value * 13 * values['v1'] * 3 } )
+              .gravity(values['v2'])
+              .charge(-200000*values['v3'])
+              .linkStrength(values['v4'])
+              .friction(values['v5'])  
               .size([w, h])
-              .start();
+              .start();     
         };
+
+
+        this.setValues = function (v) {      
+            values = v
+            force.friction(0.004)
+            .linkDistance( function(d) { return d.value * 13 * values['v1'] * 3 } )
+            // .linkDistance(2000.0*values['v1'])
+            .gravity(values['v2'])
+            .charge(-200000*values['v3'])
+            .linkStrength(values['v4'])
+            .friction(values['v5']) 
+            .start(); 
+        }
 
 
         // Make it all go
@@ -580,6 +614,15 @@
     graph = new myGraph("#svgdiv");
     //function drawGraph() {}
     //drawGraph();
+
+    // var linkDistanceVal = 1000 * 0.5;
+    // var linkStrengtVal = 10 * 0.5;
+    // var alphaVal = 1 * 0.5;
+
+     
+
+
+    
 
     // because of the way the network is created, nodes are created first, and links second,
     // so the lines were on top of the nodes, this just reorders the DOM to put the svg:g on top
@@ -871,7 +914,11 @@
 
 
 
-
+    socket.on('set_values', function(data) {
+        // console.log('set_values', data);
+        graph.setValues(data)        
+        $('#value').html(data['v1']);
+    });
 
 
     //
@@ -914,6 +961,7 @@
         //console.log(node, node.data); 
         //document.getElementById("log_words").innerHTML = "<code>" + words_all + "</code>";
     })
+
 
 
 
@@ -983,6 +1031,7 @@
   <div id="debug">
     
     <code>
+        | value:<span id="value"></span>
         | counter:<span id="counter"></span>
         | latency:<span id="latency"></span> 
         | <a href="http://docs.arthew0.online:32768/" target="_blank">v2.1.0</a> |

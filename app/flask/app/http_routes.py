@@ -141,11 +141,26 @@ def ctrl():
 
 
 
+# endpoint set values
+@http_bp.route("/set/<v>/", methods=["GET"])
+def set(v):
+    redis.set('value', v)
+    socketio.emit('set', {"value":v})
+    return "set"
 
 
 
 
 
+# endpoint set values
+@http_bp.route("/set_values/", methods=["POST"])
+def set_values():
+    if request.method == 'POST':
+        data = request.form.to_dict()
+        # redis.set('value', data)        
+        #socketio.emit('set_values', {"v1":data['v1'], "v2":data['v2'], "v3":data['v3']})
+        socketio.emit('set_values', data)
+    return "set"
 
 
 
