@@ -6,8 +6,8 @@ from config import getConfig, getRedis
 cfg = getConfig()
 redis = getRedis()
 app = Flask(__name__, 
-    static_url_path='/data', 
-    static_folder='data', 
+    static_url_path='/static', 
+    static_folder='../static', 
     template_folder='../templates'
 )
 cors = CORS(app)    
