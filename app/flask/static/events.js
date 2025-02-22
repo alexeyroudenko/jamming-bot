@@ -113,6 +113,14 @@ return length
         words = data['words']
 
 
+
+
+
+ 
+
+
+
+
         if (data.analyzed) {
             words_count = data.analyzed.words_count;
             words_count = Math.min(words_count/10+5, 20);
@@ -120,7 +128,32 @@ return length
             words_count = Math.random() * 700.0;
             words_count = Math.min(words_count/10+5, 20);
         }
+
+
+
+
+
+        // Send midi notes
+        //
+        navigator.requestMIDIAccess().then(midiAccess => {
+            const outputs = Array.from(midiAccess.outputs.values());
+            if (outputs.length === 0) {
+                console.error("No midi devices");
+                return;
+            }
+            const output = outputs[1]; 
+            const noteOn = [0x90, words_count*3, 127]; // Note On (канал 1, нота C4, velocity 127)
+            output.send(noteOn);
+            setTimeout(() => {
+                output.send([0x80, words_count*3, 0]); // Note Off (канал 1, нота C4, velocity 0)
+            }, 100);
+        });
+    
         
+
+
+
+
         headers = data['headers']        
         node_id = graph.addNode(url, step, words_count);
         node_src = graph.findNode(from_url)
