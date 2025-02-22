@@ -241,21 +241,9 @@ def step():
         
         data = request.form.to_dict()        
                 
-        with open(f'data/path/steps/{data["number"].zfill(8)}.info', 'w') as file:
-            file.write(data['number']+"\n") 
-            file.write(data['url']+"\n")
-            file.write(data['src']+"\n")
-            file.write(data['status_code']+"\n")
-            file.write(data['ip']+"\n")
         with open(f'data/path/headers/{data["number"].zfill(8)}.headers', 'w') as file:
             file.write(data['headers'])
-        
-        # if 'text' in data.keys():    
-        #     with open(f'data/path/txt/{str(data["number"]).zfill(8)}.txt', 'w') as file:
-        #         file.write(data['text'])
-        #     with open(f'data/path/html/{str(data["number"]).zfill(8)}.html', 'w') as file:
-        #         file.write(data['html'])
-        
+                
         if DO_RED:
             try:
                 RED_URL = "http://node_red:1880/events/bot_step/"
