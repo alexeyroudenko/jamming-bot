@@ -164,8 +164,19 @@ class Step():
         self.timestamp = datetime.now().timestamp()
         # self.text: str = ""
         # self.html: str = ""
+        
+    def to_info(self):
+        return [f"{self.number}", 
+                f"\n{self.url}", 
+                f"\n{self.src}", 
+                f"\n{self.ip}", 
+                f"\n{self.status_code}", 
+                f"\n{self.timestamp}"]
             
     def to_data(self):
+        data = vars(self)
+        data.pop('text', None)
+        data.pop('html', None)
         return vars(self)
     
     def to_osc(self):
@@ -569,17 +580,22 @@ class NetSpider():
 
                         
                         self.notify_about_eventp("save_html_to_file", content_type)
-                        # self.step.html = html_content
-                        # self.step.text = text
+                        
+                        self.step.html = html_content
+                        self.step.text = text
+                        
                         html_path = f'data/path/html/{str(self.step.number).zfill(8)}.html'
                         with open(html_path, 'w') as file:
                             file.write(html_content)                        
+                        
                         text_path = f'data/path/txt/{str(self.step.number).zfill(8)}.txt'                           
                         with open(text_path, 'w') as file:
                             file.write(text)
                         
-                        
-                        
+                        step_path = f'data/path/steps/{str(self.step.number).zfill(8)}.info'                           
+                        with open(step_path, 'w') as file:                            
+                            file.writelines(self.step.to_info())
+               
                                                 
                         
                         soup = BeautifulSoup(response.content, "html.parser", from_encoding="utf-8")                         
