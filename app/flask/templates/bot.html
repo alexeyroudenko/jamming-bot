@@ -579,28 +579,26 @@
 
             // console.log(force, values); 
             // Restart the force layout.
-            force.friction(0.004)
-            //   .linkDistance(2000.0*values['v1'])
-              .linkDistance( function(d) { return d.value * 13 * values['v1'] * 3 } )
-              .gravity(values['v2'])
-              .charge(-200000*values['v3'])
-              .linkStrength(values['v4'])
-              .friction(values['v5'])  
-              .size([w, h])
-              .start();     
+            force.linkDistance( function(d) { return d.value * 13 * values['v1'] * 4 } )
+                .gravity(.01 * values['v2'] * 4 )
+                .charge(-80000*values['v3'] * 4 )              
+                .linkStrength(values['v4'])
+                .friction(0.004*values['v5'] * 4 )  
+                .size([w, h])
+                .start();     
         };
 
 
         this.setValues = function (v) {      
             values = v
-            force.friction(0.004)
-            .linkDistance( function(d) { return d.value * 13 * values['v1'] * 3 } )
-            // .linkDistance(2000.0*values['v1'])
-            .gravity(values['v2'])
-            .charge(-200000*values['v3'])
-            .linkStrength(values['v4'])
-            .friction(values['v5']) 
-            .start(); 
+            force.linkDistance( function(d) { return d.value * 13 * values['v1'] * 4 } )
+                .gravity(.01 * values['v2'] * 4 )
+                .charge(-80000*values['v3'] * 4 )              
+                .linkStrength(values['v4'])
+                .friction(0.004*values['v5'] * 4 )  
+                .size([w, h])
+                .start();
+                 
         }
 
 
