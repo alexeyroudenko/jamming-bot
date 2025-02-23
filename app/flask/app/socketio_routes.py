@@ -101,6 +101,10 @@ def socketio_handlers(socketio):
         redis.set('do_analyze', float(value))
 
 
+    # @socketio.on('clean_tags')
+    # def handle_clean_tags(value):
+        # redis.set('clean_tags', float(value))
+
 
     # '''
     #     other

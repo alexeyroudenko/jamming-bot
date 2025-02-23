@@ -259,8 +259,7 @@ return length
         }    
         sanimateText();
 
-        // document.getElementById("log_phrases").innerHTML = "<code><h3>noun_phrases</h3>" + data['noun_phrases'].join('<br>') + "</code>";
-
+        //document.getElementById("log_phrases").innerHTML = "<code><h3>noun_phrases</h3>" + data['noun_phrases'].join('<br>') + "</code>";
         //words_all = data['words_str'] + words_all
         //words = data['words']
         //node = graph.findNode(data.url);

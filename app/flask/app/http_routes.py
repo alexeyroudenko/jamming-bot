@@ -183,12 +183,29 @@ def ctrl_action(action):
     return redirect('/ctrl/')
 
 
+@http_bp.route("/clean_tags/", methods=["GET"])
+def clean_tags():    
+    url = "http://tags_service:8000/api/v1/tags/"
+    response = requests.get(url)
+    r = response.json()
+    for i, t in enumerate(r):
+        idd = t['id']
+        urld = f"http://tags_service:8000/api/v1/tags/{idd}/"
+        r = requests.delete(urld)   
+    
+    status_code = 200                    
+    return redirect('/queue/')
 
 
 
 
-
-
+@http_bp.route("/tags/get/", methods=["GET"])
+def get_tags():
+    url = "http://tags_service:8000/api/v1/tags/tags/group/"
+    response = requests.get(url)
+    r = response.json()
+    status_code = 200      
+    return jsonify(r), status_code
 
 
 

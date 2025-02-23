@@ -10,6 +10,9 @@ app = FastAPI(openapi_url="/api/v1/tags/openapi.json", docs_url="/api/v1/tags/do
 origins = [
     "http://localhost:3000",
     "https://example.com",
+    "http://192.168.31.18:3000",
+    "http://192.168.31.18:8003",
+    "http://192.168.31.18:5000"
 ]
 
 app.add_middleware(

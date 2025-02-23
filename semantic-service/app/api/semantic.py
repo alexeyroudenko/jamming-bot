@@ -6,10 +6,50 @@ from collections import Counter
 import spacy
 nlp_lg = spacy.load("en_core_web_lg")
 
-def analyze_text(text):
+def remove_stopwords(text):
+    doc = nlp_lg(text)
+    return " ".join([token.text for token in doc if not token.is_stop])
+
+def remove_numbers(text):
+    doc = nlp_lg(text)
+    return " ".join([token.text for token in doc if not token.like_num])
+
+def remove_punctuation(text):
+    doc = nlp_lg(text)
+    return " ".join([token.text for token in doc if not token.is_punct])
+
+import re
+def clean_text(text):
+    text = text.strip()  # Убираем пробелы в начале и конце
+    text = re.sub(r'\s+', ' ', text)  # Заменяем множественные пробелы на один
+    return text
+
+def preprocess_text(text):
+    text = clean_text(text)  # Убираем лишние пробелы
+    text = text.lower()  # Приводим к нижнему регистру
+    doc = nlp_lg(text)
+    
+    tokens = [
+        token.lemma_ for token in doc
+        if not token.is_stop and not token.is_punct and not token.like_num
+    ]
+    
+    return " ".join(tokens)
+
+def analyze_text(texts):
     words = []
     hrases = []
     
+    
+    text = clean_text(texts)
+    text = text.lower()
+    text = remove_stopwords(text)
+    text = remove_punctuation(text)
+    text = remove_numbers(text)
+    text = preprocess_text(text)
+    
+    
+
     doc = nlp_lg(text)
     keywords = [token.text.lower() for token in doc if token.pos_ in ["NOUN", "ADJ"] and not token.is_stop]
     keyword_counts = Counter(keywords)
@@ -22,7 +62,7 @@ def analyze_text(text):
                     
     doc = nlp_lg(text)
     noun_hrases =  [chunk.text for chunk in doc.noun_chunks]            
-    for i in noun_hrases[0:10]:
+    for i in noun_hrases[0:64]:
         hrases.append(i.lower())
         
     

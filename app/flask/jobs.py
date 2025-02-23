@@ -20,10 +20,6 @@ def remove_special_characters(text):
 
 
 
-
-
-
-
 #
 #
 #  1. STEP
