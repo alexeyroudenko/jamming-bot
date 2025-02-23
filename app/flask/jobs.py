@@ -19,6 +19,69 @@ def remove_special_characters(text):
     return clean_text
 
 
+import requests
+
+@job('default', connection=redis_connection, timeout=90, result_ttl=90)
+def clean_tags():
+    # get a reference to the job we are currently in
+    # to send back status reports
+    self_job = get_current_job()
+    self_job.meta['type'] = "wait"
+    self_job.save_meta()
+    print(f"start job {self_job}")
+    num_iterations = 10
+    # define job
+    
+    url = "http://tags_service:8000/api/v1/tags/"
+    response = requests.get(url)
+    r = response.json()
+    num_iterations = len(r)
+    for i, t in enumerate(r):
+        idd = t['id']
+        urld = f"http://tags_service:8000/api/v1/tags/{idd}/"
+        r = requests.delete(urld)
+        time.sleep(.01)
+        self_job.meta['progress'] = {
+            'num_iterations': num_iterations,
+            'iteration': i,
+            'percent': i / num_iterations * 100
+        }
+           
+    # status_code = 200                    
+    # return redirect('/queue/')    
+    # for i in range(1, num_iterations + 1):  # start from 1 to get round numbers in the progress information
+    #     time.sleep(1)
+    #     self_job.meta['progress'] = {
+    #         'num_iterations': num_iterations,
+    #         'iteration': i,
+    #         'percent': i / num_iterations * 100
+    #     }
+    #     # save meta information to queue
+    #     self_job.save_meta()
+
+    # return job result (can be accesed as job.result)
+    # print(f"finish job {self_job}")
+    
+    from datetime import datetime
+    now = datetime.now()
+    date_time = now.strftime("%Y-%m-%d_%H-%M-%S")    
+    return date_time
+
+
+@job('default', connection=redis_connection, timeout=90, result_ttl=90)
+def add_tags(tags):
+    tags = {}
+    for w in tags:
+        print(f"tags: {w}")
+        tags = w[0:50]        
+        import json
+        import requests
+        url = "http://tags_service:8000/api/v1/tags/"
+        headers = {'content-type': 'application/json'}
+        data = {'name': tags, "count": 0}
+        response = requests.post(url, data=json.dumps(data), headers=headers)
+        tags = response.json()
+        
 
 #
 #

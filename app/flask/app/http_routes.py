@@ -183,23 +183,69 @@ def ctrl_action(action):
     return redirect('/ctrl/')
 
 
-@http_bp.route("/clean_tags/", methods=["GET"])
+
+
+
+@http_bp.route("/api/tags/clean/", methods=["GET"])
 def clean_tags():    
-    url = "http://tags_service:8000/api/v1/tags/"
-    response = requests.get(url)
-    r = response.json()
-    for i, t in enumerate(r):
-        idd = t['id']
-        urld = f"http://tags_service:8000/api/v1/tags/{idd}/"
-        r = requests.delete(urld)   
-    
-    status_code = 200                    
-    return redirect('/queue/')
+    job = jobs.clean_tags.delay()
+    # url = "http://tags_service:8000/api/v1/tags/"
+    # response = requests.get(url)
+    # r = response.json()
+    # for i, t in enumerate(r):
+    #     idd = t['id']
+    #     urld = f"http://tags_service:8000/api/v1/tags/{idd}/"
+    #     r = requests.delete(urld)   
+    # status_code = 200                    
+    # return redirect('/queue/')
+    return "ok"
 
 
+# endpoint set values
+@http_bp.route("/api/tags/add/", methods=["POST", "GET"])
+def add_tags():
+
+    if request.method == 'GET':
+        sim = ["hello1", "hello2"]
+        for hras in sim:       
+            url = "http://tags_service:8000/api/v1/tags/"
+            headers = {'content-type': 'application/json'}
+            data = {'name': hras, "count": 0}
+            r = requests.post(url, data=json.dumps(data), headers=headers)
+        return "ok from GET"
+            
+    if request.method == 'POST':
+        sim = request.form.get("tags")
+        print(sim)
+        # sim = ["h1", "h2"]
+        # for hras in sim:     
+        hras = sim  
+        url = "http://tags_service:8000/api/v1/tags/"
+        headers = {'content-type': 'application/json'}
+        data = {'name': hras, "count": 0}
+        r = requests.post(url, data=json.dumps(data), headers=headers)        
+        return "ok from POST"
+
+        # tags = request.form.to_dict()
+        # print(f"tags: {tags}")
+        # for w in tags:
+        #     print(f"tags: {w}")
+        #     tags = w[0:50]        
+        #     import json
+        #     import requests
+        #     url = "http://tags_service:8000/api/v1/tags/"
+        #     headers = {'content-type': 'application/json'}
+        #     data = {'name': tags, "count": 0}
+        #     response = requests.post(url, data=json.dumps(data), headers=headers)
+        #     tags = response.json()
+        
+        
+        # print(f"tags: {tags}")
+        # job = jobs.add_tags.delay(tags)    
+    return "ok"
 
 
-@http_bp.route("/tags/get/", methods=["GET"])
+@http_bp.route("/api/tags/get/", methods=["GET"])
 def get_tags():
     url = "http://tags_service:8000/api/v1/tags/tags/group/"
     response = requests.get(url)

@@ -140,10 +140,7 @@ export default class Logs extends React.Component {
 
 
       setInterval(() => {
-        // const url = CloudUrl
-
-        const url = document.location.protocol + "//" + document.location.hostname + ":8003/api/v1/tags/tags/group/"
-
+        const url = CloudUrl
         console.log("first tags request", url)
 
         let dt = []
