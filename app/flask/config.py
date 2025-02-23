@@ -40,7 +40,7 @@ def getConfig():
         redis.set('value', 0.5)
 
     if not redis.get('do_pass'):
-        redis.set('do_pass', 1)
+        redis.set('do_pass', 0)
         
     if not redis.get('do_geo'):
         redis.set('do_geo', 0)        

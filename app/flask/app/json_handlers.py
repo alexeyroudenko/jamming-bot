@@ -130,11 +130,35 @@ def all_jobs():
     return jsonify(l)
 
 
+
 @json_bp.route('/api/graph/')
 @cross_origin()
 def api_graph():
     response = jsonify([{"id":1},{"id":2},{"id":3}])
     return response
+
+
+
+# endpoint set values
+@json_bp.route("/api/tags/add/", methods=["POST", "GET"])
+@cross_origin()
+def add_tags():
+    if request.method == 'GET':
+        tag = "hello"       
+        url = "http://tags_service:8000/api/v1/tags/"
+        headers = {'content-type': 'application/json'}
+        data = {'name': tag, "count": 0}
+        r = requests.post(url, data=json.dumps(data), headers=headers)
+        return jsonify(f"ok from GET {r.json()}")
+            
+    if request.method == 'POST':
+        tags = request.get_json()
+        for tag in tags:     
+            url = "http://tags_service:8000/api/v1/tags/"
+            headers = {'content-type': 'application/json'}
+            data = {'name': tag, "count": 0}
+            r = requests.post(url, data=json.dumps(data), headers=headers)        
+            return jsonify(f"ok from POST {tags}")   
 
 
 @json_bp.route("/api/step/<step_num>", methods=["GET"])

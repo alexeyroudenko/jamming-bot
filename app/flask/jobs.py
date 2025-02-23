@@ -21,46 +21,64 @@ def remove_special_characters(text):
 
 import requests
 
-@job('default', connection=redis_connection, timeout=90, result_ttl=90)
+@job('default', connection=redis_connection, timeout=600, result_ttl=600)
 def clean_tags():
-    # get a reference to the job we are currently in
-    # to send back status reports
     self_job = get_current_job()
     self_job.meta['type'] = "wait"
     self_job.save_meta()
-    print(f"start job {self_job}")
-    num_iterations = 10
-    # define job
+    num_iterations = 300
     
-    url = "http://tags_service:8000/api/v1/tags/"
-    response = requests.get(url)
+    url_short = "http://jamming-bot.arthew0.online:5000/api/tags/get/"
+    response = requests.get(url_short)
+    
+    self_job = get_current_job() 
+    self_job.meta['type'] = "responced"
+    self_job.save_meta()
+    
     r = response.json()
+    
+    self_job = get_current_job() 
+    self_job.meta['type'] = "parsed"
+    self_job.meta['data'] = r
+    self_job.save_meta()
+    
     num_iterations = len(r)
+    
+    self_job = get_current_job() 
+    self_job.meta['type'] = "begining"
+    self_job.save_meta()
+    
     for i, t in enumerate(r):
+        self_job = get_current_job() 
+        self_job.meta['type'] = "active"
         idd = t['id']
         urld = f"http://tags_service:8000/api/v1/tags/{idd}/"
         r = requests.delete(urld)
-        time.sleep(.01)
+        # time.sleep(.1)
         self_job.meta['progress'] = {
             'num_iterations': num_iterations,
             'iteration': i,
-            'percent': i / num_iterations * 100
+            'percent': i / num_iterations * 50
         }
-           
-    # status_code = 200                    
-    # return redirect('/queue/')    
-    # for i in range(1, num_iterations + 1):  # start from 1 to get round numbers in the progress information
-    #     time.sleep(1)
+        self_job.save_meta()
+    
+    # url = "http://tags_service:8000/api/v1/tags/"
+    # response = requests.get(url)
+    # r = response.json()
+    # num_iterations = len(r)
+    # for i, t in enumerate(r):
+    #     idd = t['id']
+    #     urld = f"http://tags_service:8000/api/v1/tags/{idd}/"
+    #     r = requests.delete(urld)
+    #     time.sleep(.01)
+    #     self_job = get_current_job() 
     #     self_job.meta['progress'] = {
     #         'num_iterations': num_iterations,
     #         'iteration': i,
-    #         'percent': i / num_iterations * 100
+    #         'percent': i / num_iterations * 50
     #     }
-    #     # save meta information to queue
     #     self_job.save_meta()
-
-    # return job result (can be accesed as job.result)
-    # print(f"finish job {self_job}")
+        
     
     from datetime import datetime
     now = datetime.now()
