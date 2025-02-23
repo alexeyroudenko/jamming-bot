@@ -6,7 +6,8 @@ from rq import get_current_job
 from rq_helpers import redis_connection
 import time
 import json
-
+import requests
+import glob
 
 
 import re
@@ -26,7 +27,7 @@ def clean_tags():
     self_job = get_current_job()
     self_job.meta['type'] = "wait"
     self_job.save_meta()
-    num_iterations = 300
+    num_iterations = 2000
     
     url_short = "http://jamming-bot.arthew0.online:5000/api/tags/get/"
     response = requests.get(url_short)
@@ -62,22 +63,22 @@ def clean_tags():
         }
         self_job.save_meta()
     
-    # url = "http://tags_service:8000/api/v1/tags/"
-    # response = requests.get(url)
-    # r = response.json()
-    # num_iterations = len(r)
-    # for i, t in enumerate(r):
-    #     idd = t['id']
-    #     urld = f"http://tags_service:8000/api/v1/tags/{idd}/"
-    #     r = requests.delete(urld)
-    #     time.sleep(.01)
-    #     self_job = get_current_job() 
-    #     self_job.meta['progress'] = {
-    #         'num_iterations': num_iterations,
-    #         'iteration': i,
-    #         'percent': i / num_iterations * 50
-    #     }
-    #     self_job.save_meta()
+    url = "http://tags_service:8000/api/v1/tags/"
+    response = requests.get(url)
+    r = response.json()
+    num_iterations = len(r)
+    for i, t in enumerate(r):
+        idd = t['id']
+        urld = f"http://tags_service:8000/api/v1/tags/{idd}/"
+        r = requests.delete(urld)
+        time.sleep(.01)
+        self_job = get_current_job() 
+        self_job.meta['progress'] = {
+            'num_iterations': num_iterations,
+            'iteration': i,
+            'percent': i / num_iterations * 50
+        }
+        self_job.save_meta()
         
     
     from datetime import datetime
@@ -99,6 +100,68 @@ def add_tags(tags):
         data = {'name': tags, "count": 0}
         response = requests.post(url, data=json.dumps(data), headers=headers)
         tags = response.json()
+        
+      
+        
+@job('default', connection=redis_connection, timeout=900, result_ttl=900)
+def add_tags_from_steps():
+    MAX_STEPS = 80000
+    self_job = get_current_job()
+    self_job.meta['type'] = "wait"
+    self_job.save_meta()
+    
+    files = sorted(glob.glob("data/path/steps/*"))
+    files_txt = sorted(glob.glob("data/path/txt/*"))
+
+    self_job = get_current_job()
+    self_job.meta['type'] = "starting"
+    self_job.save_meta()
+        
+    num_iterations = MAX_STEPS
+    i = 0
+    for file in files[0:MAX_STEPS]:        
+        contents = open(file).readlines()
+        step = int(contents[0].strip())         
+        # step = i + 1   
+        # print(file, step)   
+        text_path = files_txt[step]     
+        text = open(files_txt[step-1]).read().strip().replace("\n","")
+        
+        url_semantic = f"http://semantic_service:8005/api/v1/semantic/tags/"
+        headers = {'content-type': 'application/json'}
+        rr = requests.post(url_semantic, data = json.dumps({"text": text}), headers=headers)                
+        data = rr.json()
+        if "sim" in data.keys(): 
+            sim = rr.json()['sim']
+        
+        for hras in sim:       
+            url = "http://tags_service:8000/api/v1/tags/"
+            headers = {'content-type': 'application/json'}
+            data = {'name': hras, "count": 0}
+            response = requests.post(url, data=json.dumps(data), headers=headers)
+        
+        self_job = get_current_job()
+        self_job.meta['step'] = step
+        self_job.meta['type'] = "active"
+        self_job.meta['progress'] = {
+            'num_iterations': num_iterations,
+            'iteration': i,
+            'percent': 100 * i / num_iterations
+        }
+        self_job.save_meta()
+        i += 1
+        
+        if i > MAX_STEPS:
+            return text
+            
+            # break
+        
+
+
+
+
+
+
         
 
 #

@@ -138,7 +138,19 @@ def api_graph():
     return response
 
 
-
+# endpoint set values
+@json_bp.route("/api/tags/add_one/", methods=["POST"])
+@cross_origin()
+def add_tag():            
+    if request.method == 'POST':
+        tag = request.get_json()
+        url = "http://tags_service:8000/api/v1/tags/"
+        headers = {'content-type': 'application/json'}
+        data = {'name': tag, "count": 0}
+        r = requests.post(url, data=json.dumps(data), headers=headers)        
+        return jsonify(f"ok from POST {tag}")
+                
+        
 # endpoint set values
 @json_bp.route("/api/tags/add/", methods=["POST", "GET"])
 @cross_origin()
@@ -158,7 +170,7 @@ def add_tags():
             headers = {'content-type': 'application/json'}
             data = {'name': tag, "count": 0}
             r = requests.post(url, data=json.dumps(data), headers=headers)        
-            return jsonify(f"ok from POST {tags}")   
+        return jsonify(f"ok from POST {tags}")   
 
 
 @json_bp.route("/api/step/<step_num>", methods=["GET"])

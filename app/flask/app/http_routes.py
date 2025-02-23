@@ -185,19 +185,14 @@ def ctrl_action(action):
 
 
 
+@http_bp.route("/api/tags/add_tags_from_steps/", methods=["GET"])
+def add_tags_from_steps():    
+    job = jobs.add_tags_from_steps.delay()
+    return "ok"
 
 @http_bp.route("/api/tags/clean/", methods=["GET"])
 def clean_tags():    
     job = jobs.clean_tags.delay()
-    # url = "http://tags_service:8000/api/v1/tags/"
-    # response = requests.get(url)
-    # r = response.json()
-    # for i, t in enumerate(r):
-    #     idd = t['id']
-    #     urld = f"http://tags_service:8000/api/v1/tags/{idd}/"
-    #     r = requests.delete(urld)   
-    # status_code = 200                    
-    # return redirect('/queue/')
     return "ok"
 
 
