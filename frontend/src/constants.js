@@ -1,6 +1,8 @@
-// const Url = 'http://localhost:5000'
-// const CloudUrl = "http://localhost:8003/api/v1/tags/tags/group/"
-// const LegacyUrl = 'https://localhost:5000/app/legacy/'
+
+// const url = document.location.protocol + "//" + document.location.hostname
+// const Url = url + ':5000'
+// const LegacyUrl = url + ':5000'
+// const CloudUrl = url + ":8003/api/v1/tags/tags/group/"
 
 const Url = 'https://jamming-bot.arthew0.online'
 const LegacyUrl = 'https://jamming-bot.arthew0.online/app/legacy/'

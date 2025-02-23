@@ -18,8 +18,8 @@ const Navbar = () => {
                     <NavLink to="/steps">
                     steps
                     </NavLink>                     
-                    <NavLink to="/blank">
-                    legacy
+                    <NavLink to="/graph">
+                    graph
                     </NavLink>
                 </NavMenu>
             </Nav>

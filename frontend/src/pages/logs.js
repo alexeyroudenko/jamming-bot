@@ -140,8 +140,11 @@ export default class Logs extends React.Component {
 
 
       setInterval(() => {
-        const url = CloudUrl
-        // console.log("first tags request", url)
+        // const url = CloudUrl
+
+        const url = document.location.protocol + "//" + document.location.hostname + ":8003/api/v1/tags/tags/group/"
+
+        console.log("first tags request", url)
 
         let dt = []
 
@@ -153,7 +156,6 @@ export default class Logs extends React.Component {
                 let new_tag = {value: tag.name, count: tag.count}
                 tags.push(new_tag)
                 dt.push(new_tag)
-                
                 // console.log("------------------------ ", new_tag)                      
               })
               this.setState({tags: tags})
@@ -242,7 +244,7 @@ export default class Logs extends React.Component {
           tags={data}
           rotate={rotate}
           disableRandomColor={true}
-          // onClick={tag => alert(`'${tag.value}' was selected!`)}
+          onClick={tag => alert(`'${tag.value}' was selected!`)}
         />
         </div>
     

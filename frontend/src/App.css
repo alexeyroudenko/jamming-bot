@@ -179,21 +179,22 @@ h1 {
   /* position: absolute; */
   /* border: 1px solid #220000; */
   width: 25%;
-  height: 50%;
+  height: 100%;
+  bottom: 10%;
   float: left;
-  font-size: 14px;
+  font-size: 1rem;
   overflow: hidden;
   }
 
 .semantic_cloud {
   position: absolute;
-  top:15%;
-  left:25%;
+  top:10%;
+  left:15%;
   /* border: 1px solid #220000; */
-  width: 50%;
-  height: 50%;
+  width: 70%;
+  height: 80%;
   /* float: left; */
-  font-size: 12px;
+  font-size: 2.7em;
 }
 
 .struct_text ul, li {
