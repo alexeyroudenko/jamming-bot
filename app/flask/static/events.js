@@ -1,9 +1,5 @@
-
 var text = "."
 var url = "/"
-
-
-
 
 
 var server = window.location.protocol + "//" + window.location.host;
@@ -114,12 +110,7 @@ return length
 
 
 
-
-
  
-
-
-
 
         if (data.analyzed) {
             words_count = data.analyzed.words_count;
@@ -129,31 +120,28 @@ return length
             words_count = Math.min(words_count/10+5, 20);
         }
 
-
-
-
-
         // Send midi notes
         //
-        navigator.requestMIDIAccess().then(midiAccess => {
-            const outputs = Array.from(midiAccess.outputs.values());
-            if (outputs.length === 0) {
-                console.error("No midi devices");
-                return;
-            }
-            const output = outputs[1]; 
-            const noteOn = [0x90, words_count*3, 127]; // Note On (канал 1, нота C4, velocity 127)
-            output.send(noteOn);
-            setTimeout(() => {
-                output.send([0x80, words_count*3, 0]); // Note Off (канал 1, нота C4, velocity 0)
-            }, 100);
-        });
+        if (navigator.requestMIDIAccess) {
+            navigator.requestMIDIAccess().then(midiAccess => {
+                const outputs = Array.from(midiAccess.outputs.values());
+                if (outputs.length === 0) {
+                    console.error("No midi devices");
+                    return;
+                }
+                const output = outputs[1]; 
+                const noteOn = [0x90, words_count*3, 127]; // Note On (канал 1, нота C4, velocity 127)
+                output.send(noteOn);
+                setTimeout(() => {
+                    output.send([0x80, words_count*3, 0]); // Note Off (канал 1, нота C4, velocity 0)
+                }, 100);
+            }).catch(error => {
+                console.error("MIDI access error: ", error);
+            });
+        } else {
+            console.error("navigator.requestMIDIAccess is not supported in this browser.");
+        }
     
-        
-
-
-
-
         headers = data['headers']        
         node_id = graph.addNode(url, step, words_count);
         node_src = graph.findNode(from_url)
