@@ -1,6 +1,3 @@
-
-#The Flask application container will use python:3.10-alpine as the base image
-# FROM python:3.7
 FROM python:3.6-stretch
 
 #This command will create the working directory for our Python Flask application Docker image
@@ -23,23 +20,13 @@ RUN pip install Flask
 RUN pip install rq==1.2.0
 RUN pip install rq-dashboard==0.5.1
 RUN pip install gunicorn==19.9.0
-# RUN pip install "click>=7,<8"
 RUN pip install click
 RUN pip install sentry-sdk[flask]
 RUN pip install requests
 
 RUN pip install -U spacy
 RUN python -m spacy download en_core_web_sm
-
-# RUN pip install Flask-SocketIO=="4.3.1"
-# RUN pip install python-engineio=="3.13.2"
-# RUN pip install python-socketio=="4.6.0"
-# RUN pip install Flask-Cors=="3.0.10"
-# RUN pip install Flask
-
-
-
-
+RUN python -m spacy download en_core_web_lg
 
 # Make port 5000 available to the world outside this container
 EXPOSE 5000

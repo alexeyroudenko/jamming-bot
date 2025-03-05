@@ -162,7 +162,7 @@ class Step():
         self.status_code: int = 0
         self.headers: str = ""
         self.timestamp = datetime.now().timestamp()
-        # self.text: str = ""
+        self.text: str = ""
         # self.html: str = ""
         
     def to_info(self):
@@ -175,7 +175,7 @@ class Step():
             
     def to_data(self):
         data = vars(self)
-        data.pop('text', None)
+        #data.pop('text', None)
         data.pop('html', None)
         return vars(self)
     

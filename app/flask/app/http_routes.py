@@ -270,6 +270,7 @@ def step():
         data['step'] = data['number']
         data['id'] = data['url']
         data['url'] = data['url']
+        data['text'] = data['text']
         data['current_url'] = data['url']
         data['src_url'] = data['src']
         data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"

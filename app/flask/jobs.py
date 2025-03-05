@@ -186,19 +186,13 @@ def dostep(step):
     if "ip" in step.keys():     
         ip = step['ip']        
     self_job.meta['ip'] = ip
-    self_job.save_meta()
+        
+    text = "" 
+    if "text" in step.keys():
+        text = step['text']
+    self_job.meta['text'] = text
     
-    text_out = ""    
-    if "html" in step.keys():        
-        html = step['html'].encode('utf-8')
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(html, "html.parser", from_encoding="utf-8")           
-        headings = [h.get_text() for h in soup.find_all(['h1', 'h2', 'h3'])]
-        paragraphs = [p.get_text() for p in soup.find_all('p')]
-        head = " ".join(headings)
-        text_out = head + " ".join(paragraphs)
-        # text_out = html
-        self_job.meta['text'] = text_out
+    self_job.save_meta()
         
     self_job.meta['progress'] = {
         'num_iterations': 4,
@@ -208,10 +202,9 @@ def dostep(step):
     self_job.save_meta()
                 
     
-    text_out = remove_html_tags(text_out)
-    text_out = remove_special_characters(text_out)
-    
-    text = text_out[0:2048]
+    # text_out = remove_html_tags(text_out)
+    # text_out = remove_special_characters(text_out)    
+    # text = text_out[0:2048]
     
     #
     # semantic analyze 1
@@ -295,7 +288,7 @@ def dostep(step):
             "semantic": tags,
             "semantic_words": words,
             "semantic_hrases": hrases,
-            "text":text_out[0:1024] + "..."
+            "text":text[0:1024] + "..."
         }
     
     # try:
