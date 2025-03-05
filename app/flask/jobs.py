@@ -8,7 +8,7 @@ import time
 import json
 import requests
 import glob
-
+from semantic.analyzer import analyze_text
 
 import re
 def remove_html_tags(text):
@@ -216,41 +216,36 @@ def dostep(step):
     #
     # semantic analyze 1
     #            
-    import json
-    import requests
-    url = "http://spacyapi/ent"
-    headers = {'content-type': 'application/json'}
-    d = {'text': text , 'model': 'en_core_web_md'}
-    response = requests.post(url, data=json.dumps(d), headers=headers)
-    r = response.json()
+    # import json
+    # import requests
+    # url = "http://spacyapi/ent"
+    # headers = {'content-type': 'application/json'}
+    # d = {'text': text , 'model': 'en_core_web_md'}
+    # response = requests.post(url, data=json.dumps(d), headers=headers)
+    # r = response.json()
     
     #
     # semantic analyze 2
     #
-    from semantic.analyzer import analyze_text
     words, hrases = analyze_text(text)
 
     #
     # write to file
     #
     # print(step)
-    filename = f'data/semantic.txt'    
-    self_job.meta['filename'] = filename
-    self_job.save_meta()        
-    if len(r) > 0:
-        with open(filename, 'a') as file:            
-            for word in r:
-                woord = (str(word['text']).strip().replace("\n", " ").replace("\r", " ").replace("\t", ""))[0:64]
-                if not woord.isdigit() and len(woord)>1:
-                    file.write(f"{step['step']}|{word['type']}|{woord}\n")
-                
-    
-
-    with open(f'data/txt/{step["step"].zfill(4)}_words.json', 'w') as file:
-        file.write(json.dumps(words))
-
-    with open(f'data/txt/{step["step"].zfill(4)}_hrases.json', 'w') as file:
-        file.write(json.dumps(hrases))
+    # filename = f'data/semantic.txt'    
+    # self_job.meta['filename'] = filename
+    # self_job.save_meta()        
+    # if len(r) > 0:
+    #     with open(filename, 'a') as file:            
+    #         for word in r:
+    #             woord = (str(word['text']).strip().replace("\n", " ").replace("\r", " ").replace("\t", ""))[0:64]
+    #             if not woord.isdigit() and len(woord)>1:
+    #                 file.write(f"{step['step']}|{word['type']}|{woord}\n")
+    # with open(f'data/txt/{step["step"].zfill(4)}_words.json', 'w') as file:
+    #     file.write(json.dumps(words))
+    # with open(f'data/txt/{step["step"].zfill(4)}_hrases.json', 'w') as file:
+    #     file.write(json.dumps(hrases))
         
     self_job.meta['progress'] = {
         'num_iterations': 4,
