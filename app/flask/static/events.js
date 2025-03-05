@@ -163,7 +163,7 @@ return length
         keepNodesOnTop();
 
         var log_view = document.getElementById('log_url');
-        log_view.innerHTML = "<code><nobr>" + step + " : " + url + "</nobr></code>";
+        log_view.innerHTML = "<a href='" + url + "'><code><nobr>" + step + " : " + url + "</nobr></code></a>";
 
         function updateData(selectedNode)  {
             diff.removed.forEach((node) => nodes.splice(nodes.indexOf(node), 1))
