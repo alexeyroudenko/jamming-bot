@@ -8,7 +8,7 @@ import time
 import json
 import requests
 import glob
-from semantic.analyzer import analyze_text
+
 
 import re
 def remove_html_tags(text):
@@ -220,8 +220,10 @@ def dostep(step):
     #
     # semantic analyze 2
     #
-    words, hrases = analyze_text(text)
-
+    # from semantic.analyzer import analyze_text
+    # words, hrases = analyze_text(text)
+    words = []
+    hrases = []
     #
     # write to file
     #
