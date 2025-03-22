@@ -196,10 +196,8 @@ services:
     ports:
       - "3000:3000"
     networks:
-      - app_network 
-
+      - app_network
       
-
 
 volumes:
   postgres_data_movie:

@@ -18,7 +18,11 @@ services:
     depends_on:
       - redis  
     networks:
-      - app_network         
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
 
   redis: 
     image: redislabs/redismod
@@ -50,7 +54,11 @@ services:
     depends_on:
       - redis
     networks:
-      - app_network   
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
 
   # adapter:
   #   build: 
@@ -214,7 +222,7 @@ services:
         target: /var/www/certbot
       - type: bind
         source: ./frontend/build
-        target: /var/www                
+        target: /var/www
     depends_on:
       - flask
       - redis
@@ -222,6 +230,19 @@ services:
     networks:
       - app_network 
 
+
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - type: bind
+        source: ./data/certbot/www
+        target: /var/www/certbot
+      - type: bind
+        source: ./data/certbot/www
+        target: /etc/letsencrypt
+  # command: certonly --webroot -w /var/www/certbot --non-interactive --email alexey.roudenko@gmail.com --agree-tos --preferred-challenges http --dry-run -d bots.arthew0.online
+  # command: certonly --webroot -w /var/www/certbot --non-interactive --email alexey.roudenko@gmail.com --agree-tos --preferred-challenges http -d bots.arthew0.online
+    command: certonly --webroot -w /var/www/certbot --non-interactive --email alexey.roudenko@gmail.com --agree-tos --preferred-challenges http -d jamming-bot.arthew0.online
 
 
   # node_red:
