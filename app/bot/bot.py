@@ -206,6 +206,8 @@ class NetSpider():
         self.send_sublinks = False
         
         self.resume_at_restart = False
+        
+        self.do_save_html = False
 
         import socket
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -236,6 +238,7 @@ class NetSpider():
             self.send_osc = config['send_osc']
             self.send_sublinks = config['send_sublinks']
             self.resume_at_restart = config['resume_at_restart']
+            self.do_save_html = config['do_save_html']
             #self.is_active = config['is_active']
 
     '''
@@ -584,20 +587,20 @@ class NetSpider():
                         self.step.html = html_content
                         self.step.text = text
                         
-                        html_path = f'data/path/html/{str(self.step.number).zfill(8)}.html'
-                        with open(html_path, 'w') as file:
-                            file.write(html_content)                        
-                        
-                        text_path = f'data/path/txt/{str(self.step.number).zfill(8)}.txt'                           
+                        if self.do_save_html:
+                            html_path = f'data/path/html/{str(self.step.number).zfill(8)}.html'
+                            with open(html_path, 'w') as file:
+                                file.write(html_content)
+
+                        text_path = f'data/path/txt/{str(self.step.number).zfill(8)}.txt'
                         with open(text_path, 'w') as file:
                             file.write(text)
                         
-                        step_path = f'data/path/steps/{str(self.step.number).zfill(8)}.info'                           
-                        with open(step_path, 'w') as file:                            
+                        step_path = f'data/path/steps/{str(self.step.number).zfill(8)}.info'
+                        with open(step_path, 'w') as file:
                             file.writelines(self.step.to_info())
-               
-                                                
-                        
+
+
                         soup = BeautifulSoup(response.content, "html.parser", from_encoding="utf-8")                         
                         self.notify_about_eventp("analyze_page_remove_nav", content_type) 
                         
