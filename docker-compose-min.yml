@@ -1,0 +1,68 @@
+services:
+
+  bot:
+    build: 
+      dockerfile: docker/bot/Dockerfile
+    container_name: jamming-bot
+    restart: unless-stopped
+    ports:
+      - "7001:7001"
+    env_file:
+      - .env      
+    volumes:
+      - type: bind
+        source: ./app/bot
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data 
+    depends_on:
+      - redis  
+    networks:
+      - app_network         
+
+  redis: 
+    image: redislabs/redismod
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - ./data/redis:/data
+    networks:
+      - app_network
+
+  flask:
+    build: 
+      dockerfile: docker/flask/Dockerfile
+    image: master-image
+    container_name: flask
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    command: python app.py
+    env_file:
+      - .env    
+    volumes:
+      - type: bind
+        source: ./app/flask
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data 
+    depends_on:
+      - redis
+    networks:
+      - app_network   
+
+
+volumes:
+  postgres_data_tags:
+  data:
+    external: true
+  app:
+  app-ip:
+
+networks:
+  app_network:
+    driver: bridge
