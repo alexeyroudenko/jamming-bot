@@ -256,8 +256,8 @@ def step():
         
         data = request.form.to_dict()        
                 
-        with open(f'data/path/headers/{data["number"].zfill(8)}.headers', 'w') as file:
-            file.write(data['headers'])
+        # with open(f'data/path/headers/{data["number"].zfill(8)}.headers', 'w') as file:
+        #     file.write(data['headers'])
                 
         if DO_RED:
             try:
@@ -270,7 +270,6 @@ def step():
         data['step'] = data['number']
         data['id'] = data['url']
         data['url'] = data['url']
-        data['text'] = data['text']
         data['current_url'] = data['url']
         data['src_url'] = data['src']
         data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"
@@ -343,16 +342,16 @@ def step():
         #
         # ANALYZE
         #
-        # if float(cfg['do_analyze']) == 1.0:
-        #     # http_bp.logger.info(f"analyze data {data['current_url']}")
-        #     job = jobs.analyze.delay(data['html'])
-        #     while True:
-        #         time.sleep(0.01)
-        #         job.refresh()  
-        #         if job.is_finished:
-        #             data['analyzed'] = job.result
-        #             socketio.emit('analyzed', job.result)
-        #             break
+        if float(cfg['do_analyze']) == 1.0:
+            # http_bp.logger.info(f"analyze data {data['current_url']}")
+            job = jobs.analyze.delay(data['html'])
+            while True:
+                time.sleep(0.01)
+                job.refresh()  
+                if job.is_finished:
+                    data['analyzed'] = job.result
+                    socketio.emit('analyzed', job.result)
+                    break
 
 
 

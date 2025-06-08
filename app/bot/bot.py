@@ -583,18 +583,21 @@ class NetSpider():
                         
                         self.step.html = html_content
                         self.step.text = text
-                        
-                        html_path = f'data/path/html/{str(self.step.number).zfill(8)}.html'
-                        with open(html_path, 'w') as file:
-                            file.write(html_content)                        
-                        
-                        text_path = f'data/path/txt/{str(self.step.number).zfill(8)}.txt'                           
-                        with open(text_path, 'w') as file:
-                            file.write(text)
-                        
-                        step_path = f'data/path/steps/{str(self.step.number).zfill(8)}.info'                           
-                        with open(step_path, 'w') as file:                            
-                            file.writelines(self.step.to_info())
+
+
+                        do_save_html = False
+                        if do_save_html:
+                            html_path = f'data/path/html/{str(self.step.number).zfill(8)}.html'
+                            with open(html_path, 'w') as file:
+                                file.write(html_content)                        
+                            
+                            text_path = f'data/path/txt/{str(self.step.number).zfill(8)}.txt'                           
+                            with open(text_path, 'w') as file:
+                                file.write(text)
+                            
+                            step_path = f'data/path/steps/{str(self.step.number).zfill(8)}.info'                           
+                            with open(step_path, 'w') as file:                            
+                                file.writelines(self.step.to_info())
                
                                                 
                         
