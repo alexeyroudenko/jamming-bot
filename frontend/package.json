@@ -6,6 +6,8 @@
     "@testing-library/jest-dom": "^5.16.1",
     "@testing-library/react": "^12.1.2",
     "@testing-library/user-event": "^13.5.0",
+    "aframe": "^1.7.1",
+    "aframe-extras": "^7.5.4",
     "d3": "^7.2.0",
     "react": "^18.3.1",
     "react-d3-graph": "^2.6.0",
