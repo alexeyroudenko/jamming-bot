@@ -88,6 +88,8 @@ return length
         graph.removeallLinks()
     })
 
+
+
     //
     // STEP
     //
@@ -108,10 +110,6 @@ return length
         text = data['text']
         words = data['words']
 
-
-
- 
-
         if (data.analyzed) {
             words_count = data.analyzed.words_count;
             words_count = Math.min(words_count/10+5, 20);
@@ -121,7 +119,7 @@ return length
         }
 
         // Send midi notes
-        //
+        
         // if (navigator.requestMIDIAccess) {
         //     navigator.requestMIDIAccess().then(midiAccess => {
         //         const outputs = Array.from(midiAccess.outputs.values());
@@ -141,26 +139,11 @@ return length
         // } else {
         //     console.error("navigator.requestMIDIAccess is not supported in this browser.");
         // }
-    
-        headers = data['headers']        
-        node_id = graph.addNode(url, step, words_count);
-        node_src = graph.findNode(from_url)
-        if (!node_src) {
-            graph.addNode(from_url, 0);
-            graph.addLink(from_url, url,  getLinkLength(url, from_url));
-        }    
 
-        if (graph.findNodeIndex(from_url)) {
-            graph.addLink(from_url, url, '15');
-        }
 
-        if (last_added) {
-            graph.addLink(last_added, url, getLinkLength(url, last_added));
-        }
+        // add node and delete fifo
+        graph.add_node_safe(step, url, from_url, words_count)
 
-        last_added = url
-
-        keepNodesOnTop();
 
         var log_view = document.getElementById('log_url');
         log_view.innerHTML = "<a href='" + url + "'><code><nobr>" + step + " : " + url + "</nobr></code></a>";
@@ -171,14 +154,10 @@ return length
 
 
 
-        //
-        //
-        // Limit Nodes
-        //
-        let MAX_NODES = 15
-        if (graph.getNodes().length > MAX_NODES) {
-            graph.removeNode(graph.getNodes()[0].id)
-        }
+
+
+
+
 
         let textLength = 2048;
         if (textLength < 2048) {
@@ -210,7 +189,8 @@ return length
         if (struct_text) {
             document.getElementById("log_phrases").innerHTML = "<code>" + struct_text + "</code>";
         }
-        document.getElementById("log_headers").innerHTML = "<code>" + headers + "</code>";
+
+        document.getElementById("log_headers").innerHTML = "<code>" + data['headers'] + "</code>";
         //typeString(url, "log_url", 1); //log_msg(info)
 
 

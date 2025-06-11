@@ -274,6 +274,35 @@ function myGraph() {
     }
 
 
+    this.add_node_safe = function(step, url, from_url, words_count) 
+    {
+        node_id = this.addNode(url, step, words_count);
+
+        node_src = findNode(from_url)
+        if (!node_src) {
+            this.addNode(from_url, 0);
+            this.addLink(from_url, url,  getLinkLength(url, from_url));
+        }
+
+        if (this.findNodeIndex(from_url)) {
+            this.addLink(from_url, url, '15');
+        }
+
+        if (last_added) {
+            this.addLink(last_added, url, getLinkLength(url, last_added));
+        }
+
+        last_added = url
+        keepNodesOnTop();
+
+        // Limit Nodes
+        let MAX_NODES = 25
+        while (this.getNodes().length > MAX_NODES) {
+            this.removeNode(this.getNodes()[0].id)
+        }
+    }
+
+
     // Make it all go
     update();
     this.upd = function() {
@@ -282,9 +311,9 @@ function myGraph() {
 };
 
 graph = new myGraph("#svgdiv");
+
 //function drawGraph() {}
 //drawGraph();
-
 // var linkDistanceVal = 1000 * 0.5;
 // var linkStrengtVal = 10 * 0.5;
 // var alphaVal = 1 * 0.5;
