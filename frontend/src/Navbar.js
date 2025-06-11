@@ -11,13 +11,14 @@ const Navbar = () => {
                     semantic cloud
                     </NavLink>
 
-                    <NavLink to="/words">
+                    {/* <NavLink to="/words">
                     semantic
-                    </NavLink>
+                    </NavLink> */}
 
-                    <NavLink to="/steps">
+                    {/* <NavLink to="/steps">
                     steps
-                    </NavLink>                     
+                    </NavLink> */}
+
                     <NavLink to="/graph">
                     graph
                     </NavLink>
