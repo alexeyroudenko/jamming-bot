@@ -52,19 +52,6 @@ services:
     networks:
       - app_network   
 
-  adapter:
-    build: 
-      dockerfile: docker/adapter/Dockerfile
-    ports:
-      - "4000:4000"
-    volumes:
-      - type: bind
-        source: ./app/adapter
-        target: /app
-    depends_on:
-      - flask
-    networks:
-      - app_network    
 
   worker:    
     build: 
@@ -85,20 +72,6 @@ services:
     networks:
       - app_network
 
-  # uncomment to have a another worker
-  # worker2:
-  #   image: worker-image
-  #   command: rq worker --name worker2 --url redis://redis:6379/0
-  #   volumes:
-  #     - type: bind
-  #       source: ./app/flask
-  #       target: /app
-  #     - type: bind
-  #       source: ./data
-  #       target: /app/data    
-  #   depends_on:
-  #     - redis    
-
   
   spacyapi:
     container_name: spacyapi
@@ -108,15 +81,6 @@ services:
     restart: always
     networks:
       - app_network
-
-  # screenshoter:
-  #   image: mingalevme/screenshoter
-  #   ports:
-  #     - "5020:8080"
-  #   restart: always
-  #   networks:
-  #     - app_network      
-
 
 
   tags_service:
@@ -145,7 +109,6 @@ services:
       - POSTGRES_DB=tags_db_dev
     networks:
       - app_network      
-            
 
 
   nginx:
@@ -173,21 +136,6 @@ services:
       - app_network 
 
 
-
-  node_red:
-    image: "nodered/node-red:latest"
-    container_name: node_red
-    ports:
-      - "1880:1880"
-    networks:
-      - app_network
-    volumes:
-      - node_red_data:/data
-    environment:
-      - NODE_OPTIONS=--max-old-space-size=256
-    restart: unless-stopped
-
-
   frontend:
     build: ./frontend
     volumes:
@@ -197,8 +145,6 @@ services:
       - "3000:3000"
     networks:
       - app_network 
-
-      
 
 
 volumes:
