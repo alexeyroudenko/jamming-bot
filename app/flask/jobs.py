@@ -16,7 +16,12 @@ def remove_html_tags(text):
     return clean_text
 
 def remove_special_characters(text):
-    clean_text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
+    # Remove non-ASCII characters
+    clean_text = re.sub(r'[^\x00-\x7F]+', '', text)
+    # Remove special characters except letters, numbers, and whitespace
+    clean_text = re.sub(r'[^a-zA-Z0-9\s]', '', clean_text)
+    # Remove newlines and tabs
+    clean_text = clean_text.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
     return clean_text
 
 
@@ -100,9 +105,9 @@ def add_tags(tags):
         data = {'name': tags, "count": 0}
         response = requests.post(url, data=json.dumps(data), headers=headers)
         tags = response.json()
-        
-      
-        
+
+
+
 @job('default', connection=redis_connection, timeout=900, result_ttl=900)
 def add_tags_from_steps():
     MAX_STEPS = 80000
@@ -155,14 +160,8 @@ def add_tags_from_steps():
             return text
             
             # break
-        
 
 
-
-
-
-
-        
 
 #
 #
@@ -171,20 +170,20 @@ def add_tags_from_steps():
 @job('default', connection=redis_connection, timeout=90, result_ttl=120)
 def dostep(step): 
         
-    self_job = get_current_job()    
+    self_job = get_current_job()
     self_job.meta['progress'] = {
         'num_iterations': 4,
         'iteration': 1,
         'percent': 25
-    }  
-                 
+    }
+
     self_job.meta['type'] = "step"
-    if "current_url" in step.keys():         
+    if "current_url" in step.keys():
         self_job.meta['url'] = step['current_url']
 
     ip = "0.0.0.0" 
-    if "ip" in step.keys():     
-        ip = step['ip']        
+    if "ip" in step.keys():
+        ip = step['ip']
     self_job.meta['ip'] = ip
         
     text = "" 
@@ -200,11 +199,11 @@ def dostep(step):
         'percent': 50
     }
     self_job.save_meta()
-                
     
-    # text_out = remove_html_tags(text_out)
-    # text_out = remove_special_characters(text_out)    
-    # text = text_out[0:2048]
+    
+    text = remove_html_tags(text)
+    text = remove_special_characters(text)
+    text = text[0:2048]
     
     #
     # semantic analyze 1
@@ -223,29 +222,21 @@ def dostep(step):
     
     from semantic.analyzer import analyze_text
     words, hrases = analyze_text(text)
-    
+
     # words = [] 
     # hrases = []
-    
 
     #
     # write to file
     #
     # print(step)
-    # filename = f'data/semantic.txt'    
-    # self_job.meta['filename'] = filename
-    # self_job.save_meta()        
-    # if len(r) > 0:
-    #     with open(filename, 'a') as file:            
-    #         for word in r:
-    #             woord = (str(word['text']).strip().replace("\n", " ").replace("\r", " ").replace("\t", ""))[0:64]
-    #             if not woord.isdigit() and len(woord)>1:
-    #                 file.write(f"{step['step']}|{word['type']}|{woord}\n")
-    # with open(f'data/txt/{step["step"].zfill(4)}_words.json', 'w') as file:
-    #     file.write(json.dumps(words))
-    # with open(f'data/txt/{step["step"].zfill(4)}_hrases.json', 'w') as file:
-    #     file.write(json.dumps(hrases))
-        
+    filename = f'data/semantic.tsv'
+    self_job.meta['filename'] = filename
+    self_job.save_meta()
+    with open(filename, 'a') as file:
+        write_data = [step['step'], step['url'], step['ip'], text, ' '.join(words)]
+        file.write('\t'.join(write_data) + "\n")
+
     self_job.meta['progress'] = {
         'num_iterations': 4,
         'iteration': 3,
@@ -428,9 +419,6 @@ def save(data):
     return filename
 
 
-
-
-   
 
 
 
