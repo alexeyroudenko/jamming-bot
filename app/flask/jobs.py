@@ -203,7 +203,7 @@ def dostep(step):
     
     text = remove_html_tags(text)
     text = remove_special_characters(text)
-    text = text[0:2048]
+    
     
     #
     # semantic analyze 1
@@ -217,11 +217,11 @@ def dostep(step):
     # r = response.json()
     
     #
-    # semantic analyze 2
-    
-    
+    # semantic analyze 2    
     from semantic.analyzer import analyze_text
     words, hrases = analyze_text(text)
+    
+    text = text[0:65536]
 
     # words = [] 
     # hrases = []
@@ -234,7 +234,7 @@ def dostep(step):
     self_job.meta['filename'] = filename
     self_job.save_meta()
     with open(filename, 'a') as file:
-        write_data = [step['step'], step['url'], step['ip'], text, ' '.join(words)]
+        write_data = [step['step'], step['status_code'], step['url'], step['src'], step['ip'],' '.join(words), text]
         file.write('\t'.join(write_data) + "\n")
 
     self_job.meta['progress'] = {
