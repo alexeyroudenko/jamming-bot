@@ -101,6 +101,10 @@ services:
       - redis
     networks:
       - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.05'
 
   # uncomment to have a another worker
   # worker2:

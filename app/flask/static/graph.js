@@ -296,7 +296,7 @@ function myGraph() {
         keepNodesOnTop();
 
         // Limit Nodes
-        let MAX_NODES = 25
+        let MAX_NODES = 100
         while (this.getNodes().length > MAX_NODES) {
             this.removeNode(this.getNodes()[0].id)
         }
