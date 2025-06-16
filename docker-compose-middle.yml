@@ -104,21 +104,39 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.05'
+          cpus: '0.25'
 
-  # uncomment to have a another worker
-  # worker2:
-  #   image: worker-image
-  #   command: rq worker --name worker2 --url redis://redis:6379/0
-  #   volumes:
-  #     - type: bind
-  #       source: ./app/flask
-  #       target: /app
-  #     - type: bind
-  #       source: ./data
-  #       target: /app/data    
-  #   depends_on:
-  #     - redis  
+  #uncomment to have a another worker
+  worker2:
+    image: worker-image
+    command: rq worker --name worker2 --disable-job-desc-logging --url redis://redis:6379/0
+    volumes:
+      - type: bind
+        source: ./app/flask
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data    
+    depends_on:
+      - redis
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'  
+
+
+
+  frontend:
+    build: ./frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    networks:
+      - app_network           
 
   # dashboard:
   #   image: master-image

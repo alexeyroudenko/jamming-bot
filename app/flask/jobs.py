@@ -205,7 +205,6 @@ def dostep(step):
     text = remove_special_characters(text)
     
     
-    #
     # semantic analyze 1
     #            
     # import json
@@ -216,15 +215,15 @@ def dostep(step):
     # response = requests.post(url, data=json.dumps(d), headers=headers)
     # r = response.json()
     
-    #
-    # semantic analyze 2    
-    from semantic.analyzer import analyze_text
-    words, hrases = analyze_text(text)
+    # semantic analyze 2
+    # from semantic.analyzer import analyze_text
+    # words, hrases = analyze_text(text)
     
-    text = text[0:65536]
-
-    # words = [] 
-    # hrases = []
+    # semantic analyze 3
+    words = text.split(" ")
+    import random
+    words = random.sample(words, min(7, len(words)))
+    hrases = []
 
     #
     # write to file
@@ -233,6 +232,7 @@ def dostep(step):
     filename = f'data/semantic.tsv'
     self_job.meta['filename'] = filename
     self_job.save_meta()
+    text = text[0:65536]
     with open(filename, 'a') as file:
         write_data = [step['step'], step['status_code'], step['url'], step['src'], step['ip'],' '.join(words), text]
         file.write('\t'.join(write_data) + "\n")
@@ -259,15 +259,9 @@ def dostep(step):
         headers = {'content-type': 'application/json'}
         data = {'name': word, "count": 0}
         response = requests.post(url, data=json.dumps(data), headers=headers)
-        tags = response.json()     
-    
-    # try:
-    #     RED_URL = "http://node_red:1880/events/step/"
-    #     r = requests.post(RED_URL, words) 
-    #     print(RED_URL)
-    # except Exception as e:
-    #     print("error ", e)    
-              
+        tags = response.json()
+
+
     self_job.meta['progress'] = {
         'num_iterations': 4,
         'iteration': 4,
@@ -287,13 +281,7 @@ def dostep(step):
             "semantic_hrases": hrases,
             "text":text[0:1024] + "..."
         }
-    
-    # try:
-    #     RED_URL = "http://node_red:1880/events/semantic_step/"
-    #     red_request = requests.post(RED_URL, return_obj) 
-    # except Exception as e:
-    #     print("error ", e)
-           
+
     return return_obj
 
 
@@ -361,13 +349,6 @@ def do_geo(ip):
 
 
 
-
-
-
-
-
-
-
 #
 #
 #   SAVE
@@ -422,151 +403,6 @@ def save(data):
 
 
 
-
-
-
-#
-#
-#  ANALYZE
-#   
-# @job('default', connection=redis_connection, timeout=90, result_ttl=90)
-# def analyze(text):
-    
-#     num_iterations = 3
-
-#     self_job = get_current_job()
-#     self_job.meta['progress'] = {
-#         'num_iterations': num_iterations,
-#         'iteration': 0,
-#         'percent':0,
-#         'type': "analyze"
-#     }
-#     self_job.meta['type'] = "analyze"
-#     self_job.save_meta()
-
-
-#     #
-#     # Detect similarites
-#     #
-#     # import spacy.cli
-#     # spacy.cli.download("en_core_web_lg")
-#     # en_core_web_md
-#     # en_core_web_lg
-#     # en_core_web_sm
-    
-#     text_out = ""
-#     words = []
-#     sorted_similarities = []
-#     hrases = []
-              
-#     for i in range(1, num_iterations + 1):
-#         time.sleep(.1)
-#         self_job.meta['progress'] = {
-#             'num_iterations': num_iterations,
-#             'iteration': i,
-#             'percent': i / num_iterations * 100
-#         }
-#         self_job.meta['type'] = "analyze"
-        
-#         #
-#         # Get page texts
-#         #
-#         if i == 1:
-#             html = text.encode('utf-8')
-#             from bs4 import BeautifulSoup
-#             soup = BeautifulSoup(html, "html.parser", from_encoding="utf-8")           
-#             # headings = [h.get_text() for h in soup.find_all(['h1', 'h2', 'h3'])]
-#             paragraphs = [p.get_text() for p in soup.find_all('p')]
-#             # head = " ".join(headings)
-#             text_out = " ".join(paragraphs)
-#             # text_out = html
-#             self_job.meta['text'] = text_out
-        
-#         #
-#         # Analyze Semantic
-#         #
-#         if i == 2:
-            
-#             words == analyze_sorted_similarity(text_out)
-             
-#             # import spacy
-#             # nlp = spacy.load("en_core_web_sm")
-#             # doc = nlp(text_out)
-#             # query = nlp("Jammingbot")
-#             # similarities = {}
-#             # for token in doc:
-#             #     if token.has_vector and query.has_vector:
-#             #         similarity = query.similarity(token)
-#             #         if similarity > 0:  # Фильтрация значений, близких к нулю
-#             #             similarities[token.text] = similarity
-            
-#             # sorted_similarities = sorted(similarities.items(), 
-#             #                             key=lambda x: x[1], 
-#             #                             reverse=True)   
-                     
-#             # # self_job.meta['sorted_similarities'] = sorted_similarities
-#             # # print(f"similarity сwith'{query.text}':")
-#             # for word, similarity in sorted_similarities[0:13]:
-#             #     #print(f"{word}: {similarity:.2f}")
-#             #     words.append(word)
-                
-#             self_job.meta['words'] = words
-        
-#         #
-#         # Analyze noun hrases
-#         #
-#         if i == 3:                                
-#             import spacy
-#             nlp = spacy.load("en_core_web_lg")
-#             doc = nlp(text_out)
-#             noun_hrases =  [chunk.text for chunk in doc.noun_chunks]            
-#             for i in noun_hrases[0:13]:
-#                 hrases.append(i)
-            
-                 
-                 
-#         self_job.meta['words'] = words         
-#         self_job.save_meta()
-
-#     return {
-#             "noun_phrases": hrases,
-#             "words_str": " ".join(words),
-#             "words": sorted_similarities[0:10],
-#             "text":text_out[0:100] + "..."
-#            }
-        
-
-#     # self_job.save_meta()
-#     # nlp = spacy.load("en_core_web_sm")
-#     # doc = nlp(text)
-#     # self_job.meta['progress'] = {
-#     #     'num_iterations': 2,
-#     #     'iteration': 1,
-#     #     'percent': 50
-#     # }
-#     # self_job.meta['doc'] = doc
-#     # self_job.save_meta()
-    
-#     # verbs = [token.lemma_ for token in doc if token.pos_ == "VERB"]
-#     # print("verbs:", verbs)
-    
-#     #time.sleep(0.1)
-    
-#     print(f"finish job {self_job}")    
-#     # self_job.meta['progress'] = {
-#     #     'num_iterations': 2,
-#     #     'iteration': 2,
-#     #     'percent': 100
-#     # }
-#     # self_job.meta['verbs'] = verbs
-#     self_job.save_meta()
-#     # verbs = {text}
-#     return text
-
-
-
-
-
 #
 #
 #   
@@ -594,16 +430,6 @@ def screenshot(data):
     self_job.save_meta()
     
     return out_filename
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -643,6 +469,7 @@ def wait(num_iterations):
     print(f"finish job {self_job}")
     
     from datetime import datetime
+    import random
     now = datetime.now()
     date_time = now.strftime("%Y-%m-%d_%H-%M-%S")
     
