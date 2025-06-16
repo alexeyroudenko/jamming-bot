@@ -34,7 +34,7 @@ def clean_tags():
     self_job.save_meta()
     num_iterations = 2000
     
-    url_short = "http://jamming-bot.arthew0.online:5000/api/tags/get/"
+    url_short = "http://tags_service:8000/api/v1/tags/tags/group/"
     response = requests.get(url_short)
     
     self_job = get_current_job() 
@@ -60,11 +60,11 @@ def clean_tags():
         idd = t['id']
         urld = f"http://tags_service:8000/api/v1/tags/{idd}/"
         r = requests.delete(urld)
-        # time.sleep(.1)
+        time.sleep(.001)
         self_job.meta['progress'] = {
             'num_iterations': num_iterations,
             'iteration': i,
-            'percent': i / num_iterations * 50
+            'percent': i / num_iterations * 100
         }
         self_job.save_meta()
     
@@ -76,12 +76,12 @@ def clean_tags():
         idd = t['id']
         urld = f"http://tags_service:8000/api/v1/tags/{idd}/"
         r = requests.delete(urld)
-        time.sleep(.01)
+        time.sleep(.001)
         self_job = get_current_job() 
         self_job.meta['progress'] = {
             'num_iterations': num_iterations,
             'iteration': i,
-            'percent': i / num_iterations * 50
+            'percent': i / num_iterations * 100
         }
         self_job.save_meta()
         
@@ -252,14 +252,15 @@ def dostep(step):
     tags = {}
     for w in words:
         print(f"word: {w}")
-        word = w[0:50]        
-        import json
-        import requests
-        url = "http://tags_service:8000/api/v1/tags/"
-        headers = {'content-type': 'application/json'}
-        data = {'name': word, "count": 0}
-        response = requests.post(url, data=json.dumps(data), headers=headers)
-        tags = response.json()
+        if len(w) > 4:
+            word = w[0:50]
+            import json
+            import requests
+            url = "http://tags_service:8000/api/v1/tags/"
+            headers = {'content-type': 'application/json'}
+            data = {'name': word, "count": 0}
+            response = requests.post(url, data=json.dumps(data), headers=headers)
+            tags = response.json()
 
 
     self_job.meta['progress'] = {

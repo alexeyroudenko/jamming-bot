@@ -261,31 +261,31 @@ def step():
         data['current_url'] = data['url']
         data['src_url'] = data['src']
         data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"
+        data['struct_text'] = data['text']
+        data['semantic'] = ""
+        data['semantic_words'] = ""
             
         #
         # PASS
         # 
         if float(cfg['do_pass']) == 1.0:
-            job = jobs.dostep.delay(data)
-            # while True:
-            # time.sleep(0.01)
-            # job.refresh()
-            # if job.is_finished:
-            # data['struct_text'] = job.result['text']
-            # data['semantic'] = job.result['semantic']
-            # data['semantic_words'] = job.result['semantic_words']
-            # socketio.emit('step', data)
-            # break
-            data['struct_text'] = data['text']
-            data['semantic'] = ""
-            data['semantic_words'] = ""
             socketio.emit('step', data)
+            if len(data['text']) > 0:
+                job = jobs.dostep.delay(data)
+
+                # while True:
+                # time.sleep(0.01)
+                # job.refresh()
+                # if job.is_finished:
+                # data['struct_text'] = job.result['text']
+                # data['semantic'] = job.result['semantic']
+                # data['semantic_words'] = job.result['semantic_words']
+                # socketio.emit('step', data)
+                # break
         else:
-            data['struct_text'] = data['text']
-            data['semantic'] = ""
-            data['semantic_words'] = ""
             socketio.emit('step', data)
-                      
+            
+
         #
         # GEO
         #                   

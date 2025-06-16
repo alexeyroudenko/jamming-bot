@@ -136,15 +136,19 @@ services:
     ports:
       - "3000:3000"
     networks:
-      - app_network           
+      - app_network
 
-  # dashboard:
-  #   image: master-image
-  #   ports:
-  #     - 5555:5555
-  #   depends_on:
-  #     - redis
-  #   command: rq-dashboard --port 5555 --redis-url redis://redis:6379/0 
+
+  dashboard:
+    image: master-image
+    ports:
+      - 5555:5555
+    depends_on:
+      - redis
+    command: rq-dashboard --port 5555 --redis-url redis://redis:6379/0 
+    networks:
+      - app_network
+
 
 volumes:
   postgres_data_tags:

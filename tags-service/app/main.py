@@ -12,7 +12,10 @@ origins = [
     "https://example.com",
     "http://192.168.31.18:3000",
     "http://192.168.31.18:8003",
-    "http://192.168.31.18:5000"
+    "http://192.168.31.18:5000",
+    "http://192.168.0.104:3000",
+    "http://192.168.0.104:8003",
+    "http://192.168.0.104:5000"
 ]
 
 app.add_middleware(
@@ -34,3 +37,4 @@ async def shutdown():
 
 app.include_router(tags, prefix='/api/v1/tags', tags=['tags'])
 # app.include_router(tags, prefix='/api/v1/tags/group', tags=['tags'])
+
