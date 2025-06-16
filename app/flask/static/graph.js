@@ -367,5 +367,30 @@ if (false) {
     // graph.addNode("http://arthew0.online", 0);
 }
 
+let showGraph = true;
+
+function showGraphView() {
+    document.getElementById('graph-container').style.display = 'block';
+    document.getElementById('semantic-cloud-container').style.display = 'none';
+}
+
+function showSemanticCloudView() {
+    document.getElementById('graph-container').style.display = 'none';
+    document.getElementById('semantic-cloud-container').style.display = 'block';
+}
+
+// Автоматическое переключение каждую минуту
+setInterval(() => {
+    showGraph = !showGraph;
+    if (showGraph) {
+        showGraphView();
+    } else {
+        showSemanticCloudView();
+    }
+}, 60000); // 60000 мс = 1 минута
+
+// При загрузке страницы показываем граф
+showGraphView();
+
 
 

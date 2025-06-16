@@ -2,6 +2,7 @@ import 'aframe';
 import React, { useState, useEffect } from "react";
 import './App.css';
 import Navbar from "./Navbar";
+import { useNavigate, useLocation } from 'react-router-dom';
 
 import {
   BrowserRouter as Router,
@@ -32,17 +33,33 @@ function App() {
           
       >
         <Navbar/>
+        <AutoSwitcher />
         <Routes className="Nav">
           <Route exact path="/" element={<Logs/>} />
-          <Route path="/steps" element={<Steps/>} />
-          <Route path="/words" element={<Words/>} />
           <Route path="/graph" element={<Blank/>} />
-          {/* <Route path="/contact" element={<Сontact />} /> */}
         </Routes>
       </Router>
 
     </div>
   );
+}
+
+function AutoSwitcher() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (location.pathname === "/") {
+        navigate("/graph");
+      } else {
+        navigate("/");
+      }
+    }, 60000); // 1 минута
+    return () => clearInterval(interval);
+  }, [location.pathname, navigate]);
+
+  return null;
 }
 
 export default App;
