@@ -253,20 +253,8 @@ def sublink_add():
 def step():
     
     if request.method == 'POST':
-        
-        data = request.form.to_dict()        
-                
-        # with open(f'data/path/headers/{data["number"].zfill(8)}.headers', 'w') as file:
-        #     file.write(data['headers'])
-                
-        if DO_RED:
-            try:
-                RED_URL = "http://node_red:1880/events/bot_step/"
-                red_request = requests.post(RED_URL, data) 
-            except Exception as e:
-                print("error ", e)
-         
         cfg = getConfig() 
+        data = request.form.to_dict()                
         data['step'] = data['number']
         data['id'] = data['url']
         data['url'] = data['url']
@@ -277,22 +265,25 @@ def step():
         #
         # PASS
         # 
-        if float(cfg['do_pass']) == 1.0:                           
-            send_node_red_event("bot_step_finish")
+        if float(cfg['do_pass']) == 1.0:
             job = jobs.dostep.delay(data)
-            while True:
-                time.sleep(0.01)
-                job.refresh()
-                if job.is_finished:                        
-                    data['struct_text'] = job.result['text']
-                    data['semantic'] = job.result['semantic']
-                    data['semantic_words'] = job.result['semantic_words']                                     
-                    socketio.emit('step', data)
-                    break
-        else:
-            data['struct_text'] = ""
+            # while True:
+            # time.sleep(0.01)
+            # job.refresh()
+            # if job.is_finished:
+            # data['struct_text'] = job.result['text']
+            # data['semantic'] = job.result['semantic']
+            # data['semantic_words'] = job.result['semantic_words']
+            # socketio.emit('step', data)
+            # break
+            data['struct_text'] = data['text']
             data['semantic'] = ""
-            data['semantic_words'] = ""                                     
+            data['semantic_words'] = ""
+            socketio.emit('step', data)
+        else:
+            data['struct_text'] = data['text']
+            data['semantic'] = ""
+            data['semantic_words'] = ""
             socketio.emit('step', data)
                       
         #
