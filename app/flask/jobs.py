@@ -224,6 +224,19 @@ def dostep(step):
     import random
     words = random.sample(words, min(7, len(words)))
     hrases = []
+    
+    
+    import json
+    import requests
+    url = "http://keywords_service:7771/classify"
+    headers = {'content-type': 'application/json'}
+    d = {'text': text }
+    response = requests.post(url, data=json.dumps(d), headers=headers)
+    r = response.json()
+    
+    category = "Unknown"
+    if len(r)>0:
+        category = r[0]['topic']
 
     #
     # write to file
@@ -234,7 +247,7 @@ def dostep(step):
     self_job.save_meta()
     text = text[0:65536]
     with open(filename, 'a') as file:
-        write_data = [step['step'], step['status_code'], step['url'], step['src'], step['ip'],' '.join(words), text]
+        write_data = [step['step'], step['status_code'], step['ip'], step['url'], step['src'], category,' '.join(words), text]
         file.write('\t'.join(write_data) + "\n")
 
     self_job.meta['progress'] = {
@@ -252,7 +265,7 @@ def dostep(step):
     tags = {}
     for w in words:
         print(f"word: {w}")
-        if len(w) > 4:
+        if len(w) > 4 and category != "Unknown" and category != "Technology":
             word = w[0:50]
             import json
             import requests

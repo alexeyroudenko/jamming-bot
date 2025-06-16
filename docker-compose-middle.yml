@@ -72,6 +72,18 @@ services:
     depends_on:
       - tags_db
 
+
+  keywords_service:
+    build: ./keywords-service
+    container_name: keywords_service
+    ports:
+      - "7771:7771"
+    volumes:
+      - ./keywords-service/:/usr/src/app
+    networks:
+      - app_network
+
+
   tags_db:
     image: postgres:12.1-alpine
     volumes:
@@ -125,6 +137,7 @@ services:
       resources:
         limits:
           cpus: '0.25'  
+
 
 
 
