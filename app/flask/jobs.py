@@ -204,6 +204,7 @@ def dostep(step):
     text = remove_html_tags(text)
     text = remove_special_characters(text)
     
+    category = "Undefined topic"
     
     # semantic analyze 1
     #            
@@ -214,6 +215,7 @@ def dostep(step):
     # d = {'text': text , 'model': 'en_core_web_md'}
     # response = requests.post(url, data=json.dumps(d), headers=headers)
     # r = response.json()
+    # print(r)
     
     # semantic analyze 2
     # from semantic.analyzer import analyze_text
@@ -224,20 +226,20 @@ def dostep(step):
     import random
     words = random.sample(words, min(7, len(words)))
     hrases = []
-    
-    
+        
     import json
     import requests
     url = "http://keywords_service:7771/classify"
     headers = {'content-type': 'application/json'}
-    d = {'text': text }
+    d = {'text': text}
+    print(f"text: {text}")
     response = requests.post(url, data=json.dumps(d), headers=headers)
     r = response.json()
-    
-    category = "Unknown"
     if len(r)>0:
         category = r[0]['topic']
 
+    
+    
     #
     # write to file
     #
@@ -261,19 +263,20 @@ def dostep(step):
     #
     # Calculate cloud
     #
-    # print(f"words: {words}")
+    print(f"category: {category}")
     tags = {}
-    for w in words:
-        print(f"word: {w}")
-        if len(w) > 4 and category != "Unknown" and category != "Technology":
-            word = w[0:50]
-            import json
-            import requests
-            url = "http://tags_service:8000/api/v1/tags/"
-            headers = {'content-type': 'application/json'}
-            data = {'name': word, "count": 0}
-            response = requests.post(url, data=json.dumps(data), headers=headers)
-            tags = response.json()
+    if category != "Undefined topic":
+        for w in words:
+            print(f"word: {w}")
+            if len(w) > 4:
+                word = w[0:50]
+                import json
+                import requests
+                url = "http://tags_service:8000/api/v1/tags/"
+                headers = {'content-type': 'application/json'}
+                data = {'name': word, "count": 0}
+                response = requests.post(url, data=json.dumps(data), headers=headers)
+                tags = response.json()
 
 
     self_job.meta['progress'] = {

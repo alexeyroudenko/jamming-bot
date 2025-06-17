@@ -56,6 +56,25 @@ services:
       - app_network
 
 
+  semantic_service:
+    build: ./semantic-service
+    container_name: semantic_service
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8005
+    volumes:
+      - ./semantic-service/:/app/
+      - type: bind
+        source: ./semantic-service/data
+        target: /app/data
+    ports:
+      - 8005:8005
+    environment:
+      - DATABASE_URI=postgresql://tags_db_username:tags_db_password@tags_db/tags_db_dev
+    networks:
+      - app_network
+    depends_on:
+      - tags_db
+
+
   tags_service:
     build: ./tags-service
     container_name: tags_service

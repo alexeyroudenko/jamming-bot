@@ -30,4 +30,4 @@ def classify_text_by_keywords(text, keyword_dict):
     
     # Возвращаем тему (или темы, если несколько с одинаковым счётом)
     predicted_topics = [topic for topic, score in topic_scores.items() if score == max_score]
-    return predicted_topics[0] if len(predicted_topics) == 1 else predicted_topics
+    return predicted_topics[0] if len(predicted_topics) == 1 else predicted_topics[1]

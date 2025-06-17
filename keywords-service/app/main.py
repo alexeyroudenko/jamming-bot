@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List, Dict
 from classifier import classify_text_by_keywords, load_keywords
+import json
 
 app = FastAPI()
 
