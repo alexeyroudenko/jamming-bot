@@ -152,13 +152,17 @@ services:
       - app_network
 
 
-  dashboard:
-    image: master-image
+  rq-dashboard:
+    image: kudaw/rq-dashboard
+    environment:
+      RQ_DASHBOARD_REDIS_URL: 'redis://redis:6379'
     ports:
-      - 5555:5555
+      - "9181:9181"
+    deploy:
+      mode: replicated
+      replicas: 1
     depends_on:
       - redis
-    command: rq-dashboard --port 5555 --redis-url redis://redis:6379/0 
     networks:
       - app_network
 
