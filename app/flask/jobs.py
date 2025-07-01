@@ -162,7 +162,6 @@ def add_tags_from_steps():
             # break
 
 
-
 #
 #
 #  1. STEP
@@ -204,53 +203,32 @@ def dostep(step):
     text = remove_html_tags(text)
     text = remove_special_characters(text)
     
-    category = "Undefined topic"
-    
-    # semantic analyze 1
-    #            
-    # import json
-    # import requests
-    # url = "http://spacyapi/ent"
-    # headers = {'content-type': 'application/json'}
-    # d = {'text': text , 'model': 'en_core_web_md'}
-    # response = requests.post(url, data=json.dumps(d), headers=headers)
-    # r = response.json()
-    # print(r)
-    
-    # semantic analyze 2
-    # from semantic.analyzer import analyze_text
-    # words, hrases = analyze_text(text)
-    
-    # semantic analyze 3
-    words = text.split(" ")
-    import random
-    words = random.sample(words, min(7, len(words)))
+    print(text)    
+
+    tags = []
+    words = []
     hrases = []
         
-    import json
-    import requests
-    url = "http://keywords_service:7771/classify"
-    headers = {'content-type': 'application/json'}
-    d = {'text': text}
-    print(f"text: {text}")
-    response = requests.post(url, data=json.dumps(d), headers=headers)
-    r = response.json()
-    if len(r)>0:
-        category = r[0]['topic']
+    if len(text) > 128:
+        # semantic analyze 1
+        #
+        import json
+        import requests
+        url = "http://spacyapi/ent"
+        headers = {'content-type': 'application/json'}
+        d = {'text': text , 'model': 'en_core_web_md'}
+        response = requests.post(url, data=json.dumps(d), headers=headers)
+        r = response.json()
+        print(r)
+        # Always define hrases as a list, even if ents is missing or empty
+        hrases = []
+        if isinstance(r, dict):
+            hrases = [ent["text"] for ent in r.get("ents", []) if "text" in ent]
+        elif isinstance(r, list):
+            hrases = [ent["text"] for ent in r if isinstance(ent, dict) and "text" in ent]
+        print("hrases:", hrases)
+    words = hrases[0:8]
 
-    
-    
-    #
-    # write to file
-    #
-    # print(step)
-    filename = f'data/semantic.tsv'
-    self_job.meta['filename'] = filename
-    self_job.save_meta()
-    text = text[0:65536]
-    with open(filename, 'a') as file:
-        write_data = [step['step'], step['status_code'], step['ip'], step['url'], step['src'], category,' '.join(words), text]
-        file.write('\t'.join(write_data) + "\n")
 
     self_job.meta['progress'] = {
         'num_iterations': 4,
@@ -263,20 +241,41 @@ def dostep(step):
     #
     # Calculate cloud
     #
-    print(f"category: {category}")
-    tags = {}
-    if category != "Undefined topic":
-        for w in words:
-            print(f"word: {w}")
-            if len(w) > 4:
-                word = w[0:50]
-                import json
-                import requests
-                url = "http://tags_service:8000/api/v1/tags/"
-                headers = {'content-type': 'application/json'}
-                data = {'name': word, "count": 0}
-                response = requests.post(url, data=json.dumps(data), headers=headers)
-                tags = response.json()
+    # print(f"category: {category}")
+    # tags = {}
+    # if category != "Undefined topic":
+
+    for w in words:
+        print(f"word: {w}")
+        if len(w) > 4:
+            word = w[0:50]
+            import json
+            import requests
+            url = "http://tags_service:8000/api/v1/tags/"
+            headers = {'content-type': 'application/json'}
+            data = {'name': word, "count": 0}
+            response = requests.post(url, data=json.dumps(data), headers=headers)
+            tags = response.json()
+
+
+    #
+    # write to file
+    #
+    import json
+    import requests
+    url = "http://storage_service:7781/store"
+    headers = {'content-type': 'application/json'}
+    step['text'] 
+    step['text'] = text    
+    del step['headers'] 
+    del step['src_url']
+    del step['current_url'] 
+    del step['step']
+    response = requests.post(url, data=json.dumps(step), headers=headers)
+    r = response.json()
+
+
+
 
 
     self_job.meta['progress'] = {
@@ -286,12 +285,12 @@ def dostep(step):
     }    
     self_job.save_meta()
     
-    return_obj = {    
-            "step": step['step'],             
+    return_obj = {
+            "step": step['number'],
             "code": step['status_code'], 
             "ip": ip, 
-            "url": step['url'],                
-            "src_url": step['src_url'],
+            "url": step['url'],
+            "src_url": step['src'],
             "tags": tags,
             "semantic": tags,
             "semantic_words": words,

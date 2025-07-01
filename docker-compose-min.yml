@@ -23,7 +23,7 @@ services:
 
   redis: 
     image: redislabs/redismod
-    container_name: redis
+    container_name: redis-jb
     restart: unless-stopped
     ports:
       - '6379:6379'
@@ -36,7 +36,7 @@ services:
     build: 
       dockerfile: docker/flask/Dockerfile
     image: master-image
-    container_name: flask
+    container_name: flask-jb
     restart: unless-stopped
     ports:
       - "5000:5000"

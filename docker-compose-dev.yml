@@ -7,7 +7,7 @@ services:
     ports:
       - "7001:7001"
     env_file:
-      - .env      
+      - .env
     volumes:
       - type: bind
         source: ./app/bot
@@ -16,13 +16,13 @@ services:
         source: ./data
         target: /app/data 
     depends_on:
-      - redis  
+      - redis
     networks:
-      - app_network         
+      - app_network
 
   redis: 
     image: redislabs/redismod
-    container_name: redis
+    container_name: redis-jb
     ports:
       - '6379:6379'
     volumes:
@@ -34,7 +34,7 @@ services:
     build: 
       dockerfile: docker/flask/Dockerfile
     image: master-image
-    container_name: flask
+    container_name: flask-jb
     ports:
       - "5000:5000"
     command: python app.py
@@ -81,7 +81,53 @@ services:
     restart: always
     networks:
       - app_network
-      
+
+
+
+  semantic_service:
+    build: ./semantic-service
+    container_name: semantic_service
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8005
+    restart: unless-stopped
+    volumes:
+      - ./semantic-service/:/app/
+      - type: bind
+        source: ./semantic-service/data
+        target: /app/data
+    ports:
+      - 8005:8005
+    environment:
+      - DATABASE_URI=postgresql://tags_db_username:tags_db_password@tags_db/tags_db_dev
+    networks:
+      - app_network
+    depends_on:
+      - tags_db
+
+
+  keywords_service:
+    build: ./keywords-service
+    restart: unless-stopped
+    container_name: keywords_service
+    ports:
+      - "7771:7771"
+    volumes:
+      - ./keywords-service/:/usr/src/app
+    networks:
+      - app_network
+
+  storage_service:
+    build: ./storage-service
+    restart: unless-stopped
+    container_name: storage_service
+    ports:
+      - "7781:7781"
+    volumes:
+      - ./storage-service/:/usr/src/app
+      - type: bind
+        source: ./data
+        target: /usr/src/app/data
+    networks:
+      - app_network
 
   tags_service:
     build: ./tags-service
@@ -138,6 +184,7 @@ services:
 
   frontend:
     build: ./frontend
+    restart: unless-stopped
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -146,6 +193,21 @@ services:
     networks:
       - app_network 
 
+
+  rq-dashboard:
+    image: kudaw/rq-dashboard
+    restart: unless-stopped
+    environment:
+      RQ_DASHBOARD_REDIS_URL: 'redis://redis:6379'
+    ports:
+      - "9181:9181"
+    deploy:
+      mode: replicated
+      replicas: 1
+    depends_on:
+      - redis
+    networks:
+      - app_network
 
 volumes:
   postgres_data_movie:
