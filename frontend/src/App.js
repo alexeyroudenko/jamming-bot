@@ -55,7 +55,7 @@ function AutoSwitcher() {
       } else {
         navigate("/");
       }
-    }, 180000); // 1 минута
+    }, 180000*60); // 10 Minutes
     return () => clearInterval(interval);
   }, [location.pathname, navigate]);
 

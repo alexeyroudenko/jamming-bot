@@ -60,6 +60,7 @@ services:
     build: ./semantic-service
     container_name: semantic_service
     command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8005
+    restart: unless-stopped
     volumes:
       - ./semantic-service/:/app/
       - type: bind
@@ -77,6 +78,7 @@ services:
 
   tags_service:
     build: ./tags-service
+    restart: unless-stopped
     container_name: tags_service
     command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
     volumes:
@@ -94,6 +96,7 @@ services:
 
   keywords_service:
     build: ./keywords-service
+    restart: unless-stopped
     container_name: keywords_service
     ports:
       - "7771:7771"
@@ -105,6 +108,7 @@ services:
 
   tags_db:
     image: postgres:12.1-alpine
+    restart: unless-stopped
     volumes:
       - postgres_data_tags:/var/lib/postgresql/data/
     environment:
@@ -119,6 +123,7 @@ services:
       dockerfile: docker/worker/Dockerfile
     image: worker-image
     command: rq worker --name worker --disable-job-desc-logging --url redis://redis:6379/0
+    restart: unless-stopped
     env_file:
       - .env
     volumes:
@@ -141,6 +146,7 @@ services:
   worker2:
     image: worker-image
     command: rq worker --name worker2 --disable-job-desc-logging --url redis://redis:6379/0
+    restart: unless-stopped
     volumes:
       - type: bind
         source: ./app/flask
@@ -162,6 +168,7 @@ services:
 
   frontend:
     build: ./frontend
+    restart: unless-stopped
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -173,6 +180,7 @@ services:
 
   rq-dashboard:
     image: kudaw/rq-dashboard
+    restart: unless-stopped
     environment:
       RQ_DASHBOARD_REDIS_URL: 'redis://redis:6379'
     ports:
