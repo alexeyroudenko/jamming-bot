@@ -212,23 +212,41 @@ def dostep(step):
     if len(text) > 128:
         # semantic analyze 1
         #
-        import json
-        import requests
-        url = "http://spacyapi/ent"
-        headers = {'content-type': 'application/json'}
-        d = {'text': text , 'model': 'en_core_web_md'}
-        response = requests.post(url, data=json.dumps(d), headers=headers)
-        r = response.json()
-        print(r)
-        # Always define hrases as a list, even if ents is missing or empty
-        hrases = []
-        if isinstance(r, dict):
-            hrases = [ent["text"] for ent in r.get("ents", []) if "text" in ent]
-        elif isinstance(r, list):
-            hrases = [ent["text"] for ent in r if isinstance(ent, dict) and "text" in ent]
-        print("hrases:", hrases)
-    words = hrases[0:8]
+        # import json
+        # import requests
+        # url = "http://spacyapi/ent"
+        # headers = {'content-type': 'application/json'}
+        # d = {'text': text , 'model': 'en_core_web_md'}
+        # response = requests.post(url, data=json.dumps(d), headers=headers)
+        # r = response.json()
+        # print(r)
+        # # Always define hrases as a list, even if ents is missing or empty
+        # hrases = []
+        # if isinstance(r, dict):
+        #     hrases = [ent["text"] for ent in r.get("ents", []) if "text" in ent]
+        # elif isinstance(r, list):
+        #     hrases = [ent["text"] for ent in r if isinstance(ent, dict) and "text" in ent]
+        # print("hrases:", hrases)
+        
 
+        # semantic analyze 2
+        # 
+        import json
+        import requests                       
+        url_semantic = f"http://semantic_service:8005/api/v1/semantic/tags/"
+        headers = {'content-type': 'application/json'}
+        rr = requests.post(url_semantic, data = json.dumps({"text": text}), headers=headers)                
+        data = rr.json()
+        if "sim" in data.keys(): 
+            sim = rr.json()['sim']
+        
+        # for hras in sim:       
+        #     url = "http://tags_service:8000/api/v1/tags/"
+        #     headers = {'content-type': 'application/json'}
+        #     data = {'name': hras, "count": 0}
+        #     response = requests.post(url, data=json.dumps(data), headers=headers)
+
+            words = sim
 
     self_job.meta['progress'] = {
         'num_iterations': 4,
