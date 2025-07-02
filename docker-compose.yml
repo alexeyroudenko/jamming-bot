@@ -21,6 +21,7 @@ services:
     networks:
       - app_network         
 
+
   redis: 
     image: redislabs/redismod
     container_name: redis
@@ -31,6 +32,7 @@ services:
       - ./data/redis:/data
     networks:
       - app_network
+
 
   flask:
     build: 
@@ -54,6 +56,165 @@ services:
       - redis
     networks:
       - app_network
+
+  semantic_service:
+    build: ./semantic-service
+    container_name: semantic_service
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8005
+    restart: unless-stopped
+    volumes:
+      - ./semantic-service/:/app/
+      - type: bind
+        source: ./semantic-service/data
+        target: /app/data
+    ports:
+      - 8005:8005
+    environment:
+      - DATABASE_URI=postgresql://tags_db_username:tags_db_password@tags_db/tags_db_dev
+    networks:
+      - app_network
+    depends_on:
+      - tags_db
+
+
+  tags_service:
+    build: ./tags-service
+    restart: unless-stopped
+    container_name: tags_service
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    volumes:
+      - ./tags-service/:/app/
+    ports:
+      - 8003:8000
+    environment:
+      - DATABASE_URI=postgresql://tags_db_username:tags_db_password@tags_db/tags_db_dev
+      - CAST_SERVICE_HOST_URL=http://tags_service:8000/api/v1/casts/
+    networks:
+      - app_network
+    depends_on:
+      - tags_db
+
+
+  keywords_service:
+    build: ./keywords-service
+    restart: unless-stopped
+    container_name: keywords_service
+    ports:
+      - "7771:7771"
+    volumes:
+      - ./keywords-service/:/usr/src/app
+    networks:
+      - app_network
+
+
+  tags_db:
+    image: postgres:12.1-alpine
+    restart: unless-stopped
+    volumes:
+      - postgres_data_tags:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER=tags_db_username
+      - POSTGRES_PASSWORD=tags_db_password
+      - POSTGRES_DB=tags_db_dev
+    networks:
+      - app_network
+
+  worker:    
+    build: 
+      dockerfile: docker/worker/Dockerfile
+    image: worker-image
+    command: rq worker --name worker --disable-job-desc-logging --url redis://redis:6379/0
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - type: bind
+        source: ./app/flask
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data 
+    depends_on:
+      - redis
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+
+  #uncomment to have a another worker
+  worker2:
+    image: worker-image
+    command: rq worker --name worker2 --disable-job-desc-logging --url redis://redis:6379/0
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: ./app/flask
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data    
+    depends_on:
+      - redis
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'  
+
+  rq-dashboard:
+    image: kudaw/rq-dashboard
+    restart: unless-stopped
+    environment:
+      RQ_DASHBOARD_REDIS_URL: 'redis://redis:6379'
+    ports:
+      - "9181:9181"
+    deploy:
+      mode: replicated
+      replicas: 1
+    depends_on:
+      - redis
+    networks:
+      - app_network
+
+  nginx:
+    container_name: nginx
+    restart: "no"
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+      - "5001:5001"
+    volumes:
+      - type: bind
+        source: ./data/certbot/www
+        target: /var/www/certbot
+      - type: bind
+        source: ./frontend/build
+        target: /var/www                
+    depends_on:
+      - flask
+      - redis
+      - tags_service
+    networks:
+      - app_network 
+
+
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - type: bind
+        source: ./data/certbot/www
+        target: /var/www/certbot
+      - type: bind
+        source: ./data/certbot/www
+        target: /etc/letsencrypt
+    command: certonly --webroot -w /var/www/certbot --non-interactive --email alexey.roudenko@gmail.com --agree-tos --preferred-challenges http -d jamming-bot.arthew0.online      
+
 
 volumes:
   postgres_data_tags:
