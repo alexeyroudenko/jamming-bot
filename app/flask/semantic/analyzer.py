@@ -4,8 +4,22 @@
 
 import spacy
 
-nlp_sm = spacy.load("en_core_web_sm")
-nlp_lg = spacy.load("en_core_web_lg")
+def _try_load(model_name):
+    try:
+        return spacy.load(model_name)
+    except Exception:
+        return None
+
+nlp_sm = _try_load("en_core_web_sm")
+if nlp_sm is None:
+    # As a last resort, load any available English model name
+    nlp_sm = _try_load("en_core_web_md") or _try_load("en_core_web_lg")
+    if nlp_sm is None:
+        # Fallback to blank English if no model is present (to avoid hard crash)
+        nlp_sm = spacy.blank("en")
+
+# Prefer lg, otherwise md, otherwise reuse sm
+nlp_lg = _try_load("en_core_web_lg") or _try_load("en_core_web_md") or nlp_sm
 
 def analyze_text(text):
     words = []
