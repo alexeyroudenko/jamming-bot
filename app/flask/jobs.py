@@ -16,7 +16,12 @@ def remove_html_tags(text):
     return clean_text
 
 def remove_special_characters(text):
-    clean_text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
+    # Remove non-ASCII characters
+    clean_text = re.sub(r'[^\x00-\x7F]+', '', text)
+    # Remove special characters except letters, numbers, and whitespace
+    clean_text = re.sub(r'[^a-zA-Z0-9\s]', '', clean_text)
+    # Remove newlines and tabs
+    clean_text = clean_text.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
     return clean_text
 
 
@@ -29,7 +34,7 @@ def clean_tags():
     self_job.save_meta()
     num_iterations = 2000
     
-    url_short = "http://jamming-bot.arthew0.online:5000/api/tags/get/"
+    url_short = "http://tags_service:8000/api/v1/tags/tags/group/"
     response = requests.get(url_short)
     
     self_job = get_current_job() 
@@ -55,11 +60,11 @@ def clean_tags():
         idd = t['id']
         urld = f"http://tags_service:8000/api/v1/tags/{idd}/"
         r = requests.delete(urld)
-        # time.sleep(.1)
+        time.sleep(.001)
         self_job.meta['progress'] = {
             'num_iterations': num_iterations,
             'iteration': i,
-            'percent': i / num_iterations * 50
+            'percent': i / num_iterations * 100
         }
         self_job.save_meta()
     
@@ -71,12 +76,12 @@ def clean_tags():
         idd = t['id']
         urld = f"http://tags_service:8000/api/v1/tags/{idd}/"
         r = requests.delete(urld)
-        time.sleep(.01)
+        time.sleep(.001)
         self_job = get_current_job() 
         self_job.meta['progress'] = {
             'num_iterations': num_iterations,
             'iteration': i,
-            'percent': i / num_iterations * 50
+            'percent': i / num_iterations * 100
         }
         self_job.save_meta()
         
@@ -100,9 +105,9 @@ def add_tags(tags):
         data = {'name': tags, "count": 0}
         response = requests.post(url, data=json.dumps(data), headers=headers)
         tags = response.json()
-        
-      
-        
+
+
+
 @job('default', connection=redis_connection, timeout=900, result_ttl=900)
 def add_tags_from_steps():
     MAX_STEPS = 80000
@@ -155,14 +160,7 @@ def add_tags_from_steps():
             return text
             
             # break
-        
 
-
-
-
-
-
-        
 
 #
 #
@@ -171,20 +169,20 @@ def add_tags_from_steps():
 @job('default', connection=redis_connection, timeout=90, result_ttl=120)
 def dostep(step): 
         
-    self_job = get_current_job()    
+    self_job = get_current_job()
     self_job.meta['progress'] = {
         'num_iterations': 4,
         'iteration': 1,
         'percent': 25
-    }  
-                 
+    }
+
     self_job.meta['type'] = "step"
-    if "current_url" in step.keys():         
+    if "current_url" in step.keys():
         self_job.meta['url'] = step['current_url']
 
     ip = "0.0.0.0" 
-    if "ip" in step.keys():     
-        ip = step['ip']        
+    if "ip" in step.keys():
+        ip = step['ip']
     self_job.meta['ip'] = ip
         
     text = "" 
@@ -200,48 +198,56 @@ def dostep(step):
         'percent': 50
     }
     self_job.save_meta()
-                
     
-    # text_out = remove_html_tags(text_out)
-    # text_out = remove_special_characters(text_out)    
-    # text = text_out[0:2048]
     
-    #
-    # semantic analyze 1
-    #            
-    # import json
-    # import requests
-    # url = "http://spacyapi/ent"
-    # headers = {'content-type': 'application/json'}
-    # d = {'text': text , 'model': 'en_core_web_md'}
-    # response = requests.post(url, data=json.dumps(d), headers=headers)
-    # r = response.json()
+    text = remove_html_tags(text)
+    text = remove_special_characters(text)
     
-    #
-    # semantic analyze 2
-    #
-    # from semantic.analyzer import analyze_text
-    # words, hrases = analyze_text(text)
+    print(text)    
+
+    tags = []
     words = []
     hrases = []
-    #
-    # write to file
-    #
-    # print(step)
-    # filename = f'data/semantic.txt'    
-    # self_job.meta['filename'] = filename
-    # self_job.save_meta()        
-    # if len(r) > 0:
-    #     with open(filename, 'a') as file:            
-    #         for word in r:
-    #             woord = (str(word['text']).strip().replace("\n", " ").replace("\r", " ").replace("\t", ""))[0:64]
-    #             if not woord.isdigit() and len(woord)>1:
-    #                 file.write(f"{step['step']}|{word['type']}|{woord}\n")
-    # with open(f'data/txt/{step["step"].zfill(4)}_words.json', 'w') as file:
-    #     file.write(json.dumps(words))
-    # with open(f'data/txt/{step["step"].zfill(4)}_hrases.json', 'w') as file:
-    #     file.write(json.dumps(hrases))
         
+    if len(text) > 128:
+        # semantic analyze 1
+        #
+        # import json
+        # import requests
+        # url = "http://spacyapi/ent"
+        # headers = {'content-type': 'application/json'}
+        # d = {'text': text , 'model': 'en_core_web_md'}
+        # response = requests.post(url, data=json.dumps(d), headers=headers)
+        # r = response.json()
+        # print(r)
+        # # Always define hrases as a list, even if ents is missing or empty
+        # hrases = []
+        # if isinstance(r, dict):
+        #     hrases = [ent["text"] for ent in r.get("ents", []) if "text" in ent]
+        # elif isinstance(r, list):
+        #     hrases = [ent["text"] for ent in r if isinstance(ent, dict) and "text" in ent]
+        # print("hrases:", hrases)
+        
+
+        # semantic analyze 2
+        # 
+        import json
+        import requests                       
+        url_semantic = f"http://semantic_service:8005/api/v1/semantic/tags/"
+        headers = {'content-type': 'application/json'}
+        rr = requests.post(url_semantic, data = json.dumps({"text": text}), headers=headers)                
+        data = rr.json()
+        if "sim" in data.keys(): 
+            sim = rr.json()['sim']
+        
+        # for hras in sim:       
+        #     url = "http://tags_service:8000/api/v1/tags/"
+        #     headers = {'content-type': 'application/json'}
+        #     data = {'name': hras, "count": 0}
+        #     response = requests.post(url, data=json.dumps(data), headers=headers)
+
+            words = sim
+
     self_job.meta['progress'] = {
         'num_iterations': 4,
         'iteration': 3,
@@ -253,52 +259,68 @@ def dostep(step):
     #
     # Calculate cloud
     #
-    # print(f"words: {words}")
-    tags = {}
+    # print(f"category: {category}")
+    # tags = {}
+    # if category != "Undefined topic":
+
     for w in words:
         print(f"word: {w}")
-        word = w[0:50]        
-        import json
-        import requests
-        url = "http://tags_service:8000/api/v1/tags/"
-        headers = {'content-type': 'application/json'}
-        data = {'name': word, "count": 0}
-        response = requests.post(url, data=json.dumps(data), headers=headers)
-        tags = response.json()     
-    
-    # try:
-    #     RED_URL = "http://node_red:1880/events/step/"
-    #     r = requests.post(RED_URL, words) 
-    #     print(RED_URL)
-    # except Exception as e:
-    #     print("error ", e)    
-              
+        if len(w) > 4:
+            word = w[0:50]
+            import json
+            import requests
+            url = "http://tags_service:8000/api/v1/tags/"
+            headers = {'content-type': 'application/json'}
+            data = {'name': word, "count": 0}
+            response = requests.post(url, data=json.dumps(data), headers=headers)
+            tags = response.json()
+
+
+    #
+    # write to file
+    #
+    import json
+    import requests
+    url = "http://storage_service:7781/store"
+    headers = {'content-type': 'application/json'}
+    step['text'] 
+    step['text'] = text    
+    del step['headers'] 
+    del step['src_url']
+    del step['current_url'] 
+    del step['step']
+    response = requests.post(url, data=json.dumps(step), headers=headers)
+    r = response.json()
+
+
+
+
+
     self_job.meta['progress'] = {
+        "tags": tags,
+        "semantic": tags,
+        "semantic_words": words,
+        "semantic_hrases": hrases,
+        "text":text[0:1024] + "...",
         'num_iterations': 4,
         'iteration': 4,
         'percent': 100
     }    
     self_job.save_meta()
     
-    return_obj = {    
-            "step": step['step'],             
+    return_obj = {
+            "step": step['number'],
             "code": step['status_code'], 
             "ip": ip, 
-            "url": step['url'],                
-            "src_url": step['src_url'],
+            "url": step['url'],
+            "src_url": step['src'],
             "tags": tags,
             "semantic": tags,
             "semantic_words": words,
             "semantic_hrases": hrases,
             "text":text[0:1024] + "..."
         }
-    
-    # try:
-    #     RED_URL = "http://node_red:1880/events/semantic_step/"
-    #     red_request = requests.post(RED_URL, return_obj) 
-    # except Exception as e:
-    #     print("error ", e)
-           
+
     return return_obj
 
 
@@ -366,13 +388,6 @@ def do_geo(ip):
 
 
 
-
-
-
-
-
-
-
 #
 #
 #   SAVE
@@ -426,154 +441,6 @@ def save(data):
 
 
 
-   
-
-
-
-
-
-
-#
-#
-#  ANALYZE
-#   
-# @job('default', connection=redis_connection, timeout=90, result_ttl=90)
-# def analyze(text):
-    
-#     num_iterations = 3
-
-#     self_job = get_current_job()
-#     self_job.meta['progress'] = {
-#         'num_iterations': num_iterations,
-#         'iteration': 0,
-#         'percent':0,
-#         'type': "analyze"
-#     }
-#     self_job.meta['type'] = "analyze"
-#     self_job.save_meta()
-
-
-#     #
-#     # Detect similarites
-#     #
-#     # import spacy.cli
-#     # spacy.cli.download("en_core_web_lg")
-#     # en_core_web_md
-#     # en_core_web_lg
-#     # en_core_web_sm
-    
-#     text_out = ""
-#     words = []
-#     sorted_similarities = []
-#     hrases = []
-              
-#     for i in range(1, num_iterations + 1):
-#         time.sleep(.1)
-#         self_job.meta['progress'] = {
-#             'num_iterations': num_iterations,
-#             'iteration': i,
-#             'percent': i / num_iterations * 100
-#         }
-#         self_job.meta['type'] = "analyze"
-        
-#         #
-#         # Get page texts
-#         #
-#         if i == 1:
-#             html = text.encode('utf-8')
-#             from bs4 import BeautifulSoup
-#             soup = BeautifulSoup(html, "html.parser", from_encoding="utf-8")           
-#             # headings = [h.get_text() for h in soup.find_all(['h1', 'h2', 'h3'])]
-#             paragraphs = [p.get_text() for p in soup.find_all('p')]
-#             # head = " ".join(headings)
-#             text_out = " ".join(paragraphs)
-#             # text_out = html
-#             self_job.meta['text'] = text_out
-        
-#         #
-#         # Analyze Semantic
-#         #
-#         if i == 2:
-            
-#             words == analyze_sorted_similarity(text_out)
-             
-#             # import spacy
-#             # nlp = spacy.load("en_core_web_sm")
-#             # doc = nlp(text_out)
-#             # query = nlp("Jammingbot")
-#             # similarities = {}
-#             # for token in doc:
-#             #     if token.has_vector and query.has_vector:
-#             #         similarity = query.similarity(token)
-#             #         if similarity > 0:  # Фильтрация значений, близких к нулю
-#             #             similarities[token.text] = similarity
-            
-#             # sorted_similarities = sorted(similarities.items(), 
-#             #                             key=lambda x: x[1], 
-#             #                             reverse=True)   
-                     
-#             # # self_job.meta['sorted_similarities'] = sorted_similarities
-#             # # print(f"similarity сwith'{query.text}':")
-#             # for word, similarity in sorted_similarities[0:13]:
-#             #     #print(f"{word}: {similarity:.2f}")
-#             #     words.append(word)
-                
-#             self_job.meta['words'] = words
-        
-#         #
-#         # Analyze noun hrases
-#         #
-#         if i == 3:                                
-#             import spacy
-#             nlp = spacy.load("en_core_web_lg")
-#             doc = nlp(text_out)
-#             noun_hrases =  [chunk.text for chunk in doc.noun_chunks]            
-#             for i in noun_hrases[0:13]:
-#                 hrases.append(i)
-            
-                 
-                 
-#         self_job.meta['words'] = words         
-#         self_job.save_meta()
-
-#     return {
-#             "noun_phrases": hrases,
-#             "words_str": " ".join(words),
-#             "words": sorted_similarities[0:10],
-#             "text":text_out[0:100] + "..."
-#            }
-        
-
-#     # self_job.save_meta()
-#     # nlp = spacy.load("en_core_web_sm")
-#     # doc = nlp(text)
-#     # self_job.meta['progress'] = {
-#     #     'num_iterations': 2,
-#     #     'iteration': 1,
-#     #     'percent': 50
-#     # }
-#     # self_job.meta['doc'] = doc
-#     # self_job.save_meta()
-    
-#     # verbs = [token.lemma_ for token in doc if token.pos_ == "VERB"]
-#     # print("verbs:", verbs)
-    
-#     #time.sleep(0.1)
-    
-#     print(f"finish job {self_job}")    
-#     # self_job.meta['progress'] = {
-#     #     'num_iterations': 2,
-#     #     'iteration': 2,
-#     #     'percent': 100
-#     # }
-#     # self_job.meta['verbs'] = verbs
-#     self_job.save_meta()
-#     # verbs = {text}
-#     return text
-
-
-
-
 
 #
 #
@@ -602,16 +469,6 @@ def screenshot(data):
     self_job.save_meta()
     
     return out_filename
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -651,6 +508,7 @@ def wait(num_iterations):
     print(f"finish job {self_job}")
     
     from datetime import datetime
+    import random
     now = datetime.now()
     date_time = now.strftime("%Y-%m-%d_%H-%M-%S")
     

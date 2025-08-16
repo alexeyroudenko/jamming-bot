@@ -1,3 +1,6 @@
+import 'aframe'; // This makes AFRAME global
+import 'aframe-extras'; // Now aframe-extras can find AFRAME
+
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';

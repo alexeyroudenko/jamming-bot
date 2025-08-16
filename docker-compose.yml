@@ -4,6 +4,7 @@ services:
     build: 
       dockerfile: docker/bot/Dockerfile
     container_name: jamming-bot
+    restart: unless-stopped
     ports:
       - "7001:7001"
     env_file:
@@ -24,21 +25,25 @@ services:
         limits:
           cpus: '0.5'
 
+
   redis: 
     image: redislabs/redismod
     container_name: redis
+    restart: unless-stopped
     ports:
       - '6379:6379'
     volumes:
-    - /data/redis:/data
+      - ./data/redis:/data
     networks:
       - app_network
+
 
   flask:
     build: 
       dockerfile: docker/flask/Dockerfile
     image: master-image
     container_name: flask
+    restart: unless-stopped
     ports:
       - "5000:5000"
     command: python app.py
@@ -151,15 +156,12 @@ services:
       - DATABASE_URI=postgresql://tags_db_username:tags_db_password@tags_db/tags_db_dev
     networks:
       - app_network
-    depends_on:
-      - tags_db
-
-
 
   semantic_service:
     build: ./semantic-service
     container_name: semantic_service
     command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8005
+    restart: unless-stopped
     volumes:
       - ./semantic-service/:/app/
       - type: bind
@@ -177,6 +179,7 @@ services:
 
   tags_service:
     build: ./tags-service
+    restart: unless-stopped
     container_name: tags_service
     command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
     volumes:
@@ -192,9 +195,21 @@ services:
       - tags_db
 
 
+  keywords_service:
+    build: ./keywords-service
+    restart: unless-stopped
+    container_name: keywords_service
+    ports:
+      - "7771:7771"
+    volumes:
+      - ./keywords-service/:/usr/src/app
+    networks:
+      - app_network
+
 
   tags_db:
     image: postgres:12.1-alpine
+    restart: unless-stopped
     volumes:
       - postgres_data_tags:/var/lib/postgresql/data/
     environment:
@@ -202,9 +217,67 @@ services:
       - POSTGRES_PASSWORD=tags_db_password
       - POSTGRES_DB=tags_db_dev
     networks:
-      - app_network      
-            
+      - app_network
 
+  worker:    
+    build: 
+      dockerfile: docker/worker/Dockerfile
+    image: worker-image
+    command: rq worker --name worker --disable-job-desc-logging --url redis://redis:6379/0
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - type: bind
+        source: ./app/flask
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data 
+    depends_on:
+      - redis
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+
+  #uncomment to have a another worker
+  worker2:
+    image: worker-image
+    command: rq worker --name worker2 --disable-job-desc-logging --url redis://redis:6379/0
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: ./app/flask
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data    
+    depends_on:
+      - redis
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'  
+
+  rq-dashboard:
+    image: kudaw/rq-dashboard
+    restart: unless-stopped
+    environment:
+      RQ_DASHBOARD_REDIS_URL: 'redis://redis:6379'
+    ports:
+      - "9181:9181"
+    deploy:
+      mode: replicated
+      replicas: 1
+    depends_on:
+      - redis
+    networks:
+      - app_network
 
   nginx:
     container_name: nginx
@@ -240,38 +313,7 @@ services:
       - type: bind
         source: ./data/certbot/www
         target: /etc/letsencrypt
-  # command: certonly --webroot -w /var/www/certbot --non-interactive --email alexey.roudenko@gmail.com --agree-tos --preferred-challenges http --dry-run -d bots.arthew0.online
-  # command: certonly --webroot -w /var/www/certbot --non-interactive --email alexey.roudenko@gmail.com --agree-tos --preferred-challenges http -d bots.arthew0.online
-    command: certonly --webroot -w /var/www/certbot --non-interactive --email alexey.roudenko@gmail.com --agree-tos --preferred-challenges http -d jamming-bot.arthew0.online
-
-
-  # node_red:
-  #   image: "nodered/node-red:latest"
-  #   container_name: node_red
-  #   ports:
-  #     - "1880:1880"
-  #   networks:
-  #     - app_network
-  #   volumes:
-  #     - type: bind
-  #       source: ./data/node_red
-  #       target: /data
-  #   environment:
-  #     - NODE_OPTIONS=--max-old-space-size=256
-  #   restart: unless-stopped
-
-
-  # frontend:
-  #   build: ./frontend
-  #   volumes:
-  #     - ./frontend:/app
-  #     - /app/node_modules
-  #   ports:
-  #     - "3000:3000"
-  #   networks:
-  #     - app_network 
-
-      
+    command: certonly --webroot -w /var/www/certbot --non-interactive --email alexey.roudenko@gmail.com --agree-tos --preferred-challenges http -d jamming-bot.arthew0.online      
 
 
 volumes:

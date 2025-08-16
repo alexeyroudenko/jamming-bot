@@ -537,7 +537,8 @@ class NetSpider():
                                             headers={
                                                     'Accept-Language': 'en-US, en;q=0.5',
                                                     'Accept-Charset':  'utf-8',
-                                                    'Accept-Encoding': 'gzip'
+                                                    'Accept-Encoding': 'gzip',
+                                                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
                                                 },
                                             timeout=3, 
                                             stream=True)                    
@@ -586,21 +587,24 @@ class NetSpider():
                         
                         self.step.html = html_content
                         self.step.text = text
-                        
-                        if self.do_save_html:
+
+
+                        do_save_html = False
+                        if do_save_html:
                             html_path = f'data/path/html/{str(self.step.number).zfill(8)}.html'
                             with open(html_path, 'w') as file:
-                                file.write(html_content)
-
-                        text_path = f'data/path/txt/{str(self.step.number).zfill(8)}.txt'
-                        with open(text_path, 'w') as file:
-                            file.write(text)
+                                file.write(html_content)                        
+                            
+                            text_path = f'data/path/txt/{str(self.step.number).zfill(8)}.txt'                           
+                            with open(text_path, 'w') as file:
+                                file.write(text)
+                            
+                            step_path = f'data/path/steps/{str(self.step.number).zfill(8)}.info'                           
+                            with open(step_path, 'w') as file:                            
+                                file.writelines(self.step.to_info())
+               
+                                                
                         
-                        step_path = f'data/path/steps/{str(self.step.number).zfill(8)}.info'
-                        with open(step_path, 'w') as file:
-                            file.writelines(self.step.to_info())
-
-
                         soup = BeautifulSoup(response.content, "html.parser", from_encoding="utf-8")                         
                         self.notify_about_eventp("analyze_page_remove_nav", content_type) 
                         

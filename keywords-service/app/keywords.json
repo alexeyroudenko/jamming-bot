@@ -1,0 +1,152 @@
+{
+    "Technology": [
+        "programming", "artificial", "intelligence", "gadget", "technology",
+        "internet", "algorithm", "robot", "code", "software", "computer",
+        "data", "network", "program", "hardware", "digital", "innovation",
+        "automation", "blockchain", "cryptocurrency", "server", "cloud",
+        "database", "interface", "development", "application", "smartphone",
+        "processor", "chip", "virtual", "reality", "augmented", "cybersecurity",
+        "hacker", "encryption", "platform", "system", "electronics", "drone",
+        "autonomous", "machine", "neural", "learning", "analytics", "device",
+        "tech", "coding", "connectivity", "quantum", "computing", "api"
+    ],
+    "Literature": [
+        "novel", "poetry", "author", "book", "writer", "literature", "poem",
+        "story", "drama", "essay", "prose", "poet", "novella", "genre", "plot",
+        "character", "tragedy", "comedy", "fiction", "detective", "biography",
+        "criticism", "publication", "manuscript", "chapter", "volume", "epilogue",
+        "prologue", "lyric", "epic", "ballad", "ode", "sonnet", "short", "story",
+        "allegory", "metaphor", "symbolism", "realism", "modernism", "classic",
+        "publisher", "reader", "library", "text", "style", "language", "narrative",
+        "work", "edition"
+    ],
+    "History": [
+        "war", "revolution", "king", "empire", "event", "era", "history",
+        "artifact", "battle", "chronicle", "dynasty", "ruler", "conflict",
+        "state", "civilization", "period", "century", "document", "archive",
+        "culture", "tradition", "heritage", "reform", "dictatorship", "democracy",
+        "colonization", "liberation", "treaty", "alliance", "uprising", "leader",
+        "commander", "temple", "monument", "museum", "historian", "research",
+        "excavation", "expedition", "age", "medieval", "renaissance", "ancient",
+        "fact", "legend", "myth", "relic", "annals", "chronology", "legacy"
+    ],
+    "Art": [
+        "painting", "sculpture", "music", "theater", "art", "artist", "gallery",
+        "dance", "cinema", "portrait", "photography", "design", "architecture",
+        "landscape", "still", "life", "abstract", "expressionism", "impressionism",
+        "modernism", "classicism", "statue", "monument", "exhibition", "museum",
+        "composer", "orchestra", "opera", "ballet", "song", "instrument", "canvas",
+        "palette", "brush", "color", "form", "line", "texture", "stage", "actor",
+        "director", "performance", "scenery", "costume", "lighting", "sound",
+        "creativity", "aesthetics", "inspiration", "masterpiece"
+    ],
+    "Science": [
+        "experiment", "research", "hypothesis", "science", "scientist", "laboratory",
+        "discovery", "theory", "analysis", "physics", "chemistry", "biology",
+        "mathematics", "astronomy", "genetics", "mechanics", "electricity", "optics",
+        "thermodynamics", "quantum", "relativity", "model", "formula", "data",
+        "method", "observation", "measurement", "instrument", "technology",
+        "publication", "journal", "conference", "grant", "patent", "evolution",
+        "cell", "molecule", "atom", "energy", "force", "mass", "universe", "planet",
+        "star", "galaxy", "researcher", "project", "evidence", "fact", "study"
+    ],
+    "Politics": [
+        "government", "election", "president", "parliament", "politics", "law",
+        "diplomacy", "party", "leader", "state", "constitution", "reform",
+        "minister", "senate", "deputy", "voting", "campaign", "ideology",
+        "democracy", "dictatorship", "freedom", "rights", "duties", "sanctions",
+        "treaty", "alliance", "conflict", "negotiation", "power", "opposition",
+        "regime", "administration", "bureaucracy", "lobby", "corruption",
+        "stability", "crisis", "protest", "referendum", "citizen", "nation",
+        "sovereignty", "security", "strategy", "geopolitics", "governance",
+        "policy", "legislation", "authority", "leadership"
+    ],
+    "Economy": [
+        "market", "investment", "currency", "economy", "business", "finance", "trade",
+        "capital", "profit", "loss", "budget", "tax", "credit", "bank", "stock",
+        "bond", "fund", "company", "corporation", "enterprise", "production",
+        "consumption", "demand", "supply", "price", "cost", "inflation", "deflation",
+        "growth", "recession", "crisis", "stability", "income", "expense", "savings",
+        "debt", "partnership", "competition", "monopoly", "export", "import",
+        "tariff", "deal", "strategy", "management", "analytics", "forecast",
+        "innovation", "resources", "employment"
+    ],
+    "Sports": [
+        "football", "olympics", "sport", "athlete", "competition", "training",
+        "champion", "basketball", "hockey", "tennis", "swimming", "running",
+        "gymnastics", "boxing", "wrestling", "figure", "skating", "skiing",
+        "cycling", "team", "player", "coach", "stadium", "arena", "match", "game",
+        "tournament", "league", "record", "medal", "victory", "defeat", "strategy",
+        "physical", "fitness", "sportsman", "fan", "supporter", "uniform", "gear",
+        "health", "discipline", "energy", "endurance", "strength", "agility",
+        "tactics", "referee", "rule", "athletics"
+    ],
+    "Medicine": [
+        "health", "treatment", "virus", "medicine", "doctor", "hospital", "vaccine",
+        "diagnosis", "patient", "therapy", "surgery", "medication", "pill",
+        "infection", "symptom", "disease", "rehabilitation", "analysis", "test",
+        "x-ray", "scan", "ultrasound", "blood", "heart", "lungs", "brain", "bone",
+        "joint", "immune", "system", "epidemic", "pandemic", "hygiene", "prevention",
+        "diet", "nutrition", "pharmacy", "clinic", "nurse", "staff", "technology",
+        "innovation", "research", "genetics", "psychology", "neurology", "oncology",
+        "cardiology", "endocrinology", "dentistry"
+    ],
+    "Education": [
+        "school", "university", "teacher", "education", "student", "lesson", "exam",
+        "lecture", "seminar", "course", "program", "textbook", "knowledge", "skill",
+        "diploma", "certificate", "academy", "faculty", "department", "research",
+        "science", "library", "classroom", "group", "assignment", "project",
+        "presentation", "test", "grade", "study", "method", "pedagogy", "discipline",
+        "motivation", "development", "innovation", "technology", "access",
+        "resources", "training", "workshop", "webinar", "scholarship", "grant",
+        "exchange", "internship", "career", "profession", "qualification", "learning"
+    ],
+    "Culture": [
+        "tradition", "festival", "culture", "custom", "holiday", "heritage", "art",
+        "music", "dance", "theater", "literature", "language", "religion", "history",
+        "ethnicity", "people", "ritual", "ceremony", "symbol", "museum", "exhibition",
+        "gallery", "monument", "architecture", "cuisine", "recipe", "clothing",
+        "fashion", "craft", "artistry", "creativity", "identity", "community",
+        "values", "myth", "legend", "folklore", "song", "poetry", "travel", "tourism",
+        "event", "celebration", "harmony", "diversity", "respect", "preservation",
+        "story", "belief", "practice"
+    ],
+    "Religion": [
+        "faith", "church", "religion", "god", "prayer", "temple", "ritual", "saint",
+        "scripture", "soul", "salvation", "sin", "virtue", "altar", "icon",
+        "ceremony", "holiday", "fasting", "sacrifice", "spirituality", "monk",
+        "priest", "bishop", "pope", "mosque", "synagogue", "meditation", "dogma",
+        "theology", "mythology", "cult", "sect", "pilgrimage", "shrine", "relic",
+        "deity", "angel", "demon", "heaven", "hell", "karma", "nirvana", "ethics",
+        "morality", "community", "unity", "piety", "mercy", "forgiveness", "love"
+    ],
+    "Philosophy": [
+        "thought", "idea", "philosophy", "ethics", "meaning", "morality", "reason",
+        "existence", "being", "consciousness", "truth", "good", "evil", "freedom",
+        "responsibility", "value", "logic", "dialectics", "metaphysics", "aesthetics",
+        "epistemology", "ontology", "philosopher", "doctrine", "theory", "concept",
+        "category", "principle", "dilemma", "paradox", "argument", "reasoning",
+        "intuition", "reflection", "idealism", "materialism", "existentialism",
+        "stoicism", "utilitarianism", "pragmatism", "subject", "object", "reality",
+        "absolute", "relativism", "substance", "form", "content", "human", "society"
+    ],
+    "Travel": [
+        "travel", "tourism", "city", "country", "adventure", "landscape", "vacation",
+        "trip", "route", "guide", "attraction", "museum", "beach", "mountain",
+        "forest", "river", "lake", "sea", "ocean", "island", "culture", "tradition",
+        "cuisine", "festival", "hotel", "hostel", "ticket", "airplane", "train",
+        "bus", "car", "visa", "passport", "map", "navigation", "photography",
+        "souvenir", "traveler", "tour", "agency", "nature", "excursion", "journey",
+        "road", "discovery", "experience", "story", "diary", "blog", "inspiration"
+    ],
+    "Ecology": [
+        "nature", "ecology", "climate", "environment", "resources", "pollution",
+        "recycling", "waste", "energy", "renewable", "solar", "wind", "water",
+        "soil", "forest", "wildlife", "plants", "biodiversity", "protection",
+        "conservation", "sustainability", "development", "carbon", "emissions",
+        "greenhouse", "effect", "ozone", "atmosphere", "ocean", "reef", "glacier",
+        "desert", "eco", "system", "balance", "impact", "crisis", "disaster",
+        "technology", "innovation", "green", "efficiency", "agriculture", "recycle",
+        "volunteer", "activist", "education", "awareness", "preservation", "habitat"
+    ]
+}

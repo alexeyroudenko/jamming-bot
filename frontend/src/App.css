@@ -110,6 +110,7 @@ h1 {
   top: 30px;
   padding: 60px;
   padding-top: 90px;
+  visibility: hidden
 }
 
 .App {

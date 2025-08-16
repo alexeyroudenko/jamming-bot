@@ -6,7 +6,7 @@ from config import getConfig, getRedis
 cfg = getConfig()
 redis = getRedis()
 app = Flask(__name__, 
-    static_url_path='/static', 
+    static_url_path='/flask_static', 
     static_folder='../static', 
     template_folder='../templates'
 )

@@ -1,14 +1,14 @@
-
 services:
 
   bot:
     build: 
       dockerfile: docker/bot/Dockerfile
     container_name: jamming-bot
+    restart: unless-stopped
     ports:
       - "7001:7001"
     env_file:
-      - .env
+      - .env      
     volumes:
       - type: bind
         source: ./app/bot
@@ -17,17 +17,18 @@ services:
         source: ./data
         target: /app/data 
     depends_on:
-      - redis
+      - redis  
     networks:
-      - app_network
+      - app_network         
 
   redis: 
     image: redislabs/redismod
-    container_name: redis-jb
+    container_name: redis
+    restart: unless-stopped
     ports:
       - '6379:6379'
     volumes:
-    - /data/redis:/data
+      - ./data/redis:/data
     networks:
       - app_network
 
@@ -35,7 +36,8 @@ services:
     build: 
       dockerfile: docker/flask/Dockerfile
     image: master-image
-    container_name: flask-jb
+    container_name: flask
+    restart: unless-stopped
     ports:
       - "5000:5000"
     command: python app.py
@@ -51,38 +53,7 @@ services:
     depends_on:
       - redis
     networks:
-      - app_network   
-
-
-  worker:    
-    build: 
-      dockerfile: docker/worker/Dockerfile
-    image: worker-image
-    command: rq worker --name worker --disable-job-desc-logging --url redis://redis:6379/0
-    env_file:
-      - .env
-    volumes:
-      - type: bind
-        source: ./app/flask
-        target: /app
-      - type: bind
-        source: ./data
-        target: /app/data 
-    depends_on:
-      - redis
-    networks:
       - app_network
-
-  
-  spacyapi:
-    container_name: spacyapi
-    image: bbieniek/spacyapi:en_v3
-    ports:
-      - "127.0.0.1:7010:80"
-    restart: always
-    networks:
-      - app_network
-
 
 
   semantic_service:
@@ -105,33 +76,9 @@ services:
       - tags_db
 
 
-  keywords_service:
-    build: ./keywords-service
-    restart: unless-stopped
-    container_name: keywords_service
-    ports:
-      - "7771:7771"
-    volumes:
-      - ./keywords-service/:/usr/src/app
-    networks:
-      - app_network
-
-  storage_service:
-    build: ./storage-service
-    restart: unless-stopped
-    container_name: storage_service
-    ports:
-      - "7781:7781"
-    volumes:
-      - ./storage-service/:/usr/src/app
-      - type: bind
-        source: ./data
-        target: /usr/src/app/data
-    networks:
-      - app_network
-
   tags_service:
     build: ./tags-service
+    restart: unless-stopped
     container_name: tags_service
     command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
     volumes:
@@ -144,10 +91,24 @@ services:
     networks:
       - app_network
     depends_on:
-      - tags_db      
+      - tags_db
+
+
+  keywords_service:
+    build: ./keywords-service
+    restart: unless-stopped
+    container_name: keywords_service
+    ports:
+      - "7771:7771"
+    volumes:
+      - ./keywords-service/:/usr/src/app
+    networks:
+      - app_network
+
 
   tags_db:
     image: postgres:12.1-alpine
+    restart: unless-stopped
     volumes:
       - postgres_data_tags:/var/lib/postgresql/data/
     environment:
@@ -155,32 +116,54 @@ services:
       - POSTGRES_PASSWORD=tags_db_password
       - POSTGRES_DB=tags_db_dev
     networks:
-      - app_network      
+      - app_network
 
-
-  nginx:
-    container_name: nginx
-    restart: "no"
-    build:
-      context: .
-      dockerfile: docker/nginx/Dockerfile
-    ports:
-      - "80:80"
-      - "443:443"
-      - "8080:8080"
+  worker:    
+    build: 
+      dockerfile: docker/worker/Dockerfile
+    image: worker-image
+    command: rq worker --name worker --disable-job-desc-logging --url redis://redis:6379/0
+    restart: unless-stopped
+    env_file:
+      - .env
     volumes:
       - type: bind
-        source: ./data/certbot/www
-        target: /var/www/certbot
+        source: ./app/flask
+        target: /app
       - type: bind
-        source: ./frontend/build
-        target: /var/www                
+        source: ./data
+        target: /app/data 
     depends_on:
-      - flask
       - redis
-      - tags_service
     networks:
-      - app_network 
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+
+  #uncomment to have a another worker
+  worker2:
+    image: worker-image
+    command: rq worker --name worker2 --disable-job-desc-logging --url redis://redis:6379/0
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: ./app/flask
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data    
+    depends_on:
+      - redis
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'  
+
+
 
 
   frontend:
@@ -192,7 +175,7 @@ services:
     ports:
       - "3000:3000"
     networks:
-      - app_network 
+      - app_network
 
 
   rq-dashboard:
@@ -210,15 +193,14 @@ services:
     networks:
       - app_network
 
+
 volumes:
-  postgres_data_movie:
-  postgres_data_cast:
   postgres_data_tags:
-  node_red_data:
   data:
     external: true
   app:
+  app-ip:
 
 networks:
   app_network:
-    # driver: host
+    driver: bridge

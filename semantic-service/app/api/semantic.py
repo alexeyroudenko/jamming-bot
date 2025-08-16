@@ -68,7 +68,7 @@ def analyze_text(texts):
     
     
     sim = []      
-    query = nlp_lg("happiness")
+    query = nlp_lg("happiness love life joy bliss delight euphoria serenity contentment")
     similarities = {}
     for token in doc:
         if token.has_vector and query.has_vector:

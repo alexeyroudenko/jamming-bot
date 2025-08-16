@@ -188,7 +188,7 @@ export default class Logs extends React.Component {
       return <p>Loading...</p>;
     } else if (this.state.error) {
       console.log("error")
-      return <p>Error: {this.error.message}</p>;
+      return <p>Error</p>;
     }
     else return (
       <div className="Graph3d">

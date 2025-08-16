@@ -12,9 +12,15 @@ WORKDIR /app
 RUN pip install redis
 RUN pip install eventlet
 
-RUN pip install python-socketio=="4.6.0"
-RUN pip install python-engineio=="3.13.2"
-RUN pip install Flask-SocketIO
+# RUN pip install python-socketio=="4.6.0"
+# RUN pip install python-engineio=="3.13.2"
+# RUN pip install Flask-SocketIO=="4.3.1"
+
+RUN pip install python-socketio=="5.11.0"
+RUN pip install python-engineio=="4.10.1"
+RUN pip install Flask-SocketIO=="5.4.1"
+
+
 RUN pip install Flask-Cors
 RUN pip install Flask
 RUN pip install rq==1.2.0
@@ -40,7 +46,7 @@ EXPOSE 9999
 ENV NAME World
 
 #This command will copy the files and source code required to run the application
-COPY app/flask/ /app
+# COPY app/flask/ /app
 
 #This command will start the Python Flask application Docker container
 # CMD python app.py
