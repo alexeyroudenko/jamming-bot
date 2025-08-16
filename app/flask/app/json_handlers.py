@@ -113,7 +113,13 @@ def all_jobs():
                         'status_string': "ok" if str(job.result['code']) == "200" else "error",
                         'url': job.result['url'],
                         'src_url': job.result['src_url'],
+                        'text': job.meta.get('text'), 
                         'semantic': job.result['semantic'],
+                        'words': job.meta.get('semantic_words'), 
+                        'hrases': job.meta.get('semantic_hrases'), 
+                        'sim': job.meta.get('sim'), 
+
+
                             # 'state': job.get_status(),
                             # 'progress': job.meta.get('progress'),
                             # 'step': job.meta.get('step'),
@@ -191,6 +197,14 @@ def get_step(step_num):
                         'status_string': "ok" if str(job.result['code']) == "200" else "error",
                         'url': job.result['url'],
                         'src_url': job.result['src_url'],
+                                                
+                        'text': job.meta.get('text'), 
+                        'semantic': job.result['semantic'],
+                        'words': job.meta.get('semantic_words'), 
+                        'hrases': job.meta.get('semantic_hrases'), 
+                        'sim': job.meta.get('sim'), 
+
+                        
                             # 'state': job.get_status(),
                             # 'progress': job.meta.get('progress'),
                             # 'step': job.meta.get('step'),
