@@ -206,6 +206,8 @@ class NetSpider():
         self.send_sublinks = False
         
         self.resume_at_restart = False
+        
+        self.do_save_html = False
 
         import socket
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -236,6 +238,7 @@ class NetSpider():
             self.send_osc = config['send_osc']
             self.send_sublinks = config['send_sublinks']
             self.resume_at_restart = config['resume_at_restart']
+            self.do_save_html = config['do_save_html']
             #self.is_active = config['is_active']
 
     '''

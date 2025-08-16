@@ -20,6 +20,11 @@ send_events: False
 send_sublinks: False
 log_events: False
 
+do_save_html: False
+#do_save_text: False
+#do_save_info: False
+
+
 receive_events:  True
 
 step_url: "http://flask:5000/bot/step/"

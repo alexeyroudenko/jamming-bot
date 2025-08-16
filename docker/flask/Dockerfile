@@ -30,9 +30,13 @@ RUN pip install click
 RUN pip install sentry-sdk[flask]
 RUN pip install requests
 
-# RUN pip install -U spacy
-# RUN python -m spacy download en_core_web_sm
-# RUN python -m spacy download en_core_web_lg
+# Pin spaCy to a version compatible with Python 3.6 and install models directly via wheels
+RUN python -m pip install --upgrade pip setuptools wheel \
+    && pip install "spacy==2.3.8"
+# Install spaCy v2 English models (no CLI download; fetch wheels directly)
+RUN pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.3.1/en_core_web_sm-2.3.1.tar.gz
+# The large model can fail to build in restricted environments; install md instead (sm is already installed)
+RUN pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_md-2.3.1/en_core_web_md-2.3.1.tar.gz
 
 # Make port 5000 available to the world outside this container
 EXPOSE 5000

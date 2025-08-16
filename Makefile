@@ -33,3 +33,9 @@ ip-service:
 .PHONY: semantic-service
 semantic-service:	
 	docker compose up -d semantic_service --build	
+
+.PHONY: cert
+cert:
+	docker compose run --rm certbot renew
+	# docker compose up certbot --build
+	# sudo chown -R rslsync:rslsync data/certbot/www/live
