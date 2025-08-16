@@ -297,6 +297,11 @@ def dostep(step):
 
 
     self_job.meta['progress'] = {
+        "tags": tags,
+        "semantic": tags,
+        "semantic_words": words,
+        "semantic_hrases": hrases,
+        "text":text[0:1024] + "...",
         'num_iterations': 4,
         'iteration': 4,
         'percent': 100
