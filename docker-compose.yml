@@ -19,12 +19,7 @@ services:
     depends_on:
       - redis  
     networks:
-      - app_network
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-
+      - app_network         
 
   redis: 
     image: redislabs/redismod
@@ -36,7 +31,6 @@ services:
       - ./data/redis:/data
     networks:
       - app_network
-
 
   flask:
     build: 
@@ -60,102 +54,7 @@ services:
       - redis
     networks:
       - app_network
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
 
-  # adapter:
-  #   build: 
-  #     dockerfile: docker/adapter/Dockerfile
-  #   container_name: adapter
-  #   ports:
-  #     - "4000:4000"
-  #   volumes:
-  #     - type: bind
-  #       source: ./adapter
-  #       target: /app
-  #   depends_on:
-  #     - flask
-  #   networks:
-  #     - app_network    
-
-  worker:    
-    build: 
-      dockerfile: docker/worker/Dockerfile
-    image: worker-image
-    command: rq worker --name worker --disable-job-desc-logging --url redis://redis:6379/0
-    env_file:
-      - .env
-    volumes:
-      - type: bind
-        source: ./app/flask
-        target: /app
-      - type: bind
-        source: ./data
-        target: /app/data 
-    depends_on:
-      - redis
-    networks:
-      - app_network
-
-  # uncomment to have a another worker
-  # worker2:
-  #   image: worker-image
-  #   command: rq worker --name worker2 --url redis://redis:6379/0
-  #   volumes:
-  #     - type: bind
-  #       source: ./app/flask
-  #       target: /app
-  #     - type: bind
-  #       source: ./data
-  #       target: /app/data    
-  #   depends_on:
-  #     - redis  
-
-  # dashboard:
-  #   image: master-image
-  #   ports:
-  #     - 5555:5555
-  #   depends_on:
-  #     - redis
-  #   command: rq-dashboard --port 5555 --redis-url redis://redis:6379/0  
-
-  
-  spacyapi:
-    container_name: spacyapi
-    image: bbieniek/spacyapi:en_v3
-    ports:
-      - "127.0.0.1:7010:80"
-    restart: always
-    networks:
-      - app_network
-
-  # screenshoter:
-  #   image: mingalevme/screenshoter
-  #   ports:
-  #     - "5020:8080"
-  #   restart: always
-  #   networks:
-  #     - app_network      
-
-
-
-  ip_service:
-    build: ./ip-service
-    container_name: ip_service
-    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8004
-    volumes:
-      - ./ip-service/:/app/
-      - type: bind
-        source: ./ip-service/data
-        target: /app/data
-    ports:
-      - 8004:8004
-    environment:
-      - DATABASE_URI=postgresql://tags_db_username:tags_db_password@tags_db/tags_db_dev
-    networks:
-      - app_network
 
   semantic_service:
     build: ./semantic-service
@@ -193,6 +92,20 @@ services:
       - app_network
     depends_on:
       - tags_db
+
+
+  storage_service:
+    build: ./storage-service
+    container_name: storage_service
+    restart: unless-stopped
+    volumes:
+      - ./storage-service/app:/app
+      - ./data:/usr/src/app/data
+    ports:
+      - 7781:7781
+    command: uvicorn main:app --reload --host 0.0.0.0 --port 7781
+    networks:
+      - app_network
 
 
   keywords_service:
@@ -264,6 +177,21 @@ services:
         limits:
           cpus: '0.25'  
 
+
+
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    networks:
+      - app_network
+
+
   rq-dashboard:
     image: kudaw/rq-dashboard
     restart: unless-stopped
@@ -278,42 +206,6 @@ services:
       - redis
     networks:
       - app_network
-
-  nginx:
-    container_name: nginx
-    restart: "no"
-    build:
-      context: .
-      dockerfile: docker/nginx/Dockerfile
-    ports:
-      - "80:80"
-      - "443:443"
-      - "5001:5001"
-    volumes:
-      - type: bind
-        source: ./data/certbot/www
-        target: /var/www/certbot
-      - type: bind
-        source: ./frontend/build
-        target: /var/www
-    depends_on:
-      - flask
-      - redis
-      - tags_service
-    networks:
-      - app_network 
-
-
-  certbot:
-    image: certbot/certbot:latest
-    volumes:
-      - type: bind
-        source: ./data/certbot/www
-        target: /var/www/certbot
-      - type: bind
-        source: ./data/certbot/www
-        target: /etc/letsencrypt
-    command: certonly --webroot -w /var/www/certbot --non-interactive --email alexey.roudenko@gmail.com --agree-tos --preferred-challenges http -d jamming-bot.arthew0.online      
 
 
 volumes:
