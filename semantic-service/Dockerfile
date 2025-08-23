@@ -1,18 +1,24 @@
-FROM python:3.6-stretch
+FROM python:3.10-slim
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
 COPY ./requirements.txt /app/requirements.txt
 
-RUN pip install --upgrade pip
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN pip install -r /app/requirements.txt \
-    && rm -rf /root/.cache/pip
+RUN pip install --upgrade pip setuptools wheel
 
-RUN pip install -U spacy
-RUN python -m spacy download en_core_web_sm
-RUN python -m spacy download en_core_web_lg
+RUN pip install -r /app/requirements.txt
 
-EXPOSE 80:8080
+# Install spaCy English large model pinned to match spaCy version
+RUN pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.5.0/en_core_web_lg-3.5.0-py3-none-any.whl
+
+EXPOSE 8005
 
 COPY . /app/

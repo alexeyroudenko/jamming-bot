@@ -2,3 +2,4 @@ asyncpg
 fastapi[all]
 uvicorn
 httpx
+spacy==3.5.4
