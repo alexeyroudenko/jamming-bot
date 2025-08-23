@@ -94,6 +94,20 @@ services:
       - tags_db
 
 
+  storage_service:
+    build: ./storage-service
+    container_name: storage_service
+    restart: unless-stopped
+    volumes:
+      - ./storage-service/app:/app
+      - ./data:/usr/src/app/data
+    ports:
+      - 7781:7781
+    command: uvicorn main:app --reload --host 0.0.0.0 --port 7781
+    networks:
+      - app_network
+
+
   keywords_service:
     build: ./keywords-service
     restart: unless-stopped
