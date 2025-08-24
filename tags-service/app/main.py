@@ -2,8 +2,12 @@ from fastapi import FastAPI
 from app.api.tags import tags
 from app.api.db import metadata, database, engine
 from fastapi.middleware.cors import CORSMiddleware
+import asyncio
+import logging
+import os
 
-metadata.create_all(engine)
+logger = logging.getLogger("tags_service")
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(openapi_url="/api/v1/tags/openapi.json", docs_url="/api/v1/tags/docs")
 
@@ -33,8 +37,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+async def _init_db_with_retry():
+    """Create tables with retry so the container does not exit if DB is not yet resolvable."""
+    max_attempts = int(os.getenv("DB_INIT_MAX_ATTEMPTS", "15"))
+    delay = float(os.getenv("DB_INIT_DELAY_SECONDS", "2"))
+    for attempt in range(1, max_attempts + 1):
+        try:
+            metadata.create_all(engine)
+            logger.info("Database initialization successful on attempt %s", attempt)
+            return
+        except Exception as e:  # broad to handle DNS / connection issues
+            if attempt == max_attempts:
+                logger.error("Database initialization failed after %s attempts: %s", attempt, e)
+                raise
+            logger.warning("DB not ready (attempt %s/%s): %s; retrying in %.1fs", attempt, max_attempts, e, delay)
+            await asyncio.sleep(delay)
+
 @app.on_event("startup")
 async def startup():
+    await _init_db_with_retry()
     await database.connect()
 
 @app.on_event("shutdown")

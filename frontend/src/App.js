@@ -35,8 +35,8 @@ function App() {
         <Navbar/>
         <AutoSwitcher />
         <Routes className="Nav">
-          <Route exact path="/" element={<Logs/>} />
-          <Route path="/graph" element={<Blank/>} />
+          <Route path="/" element={<Blank/>} />
+          <Route exact path="/logs" element={<Logs/>} />
         </Routes>
       </Router>
 
@@ -51,7 +51,7 @@ function AutoSwitcher() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (location.pathname === "/") {
-        navigate("/graph");
+        navigate("/logs");
       } else {
         navigate("/");
       }
