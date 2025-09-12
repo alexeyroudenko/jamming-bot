@@ -1,0 +1,172 @@
+{
+  "version": "2",
+  "templates": [
+    {
+      "type": 3,
+      "title": "Jamming Bot (Production)",
+      "description": "Complete jamming bot application with Flask backend, Redis, PostgreSQL, microservices, and Nginx reverse proxy",
+      "note": "Production deployment with all services: bot, Flask API, workers, databases, nginx, SSL certificates, and monitoring. Includes resource limits and optimization.",
+      "categories": ["Bot", "API", "Microservices", "Production"],
+      "platform": "linux",
+      "logo": "https://portainer-io-assets.sfo2.digitaloceanspaces.com/logos/registry.png",
+      "repository": {
+        "url": "https://github.com/alexeyroudenko/jamming-bot",
+        "stackfile": "docker-compose-prod.yml"
+      },
+      "env": [
+        {
+          "name": "BOT_TOKEN",
+          "label": "Bot Token",
+          "description": "The authentication token for your bot (required)",
+          "default": ""
+        },
+        {
+          "name": "SECRET_KEY",
+          "label": "Flask Secret Key",
+          "description": "Secret key for Flask application security (required)",
+          "default": ""
+        },
+        {
+          "name": "FLASK_ENV",
+          "label": "Flask Environment",
+          "description": "Flask application environment",
+          "default": "production",
+          "select": [
+            {
+              "text": "Production",
+              "value": "production"
+            },
+            {
+              "text": "Development", 
+              "value": "development"
+            }
+          ]
+        },
+        {
+          "name": "POSTGRES_USER",
+          "label": "PostgreSQL Username",
+          "description": "Username for PostgreSQL database",
+          "default": "tags_db_username"
+        },
+        {
+          "name": "POSTGRES_PASSWORD",
+          "label": "PostgreSQL Password",
+          "description": "Password for PostgreSQL database",
+          "default": "tags_db_password"
+        },
+        {
+          "name": "POSTGRES_DB",
+          "label": "PostgreSQL Database Name",
+          "description": "Name of the PostgreSQL database",
+          "default": "tags_db_dev"
+        },
+        {
+          "name": "DOMAIN_NAME",
+          "label": "Domain Name",
+          "description": "Your domain name for SSL certificates (optional)",
+          "default": "localhost"
+        },
+        {
+          "name": "EMAIL",
+          "label": "Email for SSL",
+          "description": "Email address for Let's Encrypt SSL certificates",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "type": 3,
+      "title": "Jamming Bot (Development)",
+      "description": "Development version of the jamming bot with core services for testing",
+      "note": "Simplified development deployment with essential services only. Perfect for testing and development without SSL and production optimizations.",
+      "categories": ["Bot", "API", "Development"],
+      "platform": "linux", 
+      "logo": "https://portainer-io-assets.sfo2.digitaloceanspaces.com/logos/registry.png",
+      "repository": {
+        "url": "https://github.com/alexeyroudenko/jamming-bot",
+        "stackfile": "docker-compose.yml"
+      },
+      "env": [
+        {
+          "name": "BOT_TOKEN",
+          "label": "Bot Token",
+          "description": "The authentication token for your bot (required)",
+          "default": ""
+        },
+        {
+          "name": "SECRET_KEY",
+          "label": "Flask Secret Key",
+          "description": "Secret key for Flask application security",
+          "default": "dev-secret-key-change-in-production"
+        },
+        {
+          "name": "FLASK_ENV",
+          "label": "Flask Environment",
+          "description": "Flask application environment",
+          "default": "development",
+          "select": [
+            {
+              "text": "Development",
+              "value": "development"
+            },
+            {
+              "text": "Production", 
+              "value": "production"
+            }
+          ]
+        },
+        {
+          "name": "POSTGRES_USER",
+          "label": "PostgreSQL Username",
+          "description": "Username for PostgreSQL database",
+          "default": "tags_db_username"
+        },
+        {
+          "name": "POSTGRES_PASSWORD",
+          "label": "PostgreSQL Password",
+          "description": "Password for PostgreSQL database",
+          "default": "tags_db_password"
+        },
+        {
+          "name": "POSTGRES_DB",
+          "label": "PostgreSQL Database Name",
+          "description": "Name of the PostgreSQL database",
+          "default": "tags_db_dev"
+        }
+      ]
+    },
+    {
+      "type": 3,
+      "title": "Jamming Bot (Minimal)",
+      "description": "Minimal jamming bot deployment with only essential services",
+      "note": "Lightweight deployment with just bot, Flask API, and Redis. No database or microservices. Perfect for quick testing.",
+      "categories": ["Bot", "Minimal", "Testing"],
+      "platform": "linux",
+      "logo": "https://portainer-io-assets.sfo2.digitaloceanspaces.com/logos/registry.png",
+      "repository": {
+        "url": "https://github.com/alexeyroudenko/jamming-bot",
+        "stackfile": "docker-compose.yml"
+      },
+      "env": [
+        {
+          "name": "BOT_TOKEN",
+          "label": "Bot Token",
+          "description": "The authentication token for your bot (required)",
+          "default": ""
+        },
+        {
+          "name": "SECRET_KEY",
+          "label": "Flask Secret Key",
+          "description": "Secret key for Flask application security",
+          "default": "minimal-secret-key"
+        },
+        {
+          "name": "FLASK_ENV",
+          "label": "Flask Environment",
+          "description": "Flask application environment",
+          "default": "development"
+        }
+      ]
+    }
+  ]
+}

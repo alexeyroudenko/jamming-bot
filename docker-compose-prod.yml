@@ -315,6 +315,16 @@ services:
         target: /etc/letsencrypt
     command: certonly --webroot -w /var/www/certbot --non-interactive --email alexey.roudenko@gmail.com --agree-tos --preferred-challenges http -d jamming-bot.arthew0.online      
 
+  certbotn8n:
+    image: certbot/certbot:latest
+    volumes:
+      - type: bind
+        source: ./data/certbot/www
+        target: /var/www/certbot
+      - type: bind
+        source: ./data/certbot/www
+        target: /etc/letsencrypt
+    command: certonly --webroot -w /var/www/certbot --non-interactive --email alexey.roudenko@gmail.com --agree-tos --preferred-challenges http -d n8n.arthew0.online 
 
 volumes:
   postgres_data_tags:

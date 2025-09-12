@@ -188,6 +188,10 @@ services:
       - /app/node_modules
     ports:
       - "3000:3000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3000
+      - DANGEROUSLY_DISABLE_HOST_CHECK=true
     networks:
       - app_network
 
