@@ -7,8 +7,6 @@ services:
     restart: unless-stopped
     ports:
       - "7001:7001"
-    env_file:
-      - .env      
     volumes:
       - type: bind
         source: ./app/bot
@@ -47,8 +45,6 @@ services:
     ports:
       - "5000:5000"
     command: python app.py
-    env_file:
-      - .env    
     volumes:
       - type: bind
         source: ./app/flask
@@ -85,8 +81,6 @@ services:
   #     dockerfile: docker/worker/Dockerfile
   #   image: worker-image
   #   command: rq worker --name worker --disable-job-desc-logging --url redis://redis:6379/0
-  #   env_file:
-  #     - .env
   #   volumes:
   #     - type: bind
   #       source: ./app/flask
