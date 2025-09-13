@@ -177,6 +177,19 @@ services:
           cpus: '0.25'
           memory: 256M
 
+  storage_service:
+    build: ./storage-service
+    container_name: storage_service
+    restart: unless-stopped
+    volumes:
+      - ./storage-service/app:/app
+      - ./data:/usr/src/app/data
+    ports:
+      - 7781:7781
+    command: uvicorn main:app --reload --host 0.0.0.0 --port 7781
+    networks:
+      - app_network          
+
 
   tags_db:
     image: postgres:12.1-alpine

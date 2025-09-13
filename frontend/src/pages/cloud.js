@@ -51,7 +51,8 @@ export default class Cloud extends React.Component {
       logs: [],
       semantics: [],
       semantics_log: [],
-      tags: [],
+  tags: [],
+  selectedTags: [],
       step: {},
       struct_text: "..."
     }
@@ -96,8 +97,8 @@ export default class Cloud extends React.Component {
                 tags.push(new_tag)
                 dt.push(new_tag)
               })
-              this.setState({tags: tags})
-              data = dt
+        this.setState({tags: tags})
+        data = dt
             })
         }, 5000);
     }
@@ -119,6 +120,17 @@ export default class Cloud extends React.Component {
     this.stopUpdateTimer()
   }  
 
+
+  handleTagClick = (tag) => {
+    this.setState((prevState) => {
+      const isSelected = prevState.selectedTags.includes(tag.value);
+      return {
+        selectedTags: isSelected
+          ? prevState.selectedTags.filter((t) => t !== tag.value)
+          : [...prevState.selectedTags, tag.value],
+      };
+    });
+  };
 
   render() {
 
@@ -146,14 +158,38 @@ export default class Cloud extends React.Component {
           font={"impact"}
           padding={0}
           colorOptions={options}
-          fontSizeMapper={fontSizeMapper} 
+          fontSizeMapper={fontSizeMapper}
           tags={data}
           rotate={rotate}
           disableRandomColor={true}
-          onClick={tag => alert(`'${tag.value}' was selected!`)}
+          onClick={this.handleTagClick}
+          renderer={(tag, size, color) => {
+            const isSelected = this.state.selectedTags.includes(tag.value);
+            return (
+              <span
+                key={tag.value}
+                style={{
+                  display: 'inline-block',
+                  margin: '3px',
+                  fontSize: size,
+                  color: color,
+                  fontWeight: isSelected ? 'bold' : 'normal',
+                  textDecoration: isSelected ? 'underline' : 'none',
+                  cursor: 'pointer',
+                  background: isSelected ? '#ffeb3b' : color,
+                  color: isSelected ? '#222' : color,
+                  boxShadow: isSelected ? '0 0 0 2px #ffeb3b, 0 2px 8px rgba(0,0,0,0.15)' : 'none',
+                  borderRadius: '4px',
+                  padding: '2px 6px',
+                }}
+                onClick={() => this.handleTagClick(tag)}
+              >
+                {tag.value}
+              </span>
+            );
+          }}
         />
         </div>
-    
       </div>
     )
   }

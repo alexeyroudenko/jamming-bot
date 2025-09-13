@@ -57,7 +57,7 @@ function AutoSwitcher() {
     const interval = setInterval(() => {
       currentIndex = (currentIndex + 1) % paths.length;
       navigate(paths[currentIndex]);
-    }, 1000*30);
+    }, 1000*300);
     return () => clearInterval(interval);
   }, [location.pathname, navigate]);
 

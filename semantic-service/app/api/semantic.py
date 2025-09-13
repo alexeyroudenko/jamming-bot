@@ -4,17 +4,31 @@ from app.api.models import TagIn, TagOut
 
 from collections import Counter
 import spacy
-nlp_lg = spacy.load("en_core_web_lg")
+
+# Initialize spaCy model with error handling
+nlp_lg = None
+try:
+    nlp_lg = spacy.load("en_core_web_lg")
+    print("SpaCy model loaded successfully")
+except Exception as e:
+    print(f"Failed to load SpaCy model: {e}")
+    nlp_lg = None
 
 def remove_stopwords(text):
+    if nlp_lg is None:
+        return text
     doc = nlp_lg(text)
     return " ".join([token.text for token in doc if not token.is_stop])
 
 def remove_numbers(text):
+    if nlp_lg is None:
+        return text
     doc = nlp_lg(text)
     return " ".join([token.text for token in doc if not token.like_num])
 
 def remove_punctuation(text):
+    if nlp_lg is None:
+        return text
     doc = nlp_lg(text)
     return " ".join([token.text for token in doc if not token.is_punct])
 
@@ -25,6 +39,8 @@ def clean_text(text):
     return text
 
 def preprocess_text(text):
+    if nlp_lg is None:
+        return text.lower()
     text = clean_text(text)  # Убираем лишние пробелы
     text = text.lower()  # Приводим к нижнему регистру
     doc = nlp_lg(text)
@@ -40,6 +56,8 @@ def analyze_text(texts):
     words = []
     hrases = []
     
+    if nlp_lg is None:
+        return words, hrases, []
     
     text = clean_text(texts)
     text = text.lower()
@@ -47,7 +65,6 @@ def analyze_text(texts):
     text = remove_punctuation(text)
     text = remove_numbers(text)
     text = preprocess_text(text)
-    
     
 
     doc = nlp_lg(text)
@@ -57,15 +74,12 @@ def analyze_text(texts):
     for item in keyword_counts.most_common(10):
         words.append(item[0])
 
-
-        
                     
     doc = nlp_lg(text)
     noun_hrases =  [chunk.text for chunk in doc.noun_chunks]            
     for i in noun_hrases[0:64]:
         hrases.append(i.lower())
         
-    
     
     sim = []      
     query = nlp_lg("happiness love life joy bliss delight euphoria serenity contentment")

@@ -4,6 +4,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(openapi_url="/api/v1/semantic/openapi.json", docs_url="/api/v1/semantic/docs")
 
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
 origins = [
     "http://localhost:3000",
     "https://example.com",
