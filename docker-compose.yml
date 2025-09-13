@@ -298,7 +298,6 @@ services:
       - ip_service
       - semantic_service
       - certbot
-      - frontend
       - rq-dashboard
       - worker
       - worker2 
