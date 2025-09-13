@@ -108,18 +108,19 @@ export default class Logs extends React.Component {
   }
 
   componentDidMount() {
-    console.log("componentDidMount")
+    console.log("logs componentDidMount")
     if (this.state.loaded === false) {
       this.fetchAPI();
     }
   }
 
   componentDidUpdate() {
-    console.log("componentDidUpdate")
+    console.log("logs componentDidUpdate")
   }
 
   componentWillUnmount() {
-    console.log("componentWillUnmount")
+    console.log("logs componentWillUnmount")
+    // this.stopUpdateTimer()
     this.socket.disconnect();
   }  
 

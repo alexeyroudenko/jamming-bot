@@ -22,6 +22,7 @@ services:
       resources:
         limits:
           cpus: '0.5'
+          memory: 512M
 
 
   redis: 
@@ -34,6 +35,11 @@ services:
       - ./data/redis:/data
     networks:
       - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
 
 
   flask:
@@ -60,6 +66,7 @@ services:
       resources:
         limits:
           cpus: '0.5'
+          memory: 512M
 
  
   spacyapi:
@@ -70,6 +77,11 @@ services:
     restart: always
     networks:
       - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
 
   # screenshoter:
   #   image: mingalevme/screenshoter
@@ -95,6 +107,11 @@ services:
       - DATABASE_URI=postgresql://tags_db_username:tags_db_password@tags_db/tags_db_dev
     networks:
       - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
 
   semantic_service:
     build: ./semantic-service
@@ -114,6 +131,11 @@ services:
       - app_network
     depends_on:
       - tags_db
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
 
 
   tags_service:
@@ -132,6 +154,11 @@ services:
       - app_network
     depends_on:
       - tags_db
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
 
 
   keywords_service:
@@ -144,6 +171,11 @@ services:
       - ./keywords-service/:/usr/src/app
     networks:
       - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
 
 
   tags_db:
@@ -157,6 +189,11 @@ services:
       - POSTGRES_DB=tags_db_dev
     networks:
       - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
 
   worker:    
     build: 
@@ -211,10 +248,31 @@ services:
     deploy:
       mode: replicated
       replicas: 1
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
     depends_on:
       - redis
     networks:
       - app_network
+
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - type: bind
+        source: ./data/certbot/www
+        target: /var/www/certbot
+      - type: bind
+        source: ./data/certbot/www
+        target: /etc/letsencrypt
+    command: certonly --webroot -w /var/www/certbot --non-interactive --email alexey.roudenko@gmail.com --agree-tos --preferred-challenges http -d jamming-bot.arthew0.online      
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
 
   nginx:
     container_name: nginx
@@ -238,21 +296,21 @@ services:
       - redis
       - tags_service
       - ip_service
+      - semantic_service
+      - certbot
+      - frontend
+      - rq-dashboard
+      - worker
+      - worker2 
+      - keywords_service
+      - bot
     networks:
       - app_network 
-
-
-  certbot:
-    image: certbot/certbot:latest
-    volumes:
-      - type: bind
-        source: ./data/certbot/www
-        target: /var/www/certbot
-      - type: bind
-        source: ./data/certbot/www
-        target: /etc/letsencrypt
-    command: certonly --webroot -w /var/www/certbot --non-interactive --email alexey.roudenko@gmail.com --agree-tos --preferred-challenges http -d jamming-bot.arthew0.online      
-
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
 
 volumes:
   postgres_data_tags:

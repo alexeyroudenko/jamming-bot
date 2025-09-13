@@ -81,32 +81,17 @@ export default class Cloud extends React.Component {
   }
 
   initSockets() {
-    // console.log("initSockets")
     this.socket.on("connect", () => {
         this.socket.emit('consumer')
-        // console.log("connected to socket v1.0", this.socket.id)
     });
 
     this.socket.on("connect_error", (err) => { console.log(err) });
     this.socket.on("disconnect", () => {console.log("Disconnected from socket. v1.0")});
 
     this.socket.on("step", (msg) => {
-      // let data = this.state.logs
-      // data2.push(msg)      
-      // let new_semantics = this.state.semantics_log;
-      // if (msg['semantic']) {
-      //   msg['semantic'].forEach(
-      //     (element) => new_semantics.push(element['type'] + " : " + element['text'])
-      //   );
-      // }
-      // console.log("new_semantics", new_semantics)      
       let step_data = msg;
       this.setState({
-        // loaded: true, 
-        // logs: data,
         step: step_data,
-        // semantics_log:new_semantics,
-        // struct_text: msg['struct_text']
       })
     
     })  
@@ -131,46 +116,39 @@ export default class Cloud extends React.Component {
 
   componentDidMount() {
 
+    console.log("cloud componentDidMount")
 
-
-
-    // console.log("componentDidMount")
     if (this.state.loaded === false) {
       this.fetchAPI();
 
-
       setInterval(() => {
         const url = CloudUrl
-        console.log("first tags request", url)
-
+        console.log("cloud tags request", url)
         let dt = []
-
-        fetch(url)        
+        fetch(url) 
         .then((res) => res.json())
-          .then((result) => {            
-              var tags = []                
+          .then((result) => {
+              var tags = []
               result.forEach((tag) => {
                 let new_tag = {value: tag.name, count: tag.count}
                 tags.push(new_tag)
                 dt.push(new_tag)
-                // console.log("------------------------ ", new_tag)                      
               })
               this.setState({tags: tags})
               data = dt
             })
-        }, 2000);
-
+        }, 5000);
     }
   }
 
   componentDidUpdate() {
+    console.log("cloud componentDidUpdate")
   }
 
   componentWillUnmount() {
+    console.log("cloud componentWillUnmount")
     this.socket.disconnect();
   }  
-
-
 
 
   render() {
