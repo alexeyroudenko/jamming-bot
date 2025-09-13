@@ -12,7 +12,8 @@ import {
 
 // import Contacts from "./pages/contacts";
 import Logs from "./pages/logs";
-import Blank from "./pages/graph";
+import Graph from "./pages/graph";
+import Cloud from "./pages/cloud";
 import Home from "./pages/home";
 import Words from "./pages/words";
 import Steps from './components/Steps';
@@ -35,8 +36,9 @@ function App() {
         <Navbar/>
         <AutoSwitcher />
         <Routes className="Nav">
-          <Route path="/" element={<Blank/>} />
-          <Route exact path="/logs" element={<Logs/>} />
+          <Route path="/" element={<Logs/>} />
+          <Route path="/steps" element={<Graph/>} />
+          <Route exact path="/cloud" element={<Cloud/>} />
         </Routes>
       </Router>
 

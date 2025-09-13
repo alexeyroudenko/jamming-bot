@@ -177,6 +177,13 @@ services:
   frontend:
     build: ./frontend
     restart: unless-stopped
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3000
+      - DANGEROUSLY_DISABLE_HOST_CHECK=true
+      - WDS_SOCKET_HOST=jamming-bot.arthew0.online
+      - WDS_SOCKET_PORT=3000
+      - CHOKIDAR_USEPOLLING=true
     volumes:
       - ./frontend:/app
       - /app/node_modules

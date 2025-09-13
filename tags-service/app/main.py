@@ -26,7 +26,10 @@ origins = [
     "http://0.0.0.0:3000",
     "http://bots.local:8003",
     "http://bots.local:5000",
-    "http://10.8.0.11:3000"
+    "http://10.8.0.11:3000",
+    "http://jamming-bot.arthew0.online:3000",
+    "https://jamming-bot.arthew0.online",
+    "http://jamming-bot.arthew0.online"
 ]
 
 app.add_middleware(

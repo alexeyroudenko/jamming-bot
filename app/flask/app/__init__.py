@@ -10,7 +10,19 @@ app = Flask(__name__,
     static_folder='../static', 
     template_folder='../templates'
 )
-cors = CORS(app)    
+
+# Configure CORS to allow development server
+cors = CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            "http://jamming-bot.arthew0.online:3000",
+            "http://localhost:3000",
+            "https://jamming-bot.arthew0.online",
+            "http://jamming-bot.arthew0.online"
+        ]
+    }
+})
+
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
     
     

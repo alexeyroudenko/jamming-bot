@@ -229,21 +229,6 @@ export default class Logs extends React.Component {
           ))}
         </ul>
         </div>
-
-        <div className="semantic_cloud">
-        <TagCloud
-          minSize={16}
-          maxSize={96}
-          font={"impact"}
-          padding={0}
-          colorOptions={options}
-          fontSizeMapper={fontSizeMapper} 
-          tags={data}
-          rotate={rotate}
-          disableRandomColor={true}
-          onClick={tag => alert(`'${tag.value}' was selected!`)}
-        />
-        </div>
     
       </div>
     )
