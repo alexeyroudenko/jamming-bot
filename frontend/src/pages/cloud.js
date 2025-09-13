@@ -55,7 +55,6 @@ export default class Cloud extends React.Component {
       step: {},
       struct_text: "..."
     }
-    this.socket = io(Url, { transports: ["websocket", "polling"] })
   }
 
   fetchAPI() {
@@ -69,7 +68,6 @@ export default class Cloud extends React.Component {
           loaded: true,
           logs: data
         })
-        this.initSockets()
       })
       .catch((error) => {
         console.log(error)
@@ -80,48 +78,12 @@ export default class Cloud extends React.Component {
       });
   }
 
-  initSockets() {
-    this.socket.on("connect", () => {
-        this.socket.emit('consumer')
-    });
-
-    this.socket.on("connect_error", (err) => { console.log(err) });
-    this.socket.on("disconnect", () => {console.log("Disconnected from socket. v1.0")});
-
-    this.socket.on("step", (msg) => {
-      let step_data = msg;
-      this.setState({
-        step: step_data,
-      })
-    
-    })  
-
-    this.socket.on("event", (msg) => {
-      console.log("event", msg)
-      if (msg['event'] === "say_finish") {
-        this.setState({events: []})
-      } else {
-        let data2 = this.state.events
-        data2.push(msg)
-        this.setState({events: data2})
-      }
-    })  
-
-
-
-
-
-    
-  }
-
   componentDidMount() {
-
     console.log("cloud componentDidMount")
-
     if (this.state.loaded === false) {
       this.fetchAPI();
 
-      setInterval(() => {
+      this.updateTimer = setInterval(() => {
         const url = CloudUrl
         console.log("cloud tags request", url)
         let dt = []
@@ -141,13 +103,20 @@ export default class Cloud extends React.Component {
     }
   }
 
+  stopUpdateTimer() {
+    if (this.updateTimer) {
+      clearInterval(this.updateTimer);
+      this.updateTimer = null;
+    }
+  }
+
   componentDidUpdate() {
     console.log("cloud componentDidUpdate")
   }
 
   componentWillUnmount() {
     console.log("cloud componentWillUnmount")
-    this.socket.disconnect();
+    this.stopUpdateTimer()
   }  
 
 
@@ -170,44 +139,6 @@ export default class Cloud extends React.Component {
     }
     else return (
       <div className="Graph3d">
-        <h1>logs</h1>
-        <div className="logs">
-          {!this.state.logs ? null : this.state.logs.slice().reverse().map((step, index) => (
-            <div key={index} className="item">
-              <code>{step['step']}</code>&nbsp;
-              <code className={step['status_string']}>{step['status_code']}</code>&nbsp;
-              <code><a href={step['url']} target="blank">{step['url']}</a></code>
-            </div>
-          ))}
-        </div>
-        
-        <div className="events">
-          {!this.state.events ? null : this.state.events.slice().reverse().map((step, index) => (
-            <div key={index} className="item">
-              <code className={step['status_string']}>{step['event']}</code>
-            </div>
-          ))}
-        </div>
-
-        <div className="struct_text">
-          <h2>Step {this.state.step['step']}</h2>
-          <h3><code><a href={this.state.step['url']}>{this.state.step['url']}</a></code></h3>
-          <ul>
-            <li><code>from <a href={this.state.step['src_url']}>{this.state.step['src_url']}</a></code></li>
-            <li><code className={this.state.step['status_string']}>status: {this.state.step['status_code']}</code></li><br/>
-            <li><code>ip: {this.state.step['ip']}</code></li>                                                
-            <li><code>{this.state.step['struct_text']}</code></li>
-          </ul>
-        </div>
-
-        <div className="semantic_log">
-        <ul>
-          {!this.state.semantics_log ? null : [].concat(this.state.semantics_log.slice().reverse()).slice(0, 32).map((step, index) => (
-              <li><code>{step}</code></li>
-          ))}
-        </ul>
-        </div>
-
         <div className="semantic_cloud">
         <TagCloud
           minSize={16}

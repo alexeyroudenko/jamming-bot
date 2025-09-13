@@ -51,13 +51,13 @@ function AutoSwitcher() {
   const location = useLocation();
 
   useEffect(() => {
+    const paths = ["/", "/steps", "/cloud"];
+    let currentIndex = paths.indexOf(location.pathname);
+    if (currentIndex === -1) currentIndex = 0;
     const interval = setInterval(() => {
-      if (location.pathname === "/") {
-        navigate("/logs");
-      } else {
-        navigate("/");
-      }
-    }, 180000*60); // 10 Minutes
+      currentIndex = (currentIndex + 1) % paths.length;
+      navigate(paths[currentIndex]);
+    }, 1000*30);
     return () => clearInterval(interval);
   }, [location.pathname, navigate]);
 
