@@ -150,21 +150,24 @@ export default class Cloud extends React.Component {
       return <p>Error</p>;
     }
     else return (
-      <div className="Graph3d">
-        <div className="semantic_cloud">
+      <div className="Graph3d" style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
+        <div className="semantic_cloud" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <TagCloud
-          minSize={16}
-          maxSize={96}
+          minSize={12}
+          maxSize={120}
           font={"impact"}
-          padding={0}
+          padding={5}
           colorOptions={options}
           fontSizeMapper={fontSizeMapper}
           tags={data}
           rotate={rotate}
           disableRandomColor={true}
-          onClick={this.handleTagClick}
           renderer={(tag, size, color) => {
             const isSelected = this.state.selectedTags.includes(tag.value);
+            // Generate unique animation delay and duration based on tag
+            const animationDelay = (tag.value.charCodeAt(0) % 10) * 0.1;
+            const animationDuration = 3 + (tag.value.length % 5);
+            
             return (
               <span
                 key={tag.value}
@@ -181,6 +184,8 @@ export default class Cloud extends React.Component {
                   boxShadow: isSelected ? '0 0 0 2px #ffeb3b, 0 2px 8px rgba(0,0,0,0.15)' : 'none',
                   borderRadius: '4px',
                   padding: '2px 6px',
+                  animation: `tagFloat ${animationDuration}s ease-in-out ${animationDelay}s infinite`,
+                  position: 'relative',
                 }}
                 onClick={() => this.handleTagClick(tag)}
               >

@@ -171,9 +171,6 @@ services:
         limits:
           cpus: '0.25'  
 
-
-
-
   frontend:
     build: ./frontend
     restart: unless-stopped
@@ -185,7 +182,9 @@ services:
       - WDS_SOCKET_PORT=3000
       - CHOKIDAR_USEPOLLING=true
     volumes:
-      - ./frontend:/app
+      - type: bind
+        source: ./frontend
+        target: /app
       - /app/node_modules
     ports:
       - "3000:3000"
