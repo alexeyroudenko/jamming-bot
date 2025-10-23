@@ -207,7 +207,44 @@ services:
     networks:
       - app_network
 
-
+  nginx:
+    container_name: nginx
+    restart: "no"
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+      - "5001:5001"
+    volumes:
+      - type: bind
+        source: ./docker/nginx/nginx-dev.conf
+        target: /etc/nginx/conf.d/default.conf
+      - type: bind
+        source: ./data/certbot/www
+        target: /var/www/certbot
+      - type: bind
+        source: ./frontend/build
+        target: /var/www
+    depends_on:
+      - flask
+      - redis
+      - tags_service
+      - semantic_service
+      - rq-dashboard
+      - worker
+      - worker2 
+      - keywords_service
+      - bot
+    networks:
+      - app_network 
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+          
 volumes:
   postgres_data_tags:
   data:

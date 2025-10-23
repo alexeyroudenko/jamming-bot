@@ -299,6 +299,9 @@ services:
       - "5001:5001"
     volumes:
       - type: bind
+        source: ./docker/nginx/nginx.conf
+        target: /etc/nginx/conf.d/default.conf
+      - type: bind
         source: ./data/certbot/www
         target: /var/www/certbot
       - type: bind
