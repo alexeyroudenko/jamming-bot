@@ -315,10 +315,83 @@ button {
     opacity: 0.2;
 }
 
+#login-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.95);
+    z-index: 9999;
+    display: none;
+    justify-content: center;
+    align-items: center;
+}
+
+#login-form {
+    background-color: #1a1a1a;
+    padding: 40px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    width: 300px;
+}
+
+#login-form h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #fff;
+    text-align: center;
+    font-size: 24px;
+}
+
+#login-form input {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 15px;
+    border: 1px solid #333;
+    border-radius: 4px;
+    background-color: #2a2a2a;
+    color: #fff;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+#login-form button {
+    width: 100%;
+    padding: 12px;
+    background-color: #0066cc;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+#login-form button:hover {
+    background-color: #0052a3;
+}
+
+#login-error {
+    color: #ff4444;
+    margin-bottom: 15px;
+    text-align: center;
+    font-size: 14px;
+    display: none;
+}
+
 </style>>
 
 <body>
   
+<div id="login-overlay">
+  <div id="login-form">
+    <h2>Login</h2>
+    <div id="login-error"></div>
+    <input type="text" id="username" placeholder="Username" autocomplete="username">
+    <input type="password" id="password" placeholder="Password" autocomplete="current-password">
+    <button onclick="handleLogin()">Login</button>
+  </div>
+</div>
 
 <div id="nodes"></div>
 
@@ -329,29 +402,30 @@ button {
         | counter:<span id="counter"></span>
         | latency:<span id="latency"></span> 
         | <a href="http://docs.arthew0.online:32768/" target="_blank">v2.1.0</a> |
-        
-        <!-- {% if admin %} -->
+
+        <span class="admin-only">
+        <button onclick="do_step()">step</button>
+        <button onclick="stop()">stop</button>    
+        <button onclick="start()">start</button>
         <button onclick="restart()">restart</button>
+        <button onclick="do_add()" style="display:none">add</button>|
+        <a href="/api/tags/get/">get tags<span id="tags"></span></a>|
+        <a href="/api/tags/add/">add tags<span id="tags"></span></a>|
+        <a href="/api/tags/add_tags_from_steps/">add_tags_from_steps<span id="tags"></span></a>|
+        <a href="/api/tags/clean/">clean tags<span id="clean_tags"></span></a>|
         <a href="/api/steps/">api<span id="api"></span></a>|
         <a href="/ctrl/">dashboard:<span id="dashboard"></span></a>|
         <a href="/queue/">queue:<span id="queue"></span></a>
-        <!-- {% endif %} -->
+        </span>
+        <span class="admin-only">|
+        <button onclick="handleLogout()">logout</button>
+        </span>
+        <span class="guest-only">
+        <a href="#" onclick="showLoginForm(); return false;">login:<span id="login"></span></a>
+        </span>
 
     </code>
 
-    <button onclick="do_step()">step</button>
-    <button onclick="stop()">stop</button>    
-    <button onclick="start()">start</button>
-    <button onclick="restart()">restart</button>
-    <button onclick="do_add()" style="display:none">add</button>|
-    <a href="/api/tags/get/">get tags<span id="tags"></span></a>|
-    <a href="/api/tags/add/">add tags<span id="tags"></span></a>|
-    <a href="/api/tags/add_tags_from_steps/">add_tags_from_steps<span id="tags"></span></a>|
-    <a href="/api/tags/clean/">clean tags<span id="clean_tags"></span></a>|
-    <a href="/api/steps/">api<span id="api"></span></a>|
-    <a href="/ctrl/">dashboard:<span id="dashboard"></span></a>|
-    <a href="/queue/">queue:<span id="queue"></span></a>
-    
   </div>
 
   <div id="log"></div>
@@ -379,6 +453,90 @@ button {
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
         gtag('config', 'G-NSBDJ2XRN8');
+
+// Login handling
+var admin = false;
+
+function showLoginForm() {
+    document.getElementById('login-overlay').style.display = 'flex';
+    // Clear previous inputs
+    document.getElementById('username').value = '';
+    document.getElementById('password').value = '';
+    document.getElementById('login-error').style.display = 'none';
+}
+
+function handleLogin() {
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    const errorDiv = document.getElementById('login-error');
+    
+    // Validate credentials
+    if (username === 'arthew0' && password === 'b07') {
+        // Hide login overlay
+        document.getElementById('login-overlay').style.display = 'none';
+        errorDiv.style.display = 'none';
+        // Set admin flag
+        admin = true;
+        sessionStorage.setItem('authenticated', 'true');
+        sessionStorage.setItem('admin', 'true');
+        // Show admin controls
+        updateAdminUI();
+    } else {
+        // Show error message
+        errorDiv.textContent = 'Invalid username or password';
+        errorDiv.style.display = 'block';
+    }
+}
+
+function handleLogout() {
+    // Clear admin flag
+    admin = false;
+    sessionStorage.removeItem('authenticated');
+    sessionStorage.removeItem('admin');
+    // Update UI to show guest controls
+    updateAdminUI();
+}
+
+function updateAdminUI() {
+    // Show/hide elements based on admin status
+    const adminElements = document.querySelectorAll('.admin-only');
+    const guestElements = document.querySelectorAll('.guest-only');
+    
+    adminElements.forEach(el => el.style.display = admin ? 'inline' : 'none');
+    guestElements.forEach(el => el.style.display = admin ? 'none' : 'inline');
+}
+
+// Allow login with Enter key
+document.addEventListener('DOMContentLoaded', function() {
+    const passwordInput = document.getElementById('password');
+    const usernameInput = document.getElementById('username');
+    
+    if (passwordInput) {
+        passwordInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                handleLogin();
+            }
+        });
+    }
+    
+    if (usernameInput) {
+        usernameInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                handleLogin();
+            }
+        });
+    }
+    
+    // Check if already authenticated
+    if (sessionStorage.getItem('authenticated') === 'true') {
+        admin = sessionStorage.getItem('admin') === 'true';
+        updateAdminUI();
+    } else {
+        // Initialize as guest
+        updateAdminUI();
+    }
+});
+
 
 
 
