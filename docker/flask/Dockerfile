@@ -1,4 +1,4 @@
-FROM python:3.6-stretch
+FROM python:3.11-slim
 
 #This command will create the working directory for our Python Flask application Docker image
 WORKDIR /app
@@ -23,20 +23,19 @@ RUN pip install Flask-SocketIO=="5.4.1"
 
 RUN pip install Flask-Cors
 RUN pip install Flask
-RUN pip install rq==1.2.0
-RUN pip install rq-dashboard==0.5.1
-RUN pip install gunicorn==19.9.0
+RUN pip install rq==1.16.2
+RUN pip install rq-dashboard==0.6.1
+RUN pip install gunicorn==23.0.0
 RUN pip install click
 RUN pip install sentry-sdk[flask]
 RUN pip install requests
 
-# Pin spaCy to a version compatible with Python 3.6 and install models directly via wheels
+# Install modern spaCy and models compatible with Python 3.11
 RUN python -m pip install --upgrade pip setuptools wheel \
-    && pip install "spacy==2.3.8"
-# Install spaCy v2 English models (no CLI download; fetch wheels directly)
-RUN pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.3.1/en_core_web_sm-2.3.1.tar.gz
-# The large model can fail to build in restricted environments; install md instead (sm is already installed)
-RUN pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_md-2.3.1/en_core_web_md-2.3.1.tar.gz
+    && pip install "spacy==3.8.2"
+# Install spaCy v3 English models
+RUN python -m spacy download en_core_web_sm
+RUN python -m spacy download en_core_web_md
 
 # Make port 5000 available to the world outside this container
 EXPOSE 5000
