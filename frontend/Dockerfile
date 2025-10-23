@@ -10,7 +10,10 @@ ENV PATH /app/node_modules/.bin:$PATH
 # install app dependencies
 COPY package.json ./
 # COPY package-lock.json ./
+RUN echo "Installing dependencies..."
+
 RUN yarn
+
 # RUN npm install --silent
 # RUN npm install react-scripts@3.4.1 -g --silent
 # RUN npm install react-d3-graph -g --silent
@@ -18,5 +21,11 @@ RUN yarn
 # add app
 COPY . ./
 
+RUN echo "Building app..."
+
+# RUN yarn build
+
+RUN echo "Finished building app..."
+
 # start app
-CMD ["yarn", "start"]
+# CMD ["yarn", "build"]

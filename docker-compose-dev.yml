@@ -172,7 +172,9 @@ services:
           cpus: '0.25'  
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile-dev
     restart: unless-stopped
     environment:
       - HOST=0.0.0.0
