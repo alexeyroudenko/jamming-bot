@@ -651,8 +651,8 @@ def do_screenshot(data):
     render_url = f"{RENDERER_SERVICE_URL}/render"
     params = {
         'url': current_url,
-        'width': 1280,
-        'height': 720,
+        'width': 1080,
+        'height': 1920,
         'format': 'png',
     }
     response = requests.get(render_url, params=params, timeout=90)
