@@ -653,7 +653,9 @@ def do_screenshot(data):
         'url': current_url,
         'width': 1080,
         'height': 1920,
-        'format': 'png',
+        'format': 'jpeg',
+        'quality': 80,
+        'dsf': '1',
     }
     response = requests.get(render_url, params=params, timeout=90)
     sentry_sdk.logger.info(f"do_screenshot response {response}")
@@ -676,7 +678,7 @@ def do_screenshot(data):
 
     # 2. Generate filename from URL
     safe_name = _filenamify(current_url)
-    s3_key = f"screenshots/{step_number}-{safe_name}.png"
+    s3_key = f"screenshots/{step_number}-{safe_name}.jpg"
     sentry_sdk.logger.info(f"do_screenshot s3_key {s3_key}")
     # 3. Upload to S3
     s3 = _get_s3_client()
@@ -684,7 +686,7 @@ def do_screenshot(data):
         Bucket=S3_BUCKET_NAME,
         Key=s3_key,
         Body=image_bytes,
-        ContentType='image/png',
+        ContentType='image/jpeg',
         ACL='public-read',
     )
 
