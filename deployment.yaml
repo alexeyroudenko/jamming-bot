@@ -567,7 +567,6 @@ spec:
         imagePullPolicy: Never
         ports:
         - containerPort: 5000
-          hostPort: 5000
         env:
         - name: REDIS_HOST
           value: "redis"
