@@ -678,7 +678,7 @@ def do_screenshot(data):
 
     # 2. Generate filename from URL
     safe_name = _filenamify(current_url)
-    s3_key = f"screenshots/{step_number}-{safe_name}.jpg"
+    s3_key = f"screenshots/{str(step_number).zfill(8)}-{safe_name}.jpg"
     sentry_sdk.logger.info(f"do_screenshot s3_key {s3_key}")
     # 3. Upload to S3
     s3 = _get_s3_client()
