@@ -11,7 +11,7 @@ count_per_domain: 40
 sleep_time: 5.0
 color_log: True
 resolve_coords: False
-resume_at_restart: False
+resume_at_restart: True
 max_errors: 100000
 
 send_osc: True
