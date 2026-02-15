@@ -1,0 +1,94 @@
+name: Deploy to K3s
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  DEPLOY_HOST: b0ts.arthew0.online
+  DEPLOY_PATH: /opt/jamming-bot
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to K3s via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.K3S_SSH_HOST || 'b0ts.arthew0.online' }}
+          username: ${{ secrets.K3S_SSH_USER }}
+          key: ${{ secrets.K3S_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.K3S_SSH_PORT || '22' }}
+          script: |
+            set -e
+            DEPLOY_PATH="${{ secrets.K3S_DEPLOY_PATH || '/opt/jamming-bot' }}"
+            cd "$DEPLOY_PATH"
+
+            echo ">>> Pulling latest code..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo ">>> Building and importing Docker images..."
+
+            # html-renderer (uses custom image name)
+            docker build -t 1325gy/my_dev:v5 ./html-renderer-service
+            docker save 1325gy/my_dev:v5 | k3s ctr images import -
+
+            # keywords-service
+            docker build -t keywords-service:latest ./keywords-service
+            docker save keywords-service:latest | k3s ctr images import -
+
+            # semantic-service
+            docker build -t semantic-service:latest ./semantic-service
+            docker save semantic-service:latest | k3s ctr images import -
+
+            # storage-service
+            docker build -t storage-service:latest ./storage-service
+            docker save storage-service:latest | k3s ctr images import -
+
+            # tags-service
+            docker build -t tags-service:latest ./tags-service
+            docker save tags-service:latest | k3s ctr images import -
+
+            # bot-service
+            docker build -t bot-service:latest ./bot-service
+            docker save bot-service:latest | k3s ctr images import -
+
+            # ip-service
+            docker build -t ip-service:latest ./ip-service
+            docker save ip-service:latest | k3s ctr images import -
+
+            # app-service (also used by worker-service)
+            docker build -t app-service:latest ./app-service
+            docker save app-service:latest | k3s ctr images import -
+
+            echo ">>> Applying Kubernetes manifests..."
+            kubectl apply -f deployment.yaml
+
+            echo ">>> Restarting deployments for rolling update..."
+            kubectl rollout restart deployment html-renderer
+            kubectl rollout restart deployment keywords-service
+            kubectl rollout restart deployment semantic-service
+            kubectl rollout restart deployment storage-service
+            kubectl rollout restart deployment tags-service
+            kubectl rollout restart deployment bot-service
+            kubectl rollout restart deployment ip-service
+            kubectl rollout restart deployment app-service
+            kubectl rollout restart deployment worker-service
+
+            echo ">>> Waiting for rollouts..."
+            kubectl rollout status deployment/html-renderer --timeout=120s
+            kubectl rollout status deployment/keywords-service --timeout=120s
+            kubectl rollout status deployment/semantic-service --timeout=120s
+            kubectl rollout status deployment/storage-service --timeout=120s
+            kubectl rollout status deployment/tags-service --timeout=120s
+            kubectl rollout status deployment/bot-service --timeout=120s
+            kubectl rollout status deployment/ip-service --timeout=120s
+            kubectl rollout status deployment/app-service --timeout=120s
+            kubectl rollout status deployment/worker-service --timeout=120s
+
+            echo ">>> Deployment complete!"

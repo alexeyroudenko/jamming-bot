@@ -749,7 +749,7 @@ metadata:
   name: app-subdomain-ingress
 spec:
   rules:
-    - host: app.jamming-bot.arthew0.online
+    - host: b0ts.arthew0.online
       http:
         paths:
         - path: /
