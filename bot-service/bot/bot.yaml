@@ -16,7 +16,7 @@ max_errors: 100000
 
 send_osc: True
 send_step: True
-send_events: False
+send_events: True
 send_sublinks: False
 log_events: False
 

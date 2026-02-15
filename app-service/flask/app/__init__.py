@@ -90,6 +90,8 @@ app.logger.info('initializing Prometheus metrics')
 step_number = Gauge('step_number', 'Текущее количество шагов')
 # step_number = 77 
 
+steps_forwards = Gauge('steps_forwards', 'Запас хода')
+
 
 # Explicitly register /metrics route as fallback to ensure it works
 # PrometheusMetrics should auto-register this, but this ensures it's available
@@ -116,6 +118,9 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
     
 def get_metrics():
     return metrics
+
+def get_steps_forwards():
+    return steps_forwards
 
 def get_step_number():
     return step_number

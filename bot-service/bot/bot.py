@@ -343,11 +343,11 @@ class NetSpider():
         if self.send_events:
             try:
                 url = EVENT_URL + f"/{event_name}/"
-                r = requests.post(url, {"data":data})
-                # logging.info(f"url: {url}")
+                r = requests.post(url, {"data": data}, timeout=10)
+                if r.status_code != 200:
+                    logging.warning(f"event {event_name} status {r.status_code} {url}")
             except Exception as e0:
-                logging.error(f"error send eventp data {url}")
-                self.send_events = False
+                logging.error(f"error send eventp {event_name}: {e0} url={EVENT_URL}")
         if self.send_osc:            
             try:
                 self.osc.send_message(f"/events/{event_name}/", [])
@@ -463,7 +463,13 @@ class NetSpider():
 
             #
             query = "SELECT id, hostname, url, src_url, count(visited) FROM Urls where visited==0 GROUP BY hostname ORDER BY count(visited) LIMIT 1"
-            rows = await self.database.fetch_all(query=query)   
+            rows = await self.database.fetch_all(query=query)
+
+            steps_forwards_query = "SELECT COUNT(*) FROM Urls WHERE visited=0"
+            steps_forwards_result = await self.database.fetch_one(query=steps_forwards_query)
+            steps_forwards = steps_forwards_result[0] if steps_forwards_result else 0
+            self.notify_about_eventp("steps_forwards", steps_forwards)
+            logging.info(f"steps_forwards {steps_forwards}")
                    
             url_id = rows[0][0]
             # domain = get_second_level_domain(rows[0][1])
@@ -726,8 +732,8 @@ async def main():
                        count_per_domain = config['count_per_domain'])
     spider.resume_at_restart = config['resume_at_restart']
     spider.is_active = config['is_active']
-    
-    
+    spider.reload_config()  # Load send_events, send_step etc from config before first step
+
     # from omegaconf import OmegaConf
     # from osc_server import OSCServer
     # osc_config = OmegaConf.load("osc_server.yml")

@@ -15,6 +15,7 @@ TAGS_SERVICE_URL = os.getenv('TAGS_SERVICE_URL', 'http://tags_service:8000')
 
 from config import getConfig, getRedis
 from app import get_step_number
+from app import get_steps_forwards
 
 cfg = getConfig()
 redis = getRedis()
@@ -229,8 +230,10 @@ def get_tags():
 
 #
 #    EVENTS
+#@metrics.counter('steps_forwards_counter', 'Запас хода', labels={'code': lambda r: r.status_code})
 @http_bp.route('/bot/events/<event_id>/', methods=['POST'])
-def bot_event(event_id):    
+def bot_event(event_id):
+    logger.info(f"bot_event received: {event_id}")
     if request.method == 'POST':
         
         # url = "http://node_red:1880/hello"
@@ -239,8 +242,17 @@ def bot_event(event_id):
         # EVENTS_URL = 'http://node_red:1880/events/'
         # r = requests.post(EVENTS_URL + event_id + "/", data = data)
 
-        data = {}        
+        data = {}
         socketio.emit('event', {"event":event_id, "data":data})
+
+        if event_id == "steps_forwards":
+            steps_forwards_gauge = get_steps_forwards()
+            form_data = request.form.to_dict()
+            # Bot sends {"data": value}; accept both "data" and "steps_forwards" keys
+            value = int(form_data.get('steps_forwards', form_data.get('data', 0)))
+            steps_forwards_gauge.set(value)
+            logger.info(f"steps_forwards set to {value} form_keys={list(form_data.keys())}")
+            socketio.emit('steps_forwards', value)
     return "event"
 
 
@@ -276,7 +288,7 @@ def step():
         cfg = getConfig() 
         data = request.form.to_dict(    )   
 
-        step_number = get_step_number()                     
+        step_number = get_step_number()
         print(f"step_number {step_number}")
         logger.info(f"step_number {step_number}")
         step_number.set(int(data['number']))
