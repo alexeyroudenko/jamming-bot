@@ -31,9 +31,12 @@ Add these secrets in your repo: **Settings → Secrets and variables → Actions
 |--------|----------|-------------|
 | `K3S_SSH_HOST` | No | SSH host (default: `b0ts.arthew0.online`) |
 | `K3S_SSH_USER` | **Yes** | SSH username (e.g. `root` or `deploy`) |
-| `K3S_SSH_PRIVATE_KEY` | **Yes** | Full contents of your SSH private key |
+| `K3S_SSH_PRIVATE_KEY` | One of these | Full contents of your SSH private key (recommended) |
+| `K3S_SSH_PASSWORD` | One of these | SSH password (alternative to key) |
 | `K3S_SSH_PORT` | No | SSH port (default: `22`) |
 | `K3S_DEPLOY_PATH` | No | Path to repo on server (default: `/opt/jamming-bot`) |
+
+**Error: "can't connect without a private SSH key or password"** — Add either `K3S_SSH_PRIVATE_KEY` or `K3S_SSH_PASSWORD`.
 
 ### Generate SSH key for deploy
 

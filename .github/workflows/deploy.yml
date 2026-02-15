@@ -22,6 +22,7 @@ jobs:
           host: ${{ secrets.K3S_SSH_HOST || 'b0ts.arthew0.online' }}
           username: ${{ secrets.K3S_SSH_USER }}
           key: ${{ secrets.K3S_SSH_PRIVATE_KEY }}
+          password: ${{ secrets.K3S_SSH_PASSWORD }}
           port: ${{ secrets.K3S_SSH_PORT || '22' }}
           script: |
             set -e
