@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+<head>
+  
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
+  
+  <title>SocketIO</title>
+  
+</head>
+<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}" />
+<body>
+
+        <div id="debug">
+        counter:<span id="counter"></span>
+        latency:<span id="latency"></span>
+        tag:<span id="tag"></span>
+        </div>
+        
+        <ul>
+          <li><a href="/clean/">CLEAN</a></li>
+            <li><a href="/tag/">TAG</a></li>
+            <li><a href="/tags/">TAGS</a></li>
+            <li><a href="/day/">DAY CONTROLLER PING</a></li>
+            <li><a href="http://pi.local:5000/tag/tag_update/Hamas/">update TAG</a></li>
+            <li><a href="http://pi.local:5000/tag/tag_add/Hamas/">add TAG</a></li>
+            <li><a href="http://pi.local:5000/tag/tag_delete/Hamas/">delete TAG</a></li>
+        </ul>
+
+        
+        <div id="tags_spot">
+
+        </div>
+
+        <div class="words">
+
+            <ul id="words2" class="word-result">
+
+            </ul>
+        
+        </div>
+        
+        <div id="words_spot"></div>
+        
+        <div class="errors"></div>
+
+        <div class="spots"><div id ="animate"><ul id="spotsl" class="ajax-result"></ul></div></div>
+
+
+
+      <!-- Google tag (gtag.js) -->
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-NSBDJ2XRN8"></script>
+      <script>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-NSBDJ2XRN8');
+      </script>
+
+    </body>
+
+</html>

@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "7771:7771"
+    volumes:
+      - ./src:/usr/src/app
+    environment:
+      NODE_ENV: development
+
+networks:
+  default:
+    driver: bridge

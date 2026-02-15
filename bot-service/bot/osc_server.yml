@@ -1,0 +1,7 @@
+osc_client:
+  adress: '239.255.255.255'
+  port: 5005
+
+osc_server:
+  adress: '127.0.0.1'
+  port: 5006  

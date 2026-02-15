@@ -1,0 +1,343 @@
+services:
+
+  bot:
+    build: ./bot-service
+    container_name: jamming-bot
+    restart: unless-stopped
+    ports:
+      - "7001:7001"
+    volumes:
+      - type: bind
+        source: ./bot-service/bot
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data 
+    depends_on:
+      - redis  
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+
+  redis: 
+    image: redislabs/redismod
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - ./data/redis:/data
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+
+
+  flask:
+    build: ./app-service
+    image: master-image
+    container_name: flask
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    command: python app.py
+    volumes:
+      - type: bind
+        source: ./app-service/flask
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data 
+    depends_on:
+      - redis
+      - tags_service
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+ 
+  spacyapi:
+    container_name: spacyapi
+    image: bbieniek/spacyapi:en_v3
+    ports:
+      - "127.0.0.1:7010:80"
+    restart: always
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  # screenshoter:
+  #   image: mingalevme/screenshoter
+  #   ports:
+  #     - "5020:8080"
+  #   restart: always
+  #   networks:
+  #     - app_network      
+
+  ip_service:
+    build: ./ip-service
+    container_name: ip_service
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8004
+    restart: unless-stopped
+    volumes:
+      - ./ip-service/:/app/
+      - type: bind
+        source: ./ip-service/data
+        target: /app/data
+    ports:
+      - 8004:8004
+    environment:
+      - DATABASE_URI=postgresql://tags_db_username:tags_db_password@tags_db/tags_db_dev
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  semantic_service:
+    build: ./semantic-service
+    container_name: semantic_service
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8005
+    restart: unless-stopped
+    volumes:
+      - ./semantic-service/:/app/
+      - type: bind
+        source: ./semantic-service/data
+        target: /app/data
+    ports:
+      - 8005:8005
+    environment:
+      - DATABASE_URI=postgresql://tags_db_username:tags_db_password@tags_db/tags_db_dev
+    networks:
+      - app_network
+    depends_on:
+      - tags_db
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1024M
+
+  # frontend: (disabled — ./frontend/ directory not present)
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   environment:
+  #     - HOST=0.0.0.0
+  #     - PORT=3000
+  #     - DANGEROUSLY_DISABLE_HOST_CHECK=true
+  #     - WDS_SOCKET_HOST=jamming-bot.arthew0.online
+  #     - WDS_SOCKET_PORT=3000
+  #     - CHOKIDAR_USEPOLLING=true
+  #   volumes:
+  #     - type: bind
+  #       source: ./frontend
+  #       target: /app
+  #     - /app/node_modules
+  #   ports:
+  #     - "3000:3000"
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '1.0'
+  #         memory: 1024M
+
+  tags_service:
+    build: ./tags-service
+    restart: unless-stopped
+    container_name: tags_service
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    volumes:
+      - ./tags-service/:/app/
+    ports:
+      - 8003:8000
+    environment:
+      - DATABASE_URI=postgresql://tags_db_username:tags_db_password@tags_db/tags_db_dev
+      - CAST_SERVICE_HOST_URL=http://tags_service:8000/api/v1/casts/
+    networks:
+      - app_network
+    depends_on:
+      - tags_db
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+
+  keywords_service:
+    build: ./keywords-service
+    restart: unless-stopped
+    container_name: keywords_service
+    ports:
+      - "7771:7771"
+    volumes:
+      - ./keywords-service/:/usr/src/app
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  storage_service:
+    build: ./storage-service
+    container_name: storage_service
+    restart: unless-stopped
+    volumes:
+      - ./storage-service/app:/app
+      - ./data:/usr/src/app/data
+    ports:
+      - 7781:7781
+    command: uvicorn main:app --reload --host 0.0.0.0 --port 7781
+    networks:
+      - app_network          
+
+
+  tags_db:
+    image: postgres:12.1-alpine
+    restart: unless-stopped
+    volumes:
+      - postgres_data_tags:/var/lib/postgresql/data/
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=tags_db_username
+      - POSTGRES_PASSWORD=tags_db_password
+      - POSTGRES_DB=tags_db_dev
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+
+  worker:    
+    build: ./app-service
+    image: worker-image
+    command: rq worker --name worker --disable-job-desc-logging --url redis://redis:6379/0
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: ./app-service/flask
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data 
+    depends_on:
+      - redis
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+
+  #uncomment to have a another worker
+  worker2:
+    image: worker-image
+    command: rq worker --name worker2 --disable-job-desc-logging --url redis://redis:6379/0
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: ./app-service/flask
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data    
+    depends_on:
+      - redis
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'  
+
+  rq-dashboard:
+    image: kudaw/rq-dashboard
+    restart: unless-stopped
+    environment:
+      RQ_DASHBOARD_REDIS_URL: 'redis://redis:6379'
+    ports:
+      - "9181:9181"
+    deploy:
+      mode: replicated
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    depends_on:
+      - redis
+    networks:
+      - app_network
+
+  # certbot: (disabled — handled externally or not needed)
+  #   image: certbot/certbot:latest
+  #   volumes:
+  #     - type: bind
+  #       source: ./data/certbot/www
+  #       target: /var/www/certbot
+  #     - type: bind
+  #       source: ./data/certbot/www
+  #       target: /etc/letsencrypt
+  #   command: certonly --webroot -w /var/www/certbot --non-interactive --email alexey.roudenko@gmail.com --agree-tos --preferred-challenges http -d blog.arthew0.online
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '0.25'
+  #         memory: 128M
+
+  # nginx: (disabled — k3s Traefik ingress handles routing, port 80 conflict)
+  #   container_name: nginx
+  #   restart: "no"
+  #   build:
+  #     context: .
+  #     dockerfile: docker/nginx/Dockerfile
+  #   ports:
+  #     - "80:80"
+  #     - "81:81"
+  #     - "443:443"
+  #     - "5001:5001"
+  #   depends_on:
+  #     - flask
+  #     - redis
+  #     - tags_service
+  #     - ip_service
+  #     - semantic_service
+  #     - certbot
+  #     - rq-dashboard
+  #     - worker
+  #     - worker2
+  #     - keywords_service
+  #     - bot
+  #   networks:
+  #     - app_network
+
+volumes:
+  postgres_data_tags:
+
+networks:
+  app_network:
+    driver: bridge

@@ -1,0 +1,28 @@
+{
+  "short_name": "Jamming Bot",
+  "name": "Jamming Bot v2.1.0",
+  "icons": [
+    {
+      "src": "/flask_static/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/flask_static/logo192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/flask_static/logo512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "theme_color": "#000000",
+  "background_color": "#000000",
+  "scope": "/",
+  "description": "Jamming bot visualization and monitoring"
+}

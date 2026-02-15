@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>jammingbot : console</title>
+    <meta http-equiv="refresh" content="4" />
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
+    <!--<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script> -->
+</head>
+<body>
+
+
+
+<div class="jumbotron text-center">
+    
+    <div  class="col-md-6 offset-3">
+        <a href="/">counter:<span id="counter"></span> | latency:<span id="latency"></span>
+    </div>
+
+    <br>
+
+    <div class="col-md-6 offset-3">
+        <a href="/ctrl/start/" class="btn btn-sm btn-primary">start</a>
+        <a href="/ctrl/stop/" class="btn btn-sm btn-primary">stop</a>
+        <a href="/ctrl/step/" class="btn btn-sm btn-primary">step</a>
+        <a href="/ctrl/restart/" class="btn btn-sm btn-primary">restart</a> 
+        |||| <a href="/queue/" class="btn btn-sm btn-primary">queue</a>
+        |||| <a href="/all_jobs/" class="btn btn-sm btn-primary">API all_jobs</a>
+    </div>
+
+    <br>
+
+    <fieldset style="float:righleftt;">
+        <span>
+            <input type="checkbox" id="do_pass" name="do_pass" {% if cfg.do_pass == 1 %}checked{% endif %} />
+            <label for="do_pass">do_pass</label>
+        </span>        
+        <span>
+            <input type="checkbox" id="do_geo" name="do_geo" {% if cfg.do_geo == 1 %}checked{% endif %} />
+            <label for="do_geo">do_geo</label>
+        </span>        
+        <span>
+            <input type="checkbox" id="do_save" name="do_save" {% if cfg.do_save == 1 %}checked{% endif %} />
+            <label for="do_save">do_save</label>
+        </span>
+        <span>
+            <input type="checkbox" id="do_analyze" name="do_analyze"  {% if cfg.do_analyze == 1 %}checked{% endif %} />
+            <label for="do_analyze">do_analyze</label>
+        </span>
+        <span>
+            <input type="checkbox" id="do_screenshot" name="do_screenshot" {% if cfg.do_screenshot == 1 %}checked{% endif %} />
+            <label for="do_screenshot">do_screenshot</label>
+        </span>
+        <span>
+        <form action="set_tick" method="get">                
+            <input  style="width:300px"  type="range" class="form-range" min="0" max="1" id="pi_input" name="tick" id="tick" step="any" value={{ cfg.value }}><br>                   
+            <label for="pi_input"><output id="value"></output></label>                
+        </form>   
+        
+        </span>
+
+    </fieldset>
+    <br><br>
+
+    <h1>Jamming bot</h1>
+
+
+</div>
+
+
+
+
+<script>
+    var counter = 0;
+    var start_time = (new Date).getTime()
+
+    var socket = io();
+    socket.on('connect', function() {  
+        window.setInterval(function () {
+            counter += 1
+            socket.emit('my_ping');
+        }, 250);
+    });
+
+    socket.on('my_pong', function () {
+        const latency = (new Date).getTime() - start_time;
+        $('#latency').html(latency);
+        $('#counter').html(counter);
+    });
+
+    const do_pass = document.querySelector("#do_pass");
+    do_pass.addEventListener("input", (event) => {
+        socket.emit('do_pass', (event.target.checked)?1.:0.);
+    });
+
+    const do_geo = document.querySelector("#do_geo");
+    do_geo.addEventListener("input", (event) => {
+        socket.emit('do_geo', (event.target.checked)?1.:0.);
+    });
+
+    const do_save = document.querySelector("#do_save");
+    do_save.addEventListener("input", (event) => {
+        socket.emit('do_save', (event.target.checked)?1.:0.);
+    });
+
+    const do_analyze = document.querySelector("#do_analyze");
+    do_analyze.addEventListener("input", (event) => {
+        socket.emit('do_analyze', (event.target.checked)?1.:0.);
+    });
+
+    const do_screenshot = document.querySelector("#do_screenshot");
+    do_screenshot.addEventListener("input", (event) => {
+        socket.emit('do_screenshot', (event.target.checked)?1.:0.);
+    });
+
+    const value = document.querySelector("#value");
+    const input = document.querySelector("#pi_input");
+    value.textContent = input.value;
+    input.addEventListener("input", (event) => {
+        value.textContent = event.target.value;
+        socket.emit('value', parseFloat(event.target.value));
+    });
+
+    socket.on('disconnect', function() {
+        console.log('Disconnected from server');
+    });
+
+</script>
+
+
+
+
+
+
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-6 offset-3">
+
+        
+            <div class="card" style="float:left">
+                <div class="card-body">
+                    <form action="add_wait_job" method="get">
+                        <td><a href="/add_wait_job/15" class="btn btn-sm btn-primary">Enqueue wait job</a></td>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card" style="float:left">
+                <div class="card-body">
+                    <form action="/add_analyze_job/" method="post">
+                        <input name="text" id="text" value="Telegram bot parsing" />
+                        <td><input type="submit" value="analyze"  class="btn btn-sm btn-primary"></td>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+
+
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-NSBDJ2XRN8"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-NSBDJ2XRN8');
+    </script>
+
+</div>
+</body>

@@ -1,0 +1,761 @@
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: html-renderer
+spec:
+  replicas: 2 # Запускаем два пода для отказоустойчивости
+  selector:
+    matchLabels:
+      app: html-renderer
+  template:
+    metadata:
+      labels:
+        app: html-renderer
+    spec:
+      containers:
+      - name: renderer
+        image: 1325gy/my_dev:v5 # Python + Playwright версия
+        imagePullPolicy: Never  # Используем локальный образ, импортированный в k3s
+        ports:
+        - containerPort: 3000
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "1"
+            memory: "2Gi"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 20
+        volumeMounts:
+        - name: dshm
+          mountPath: /dev/shm
+      volumes:
+      - name: dshm
+        emptyDir:
+          medium: Memory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: html-renderer-service
+spec:
+  type: ClusterIP
+  selector:
+    app: html-renderer
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 3000
+---
+# ===================== keywords-service =====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keywords-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keywords-service
+  template:
+    metadata:
+      labels:
+        app: keywords-service
+    spec:
+      containers:
+      - name: keywords-service
+        image: keywords-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 7771
+        resources:
+          requests:
+            cpu: "125m"
+            memory: "128Mi"
+          limits:
+            cpu: "250m"
+            memory: "256Mi"
+        readinessProbe:
+          tcpSocket:
+            port: 7771
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 7771
+          initialDelaySeconds: 20
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keywords-service
+spec:
+  type: ClusterIP
+  selector:
+    app: keywords-service
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 7771
+---
+# ===================== semantic-service =====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: semantic-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: semantic-service
+  template:
+    metadata:
+      labels:
+        app: semantic-service
+    spec:
+      containers:
+      - name: semantic-service
+        image: semantic-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8005
+        command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8005"]
+        env:
+        - name: DATABASE_URI
+          value: "postgresql://tags_db_username:tags_db_password@tags-db:5432/tags_db_dev"
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+        readinessProbe:
+          tcpSocket:
+            port: 8005
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 8005
+          initialDelaySeconds: 30
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: semantic-service
+spec:
+  type: ClusterIP
+  selector:
+    app: semantic-service
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8005
+---
+# ===================== storage-service =====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: storage-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: storage-service
+  template:
+    metadata:
+      labels:
+        app: storage-service
+    spec:
+      containers:
+      - name: storage-service
+        image: storage-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 7781
+        command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7781"]
+        resources:
+          requests:
+            cpu: "125m"
+            memory: "128Mi"
+          limits:
+            cpu: "250m"
+            memory: "256Mi"
+        readinessProbe:
+          tcpSocket:
+            port: 7781
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 7781
+          initialDelaySeconds: 20
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: storage-service
+spec:
+  type: ClusterIP
+  selector:
+    app: storage-service
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 7781
+---
+# ===================== tags-service =====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tags-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tags-service
+  template:
+    metadata:
+      labels:
+        app: tags-service
+    spec:
+      containers:
+      - name: tags-service
+        image: tags-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8000
+        command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+        env:
+        - name: DATABASE_URI
+          value: "postgresql://tags_db_username:tags_db_password@tags-db:5432/tags_db_dev"
+        resources:
+          requests:
+            cpu: "125m"
+            memory: "128Mi"
+          limits:
+            cpu: "250m"
+            memory: "256Mi"
+        readinessProbe:
+          tcpSocket:
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tags-service
+spec:
+  type: ClusterIP
+  selector:
+    app: tags-service
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+---
+# ===================== tags-db (PostgreSQL) =====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tags-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tags-db
+  template:
+    metadata:
+      labels:
+        app: tags-db
+    spec:
+      containers:
+      - name: tags-db
+        image: postgres:12.1-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_USER
+          value: "tags_db_username"
+        - name: POSTGRES_PASSWORD
+          value: "tags_db_password"
+        - name: POSTGRES_DB
+          value: "tags_db_dev"
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        readinessProbe:
+          tcpSocket:
+            port: 5432
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 5432
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        volumeMounts:
+        - name: pg-data
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: pg-data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tags-db
+spec:
+  type: ClusterIP
+  selector:
+    app: tags-db
+  ports:
+  - protocol: TCP
+    port: 5432
+    targetPort: 5432
+---
+# ===================== redis =====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            cpu: "125m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        readinessProbe:
+          tcpSocket:
+            port: 6379
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 6379
+          initialDelaySeconds: 10
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+  - protocol: TCP
+    port: 6379
+    targetPort: 6379
+---
+# ===================== worker-service (rq workers) =====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: worker-service
+  template:
+    metadata:
+      labels:
+        app: worker-service
+    spec:
+      containers:
+      - name: worker
+        image: app-service:latest
+        imagePullPolicy: Never
+        command: ["rq", "worker", "--disable-job-desc-logging", "--url", "redis://redis:6379/0"]
+        env:
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_URL
+          value: "redis://redis:6379/0"
+        - name: TAGS_SERVICE_URL
+          value: "http://tags-service"
+        - name: SEMANTIC_SERVICE_URL
+          value: "http://semantic-service"
+        - name: STORAGE_SERVICE_URL
+          value: "http://storage-service"
+        - name: IP_SERVICE_URL
+          value: "http://ip-service"
+        - name: RENDERER_SERVICE_URL
+          value: "http://html-renderer-service"
+        - name: S3_HOST
+          value: "s3.firstvds.ru"
+        - name: S3_PORT
+          value: "443"
+        - name: S3_ACCESS_KEY
+          value: "8OGGVB8NPOIVXBN87IXJ"
+        - name: S3_SECRET_KEY
+          value: "ihIVGhzf1Dq7ESqmGLD42eRyCMeQ8uUnBe5Q4e4V"
+        - name: S3_BUCKET_NAME
+          value: "steps"
+        resources:
+          requests:
+            cpu: "125m"
+            memory: "128Mi"
+          limits:
+            cpu: "250m"
+            memory: "256Mi"
+---
+# ===================== bot-service =====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bot-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bot-service
+  template:
+    metadata:
+      labels:
+        app: bot-service
+    spec:
+      containers:
+      - name: bot-service
+        image: bot-service:latest
+        imagePullPolicy: Never
+        env:
+        - name: SHHH_API_KEY
+          value: "1704471935:AAFFqVM3qu8dkjkO0Feg00vR-WSw_4rJJC0"
+        - name: SHHH_MY_CHAT_ID
+          value: "218014682"
+        - name: SHHH_SENTRY_URL
+          value: "https://74f2e249c0ff771f90f0f69560153ed0@o4508353081573376.ingest.de.sentry.io/4508353103003728"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: FLASK_HOST
+          value: "app-service"
+        - name: FLASK_PORT
+          value: "80"
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+---
+# ===================== ip-service =====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ip-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ip-service
+  template:
+    metadata:
+      labels:
+        app: ip-service
+    spec:
+      containers:
+      - name: ip-service
+        image: ip-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8004
+        command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8004"]
+        env:
+        - name: DATABASE_URI
+          value: "postgresql://tags_db_username:tags_db_password@tags-db:5432/tags_db_dev"
+        resources:
+          requests:
+            cpu: "125m"
+            memory: "128Mi"
+          limits:
+            cpu: "250m"
+            memory: "256Mi"
+        readinessProbe:
+          tcpSocket:
+            port: 8004
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 8004
+          initialDelaySeconds: 20
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ip-service
+spec:
+  type: ClusterIP
+  selector:
+    app: ip-service
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8004
+---
+# ===================== app-service (Flask) =====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-service
+  template:
+    metadata:
+      labels:
+        app: app-service
+    spec:
+      containers:
+      - name: app-service
+        image: app-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 5000
+          hostPort: 5000
+        env:
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_URL
+          value: "redis://redis:6379/0"
+        - name: TAGS_SERVICE_URL
+          value: "http://tags-service"
+        - name: SEMANTIC_SERVICE_URL
+          value: "http://semantic-service"
+        - name: STORAGE_SERVICE_URL
+          value: "http://storage-service"
+        - name: IP_SERVICE_URL
+          value: "http://ip-service"
+        - name: RENDERER_SERVICE_URL
+          value: "http://html-renderer-service"
+        - name: S3_HOST
+          value: "s3.firstvds.ru"
+        - name: S3_PORT
+          value: "443"
+        - name: S3_ACCESS_KEY
+          value: "8OGGVB8NPOIVXBN87IXJ"
+        - name: S3_SECRET_KEY
+          value: "ihIVGhzf1Dq7ESqmGLD42eRyCMeQ8uUnBe5Q4e4V"
+        - name: S3_BUCKET_NAME
+          value: "steps"
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        readinessProbe:
+          tcpSocket:
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 5000
+          initialDelaySeconds: 20
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-service
+spec:
+  type: ClusterIP
+  selector:
+    app: app-service
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5000
+---
+# ===================== Traefik StripPrefix Middleware =====================
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-keywords
+spec:
+  stripPrefix:
+    prefixes:
+      - /keywords
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-semantic
+spec:
+  stripPrefix:
+    prefixes:
+      - /semantic
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-storage
+spec:
+  stripPrefix:
+    prefixes:
+      - /storage
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-tags
+spec:
+  stripPrefix:
+    prefixes:
+      - /tags
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-ip
+spec:
+  stripPrefix:
+    prefixes:
+      - /ip
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-app
+spec:
+  stripPrefix:
+    prefixes:
+      - /app
+---
+# ===================== Ingress =====================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: html-renderer-ingress
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: default-strip-keywords@kubernetescrd,default-strip-semantic@kubernetescrd,default-strip-storage@kubernetescrd,default-strip-tags@kubernetescrd,default-strip-ip@kubernetescrd,default-strip-app@kubernetescrd
+spec:
+  rules:
+    - http:
+        paths:
+        - path: /render
+          pathType: Prefix
+          backend:
+            service:
+              name: html-renderer-service
+              port:
+                number: 80
+        - path: /keywords
+          pathType: Prefix
+          backend:
+            service:
+              name: keywords-service
+              port:
+                number: 80
+        - path: /semantic
+          pathType: Prefix
+          backend:
+            service:
+              name: semantic-service
+              port:
+                number: 80
+        - path: /storage
+          pathType: Prefix
+          backend:
+            service:
+              name: storage-service
+              port:
+                number: 80
+        - path: /tags
+          pathType: Prefix
+          backend:
+            service:
+              name: tags-service
+              port:
+                number: 80
+        - path: /ip
+          pathType: Prefix
+          backend:
+            service:
+              name: ip-service
+              port:
+                number: 80
+        - path: /app
+          pathType: Prefix
+          backend:
+            service:
+              name: app-service
+              port:
+                number: 80
+---
+# ===================== app subdomain Ingress =====================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-subdomain-ingress
+spec:
+  rules:
+    - host: app.jamming-bot.arthew0.online
+      http:
+        paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: app-service
+              port:
+                number: 80

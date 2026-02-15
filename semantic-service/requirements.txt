@@ -1,0 +1,7 @@
+asyncpg
+fastapi[all]
+uvicorn
+httpx
+# Pin NumPy below 2.0 to avoid ABI incompatibility with spaCy/thinc 3.5.x
+numpy<2.0.0
+spacy==3.5.4

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>jammingbot : console</title>
+    <meta http-equiv="refresh" content="4" />
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://bootswatch.com/4/cyborg/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
+    <!--<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script> -->
+</head>
+<body>
+
+
+
+<div class="jumbotron text-center">
+    
+    <div  class="col-md-6 offset-3">
+        <a href="/">counter:<span id="counter"></span> | latency:<span id="latency"></span></a>
+    </div>
+
+
+
+    <h1>Jamming bot</h1>
+
+
+</div>
+
+
+<script>
+    var counter = 0;
+    var start_time = (new Date).getTime()
+
+    var socket = io();
+    socket.on('connect', function() {  
+        window.setInterval(function () {
+            counter += 1
+            socket.emit('my_ping');
+        }, 250);
+    });
+
+    socket.on('my_pong', function () {
+        const latency = (new Date).getTime() - start_time;
+        $('#latency').html(latency);
+        $('#counter').html(counter);
+    });
+
+    const do_pass = document.querySelector("#do_pass");
+    do_pass.addEventListener("input", (event) => {
+        socket.emit('do_pass', (event.target.checked)?1.:0.);
+    });
+
+    const do_geo = document.querySelector("#do_geo");
+    do_geo.addEventListener("input", (event) => {
+        socket.emit('do_geo', (event.target.checked)?1.:0.);
+    });
+
+    const do_save = document.querySelector("#do_save");
+    do_save.addEventListener("input", (event) => {
+        socket.emit('do_save', (event.target.checked)?1.:0.);
+    });
+
+    const do_analyze = document.querySelector("#do_analyze");
+    do_analyze.addEventListener("input", (event) => {
+        socket.emit('do_analyze', (event.target.checked)?1.:0.);
+    });
+
+    const value = document.querySelector("#value");
+    const input = document.querySelector("#pi_input");
+    value.textContent = input.value;
+    input.addEventListener("input", (event) => {
+        value.textContent = event.target.value;
+        socket.emit('value', parseFloat(event.target.value));
+    });
+
+    socket.on('disconnect', function() {
+        console.log('Disconnected from server');
+    });
+
+</script>
+
+
+
+
+
+
+<div class="container mt-5">
+
+
+
+
+
+    <div class="row mt-3">
+        <div class="col-md-12">
+            <h3>Job list</h3>
+            <p>Finished and failed jobs will linger around until their result_ttl or failure_ttl has expired and they will be deleted.</p>
+            <table class="table">
+                <thead><tr>
+                    <th>State</th>
+                    <th>Id</th>
+                    <th>Type</th>
+                    <th style="width: 20%;">Meta</th>
+                    <th>Result</th>
+                    <th>Actions</th>
+                </tr></thead>
+                <tbody>
+                    {% for job in joblist %}
+                    <tr>
+                       <td><span class="badge {{ {'finished': 'badge-success', 'started': 'badge-info', 'failed': 'badge-danger'}[job.state] | default('badge-dark') }}">{{ job.state }}</td>
+                       <td style="font-size: 12px;">{{ job.id }}</td>
+                       <td>{{ job.type }}</td>
+                       <td>
+                           <div class="progress" style="height: 24px;">
+                              <div class="progress-bar" role="progressbar" style="width: {{ job.progress.percent }}%;">{{ job.progress.iteration }}/{{ job.progress.num_iterations }}</div>
+                            </div>
+                       </td>
+                       <td style="font-size: 14px;">{{ job.result }}</td>
+                       <td><a href="/delete_job/{{ job.id }}" class="btn btn-sm btn-primary">Delete</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+
+
+</div>
+
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-NSBDJ2XRN8"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-NSBDJ2XRN8');
+    </script>
+
+</body>

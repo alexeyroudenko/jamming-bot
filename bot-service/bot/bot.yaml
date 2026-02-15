@@ -1,0 +1,36 @@
+version: "2.1.0"
+is_active: True
+#osc_adress: "10.0.0.255"
+osc_adress: "192.168.0.101"
+#osc_adress: "239.255.255.255"
+
+src_url: 'https://arthew0.online/'
+start_url: 'https://arthew0.online/blog/2023-11_jamming_bot/'
+
+count_per_domain: 40
+sleep_time: 5.0
+color_log: True
+resolve_coords: False
+resume_at_restart: False
+max_errors: 100000
+
+send_osc: True
+send_step: True
+send_events: False
+send_sublinks: False
+log_events: False
+
+do_save_html: False
+#do_save_text: False
+#do_save_info: False
+
+
+receive_events:  True
+
+step_url: "http://flask:5000/bot/step/"
+event_url: "http://flask:5000/bot/events"
+sublink_url: "http://flask:5000/bot/sublink/add/"
+
+# step_url: "http://node_red:1880/bot/step/"
+# event_url: "http://node_red:1880/bot/events"
+# sublink_url: "http://node_red:1880/bot/sublink/add/"
