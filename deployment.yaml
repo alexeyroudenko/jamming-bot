@@ -605,12 +605,12 @@ spec:
         readinessProbe:
           tcpSocket:
             port: 5000
-          initialDelaySeconds: 10
+          initialDelaySeconds: 60
           periodSeconds: 10
         livenessProbe:
           tcpSocket:
             port: 5000
-          initialDelaySeconds: 20
+          initialDelaySeconds: 90
           periodSeconds: 20
 ---
 apiVersion: v1

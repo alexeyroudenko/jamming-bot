@@ -45,7 +45,7 @@ EXPOSE 5000
 EXPOSE 9999
 
 # Define environment variable
-ENV NAME World
+ENV NAME=World
 
 #This command will copy the files and source code required to run the application
 COPY flask/ /app

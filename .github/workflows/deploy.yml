@@ -89,7 +89,7 @@ jobs:
             kubectl rollout status deployment/tags-service --timeout=120s
             kubectl rollout status deployment/bot-service --timeout=120s
             kubectl rollout status deployment/ip-service --timeout=120s
-            kubectl rollout status deployment/app-service --timeout=120s
+            kubectl rollout status deployment/app-service --timeout=300s
             kubectl rollout status deployment/worker-service --timeout=120s
 
             echo ">>> Deployment complete!"
