@@ -625,6 +625,65 @@ spec:
     port: 80
     targetPort: 5000
 ---
+# NodePort service for metrics scraping (Prometheus etc.)
+# Access: http://<node-ip>:30500/metrics or http://jamming-bot.arthew0.online:30500/metrics
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-service-metrics
+spec:
+  type: NodePort
+  selector:
+    app: app-service
+  ports:
+  - protocol: TCP
+    port: 5000
+    targetPort: 5000
+    nodePort: 30500
+---
+# Proxy for LoadBalancer :5000 — forwards TCP 5000 → app-service:80
+# No hostPort: svclb binds 5000, forwards to this pod
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-port5000-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-port5000-proxy
+  template:
+    metadata:
+      labels:
+        app: app-port5000-proxy
+    spec:
+      containers:
+      - name: socat
+        image: alpine/socat
+        args:
+        - "TCP-LISTEN:5000,fork,reuseaddr"
+        - "TCP:app-service:80"
+        ports:
+        - containerPort: 5000
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "16Mi"
+---
+# LoadBalancer to expose port 5000 (for :5000/metrics)
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-metrics-lb
+spec:
+  type: LoadBalancer
+  selector:
+    app: app-port5000-proxy
+  ports:
+  - name: metrics
+    port: 5000
+    targetPort: 5000
+---
 # ===================== Traefik StripPrefix Middleware =====================
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
@@ -742,12 +801,33 @@ spec:
                 number: 80
 ---
 # ===================== app subdomain Ingress =====================
+# Hosts: app.jamming-bot, jamming-bot, b0ts — all serve app-service at root path
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: app-subdomain-ingress
 spec:
   rules:
+    - host: app.jamming-bot.arthew0.online
+      http:
+        paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: app-service
+              port:
+                number: 80
+    - host: jamming-bot.arthew0.online
+      http:
+        paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: app-service
+              port:
+                number: 80
     - host: b0ts.arthew0.online
       http:
         paths:
