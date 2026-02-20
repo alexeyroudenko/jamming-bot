@@ -1688,13 +1688,17 @@ if (false) {
 let showGraph = true;
 
 function showGraphView() {
-    document.getElementById('graph-container').style.display = 'block';
-    document.getElementById('semantic-cloud-container').style.display = 'none';
+    var graphEl = document.getElementById('graph-container');
+    var cloudEl = document.getElementById('semantic-cloud-container');
+    if (graphEl) graphEl.style.display = 'block';
+    if (cloudEl) cloudEl.style.display = 'none';
 }
 
 function showSemanticCloudView() {
-    document.getElementById('graph-container').style.display = 'none';
-    document.getElementById('semantic-cloud-container').style.display = 'block';
+    var graphEl = document.getElementById('graph-container');
+    var cloudEl = document.getElementById('semantic-cloud-container');
+    if (graphEl) graphEl.style.display = 'none';
+    if (cloudEl) cloudEl.style.display = 'block';
 }
 
 // Автоматическое переключение каждую минуту

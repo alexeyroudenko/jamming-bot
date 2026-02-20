@@ -468,7 +468,7 @@ class NetSpider():
             steps_forwards_result = await self.database.fetch_one(query=steps_forwards_query)
             steps_forwards = steps_forwards_result[0] if steps_forwards_result else 0
             self.notify_about_eventp("steps_forwards", steps_forwards)
-            logging.info(f"steps_forwards {steps_forwards}")
+            # logging.info(f"steps_forwards {steps_forwards}")
                    
             url_id = rows[0][0]
             # domain = get_second_level_domain(rows[0][1])

@@ -24,7 +24,7 @@ TAGS_SERVICE_URL = os.getenv('TAGS_SERVICE_URL', 'http://tags_service:8000')
 SEMANTIC_SERVICE_URL = os.getenv('SEMANTIC_SERVICE_URL', 'http://semantic_service:8005')
 STORAGE_SERVICE_URL = os.getenv('STORAGE_SERVICE_URL', 'http://storage_service:7781')
 IP_SERVICE_URL = os.getenv('IP_SERVICE_URL', 'http://bots.arthew0.online:8004')
-RENDERER_SERVICE_URL = os.getenv('RENDERER_SERVICE_URL', 'http://html-renderer-service')
+RENDERER_SERVICE_URL = os.getenv('RENDERER_SERVICE_URL', 'http://html-renderer-service:3000')
 SVC_NAME = os.getenv("SVC_NAME", "jobs service")
 
 # S3 configuration
