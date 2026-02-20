@@ -106,7 +106,7 @@ services:
   ip_service:
     build: ./ip-service
     container_name: ip_service
-    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8004
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8004
     restart: unless-stopped
     volumes:
       - ./ip-service/:/app/
@@ -128,7 +128,7 @@ services:
   semantic_service:
     build: ./semantic-service
     container_name: semantic_service
-    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8005
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8005
     restart: unless-stopped
     volumes:
       - ./semantic-service/:/app/
@@ -177,7 +177,7 @@ services:
     build: ./tags-service
     restart: unless-stopped
     container_name: tags_service
-    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     volumes:
       - ./tags-service/:/app/
     ports:
@@ -222,7 +222,7 @@ services:
       - ./data:/usr/src/app/data
     ports:
       - 7781:7781
-    command: uvicorn main:app --reload --host 0.0.0.0 --port 7781
+    command: uvicorn main:app --host 0.0.0.0 --port 7781
     networks:
       - app_network          
 
