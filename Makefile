@@ -96,4 +96,5 @@ k3s-all: k3s-html-renderer k3s-keywords-service k3s-semantic-service k3s-storage
 
 .PHONY: k3s-apply
 k3s-apply:
+	@test -f k8s-secrets.yaml && kubectl apply -f k8s-secrets.yaml || echo "WARN: k8s-secrets.yaml not found — create it from k8s-secrets.yaml.template"
 	kubectl apply -f deployment.yaml

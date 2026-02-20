@@ -13,6 +13,7 @@ rnd/txt*
 adapter/node_modules/*
 # env vars
 .env
+k8s-secrets.yaml
 .local/
 logs/
 

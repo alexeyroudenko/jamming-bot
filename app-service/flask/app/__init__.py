@@ -24,7 +24,7 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 # SVC_NAME = os.getenv("SVC_NAME", "app-service")
 SVC_NAME = "app-service"
-SENTRY_DSN = "https://74f2e249c0ff771f90f0f69560153ed0@o4508353081573376.ingest.de.sentry.io/4508353103003728"
+SENTRY_DSN = os.getenv('SENTRY_DSN', '')
 
 if SENTRY_DSN:
     logging_integration = LoggingIntegration(

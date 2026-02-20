@@ -10,23 +10,26 @@ import os
 import sentry_sdk
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from sentry_sdk.integrations.fastapi import FastApiIntegration
-sentry_sdk.init(
-    dsn="https://74f2e249c0ff771f90f0f69560153ed0@o4508353081573376.ingest.de.sentry.io/4508353103003728",
-    integrations=[
-        StarletteIntegration(
-            transaction_style="endpoint",
-            failed_request_status_codes={403, *range(500, 599)},
-            http_methods_to_capture=("GET",),
-        ),
-        FastApiIntegration(
-            transaction_style="endpoint",
-            failed_request_status_codes={403, *range(500, 599)},
-            http_methods_to_capture=("GET",),
-        ),
-    ],
-    enable_logs=True,
-    traces_sample_rate=1.0,
-)
+
+SENTRY_DSN = os.getenv('SENTRY_DSN', '')
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[
+            StarletteIntegration(
+                transaction_style="endpoint",
+                failed_request_status_codes={403, *range(500, 599)},
+                http_methods_to_capture=("GET",),
+            ),
+            FastApiIntegration(
+                transaction_style="endpoint",
+                failed_request_status_codes={403, *range(500, 599)},
+                http_methods_to_capture=("GET",),
+            ),
+        ],
+        enable_logs=True,
+        traces_sample_rate=1.0,
+    )
 
 
 logger = logging.getLogger("tags_service")

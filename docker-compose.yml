@@ -6,6 +6,12 @@ services:
     restart: unless-stopped
     ports:
       - "7001:7001"
+    environment:
+      - SHHH_SENTRY_URL=${SHHH_SENTRY_URL}
+      - SHHH_API_KEY=${SHHH_API_KEY}
+      - SHHH_MY_CHAT_ID=${SHHH_MY_CHAT_ID}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     volumes:
       - type: bind
         source: ./bot-service/bot
@@ -49,6 +55,13 @@ services:
     ports:
       - "5000:5000"
     command: python app.py
+    environment:
+      - SENTRY_DSN=${SHHH_SENTRY_URL}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - S3_HOST=${S3_HOST}
+      - S3_PORT=${S3_PORT}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
     volumes:
       - type: bind
         source: ./app-service/flask
@@ -103,7 +116,7 @@ services:
     ports:
       - 8004:8004
     environment:
-      - DATABASE_URI=postgresql://tags_db_username:tags_db_password@tags_db/tags_db_dev
+      - DATABASE_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@tags_db/tags_db_dev
     networks:
       - app_network
     deploy:
@@ -125,7 +138,7 @@ services:
     ports:
       - 8005:8005
     environment:
-      - DATABASE_URI=postgresql://tags_db_username:tags_db_password@tags_db/tags_db_dev
+      - DATABASE_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@tags_db/tags_db_dev
     networks:
       - app_network
     depends_on:
@@ -170,8 +183,9 @@ services:
     ports:
       - 8003:8000
     environment:
-      - DATABASE_URI=postgresql://tags_db_username:tags_db_password@tags_db/tags_db_dev
+      - DATABASE_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@tags_db/tags_db_dev
       - CAST_SERVICE_HOST_URL=http://tags_service:8000/api/v1/casts/
+      - SENTRY_DSN=${SHHH_SENTRY_URL}
     networks:
       - app_network
     depends_on:
@@ -221,8 +235,8 @@ services:
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_USER=tags_db_username
-      - POSTGRES_PASSWORD=tags_db_password
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=tags_db_dev
     networks:
       - app_network

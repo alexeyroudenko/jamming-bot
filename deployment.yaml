@@ -140,7 +140,10 @@ spec:
         command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8005"]
         env:
         - name: DATABASE_URI
-          value: "postgresql://tags_db_username:tags_db_password@tags-db:5432/tags_db_dev"
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: DATABASE_URI
         resources:
           requests:
             cpu: "250m"
@@ -249,7 +252,15 @@ spec:
         command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
         env:
         - name: DATABASE_URI
-          value: "postgresql://tags_db_username:tags_db_password@tags-db:5432/tags_db_dev"
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: DATABASE_URI
+        - name: SENTRY_DSN
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: SHHH_SENTRY_URL
         resources:
           requests:
             cpu: "125m"
@@ -303,9 +314,15 @@ spec:
         - containerPort: 5432
         env:
         - name: POSTGRES_USER
-          value: "tags_db_username"
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: POSTGRES_USER
         - name: POSTGRES_PASSWORD
-          value: "tags_db_password"
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: POSTGRES_PASSWORD
         - name: POSTGRES_DB
           value: "tags_db_dev"
         resources:
@@ -438,9 +455,20 @@ spec:
         - name: S3_PORT
           value: "443"
         - name: S3_ACCESS_KEY
-          value: "8OGGVB8NPOIVXBN87IXJ"
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: S3_ACCESS_KEY
         - name: S3_SECRET_KEY
-          value: "ihIVGhzf1Dq7ESqmGLD42eRyCMeQ8uUnBe5Q4e4V"
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: S3_SECRET_KEY
+        - name: SENTRY_DSN
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: SHHH_SENTRY_URL
         - name: S3_BUCKET_NAME
           value: "steps"
         resources:
@@ -472,11 +500,17 @@ spec:
         imagePullPolicy: Never
         env:
         - name: SHHH_API_KEY
-          value: "1704471935:AAFFqVM3qu8dkjkO0Feg00vR-WSw_4rJJC0"
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: SHHH_API_KEY
         - name: SHHH_MY_CHAT_ID
           value: "218014682"
         - name: SHHH_SENTRY_URL
-          value: "https://74f2e249c0ff771f90f0f69560153ed0@o4508353081573376.ingest.de.sentry.io/4508353103003728"
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: SHHH_SENTRY_URL
         - name: PYTHONUNBUFFERED
           value: "1"
         - name: REDIS_HOST
@@ -519,7 +553,10 @@ spec:
         command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8004"]
         env:
         - name: DATABASE_URI
-          value: "postgresql://tags_db_username:tags_db_password@tags-db:5432/tags_db_dev"
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: DATABASE_URI
         resources:
           requests:
             cpu: "125m"
@@ -594,9 +631,20 @@ spec:
         - name: S3_PORT
           value: "443"
         - name: S3_ACCESS_KEY
-          value: "8OGGVB8NPOIVXBN87IXJ"
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: S3_ACCESS_KEY
         - name: S3_SECRET_KEY
-          value: "ihIVGhzf1Dq7ESqmGLD42eRyCMeQ8uUnBe5Q4e4V"
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: S3_SECRET_KEY
+        - name: SENTRY_DSN
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: SHHH_SENTRY_URL
         - name: S3_BUCKET_NAME
           value: "steps"
         resources:
