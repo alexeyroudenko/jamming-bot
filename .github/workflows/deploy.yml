@@ -70,26 +70,28 @@ jobs:
             echo ">>> Applying Kubernetes manifests..."
             kubectl apply -f deployment.yaml
 
+            NS="jamming-bot"
+
             echo ">>> Restarting deployments for rolling update..."
-            kubectl rollout restart deployment html-renderer
-            kubectl rollout restart deployment keywords-service
-            kubectl rollout restart deployment semantic-service
-            kubectl rollout restart deployment storage-service
-            kubectl rollout restart deployment tags-service
-            kubectl rollout restart deployment bot-service
-            kubectl rollout restart deployment ip-service
-            kubectl rollout restart deployment app-service
-            kubectl rollout restart deployment worker-service
+            kubectl -n $NS rollout restart deployment html-renderer
+            kubectl -n $NS rollout restart deployment keywords-service
+            kubectl -n $NS rollout restart deployment semantic-service
+            kubectl -n $NS rollout restart deployment storage-service
+            kubectl -n $NS rollout restart deployment tags-service
+            kubectl -n $NS rollout restart deployment bot-service
+            kubectl -n $NS rollout restart deployment ip-service
+            kubectl -n $NS rollout restart deployment app-service
+            kubectl -n $NS rollout restart deployment worker-service
 
             echo ">>> Waiting for rollouts..."
-            kubectl rollout status deployment/keywords-service --timeout=120s
-            kubectl rollout status deployment/semantic-service --timeout=120s
-            kubectl rollout status deployment/storage-service --timeout=120s
-            kubectl rollout status deployment/tags-service --timeout=120s
-            kubectl rollout status deployment/bot-service --timeout=120s
-            kubectl rollout status deployment/ip-service --timeout=120s
-            kubectl rollout status deployment/html-renderer --timeout=300s
-            kubectl rollout status deployment/app-service --timeout=300s
-            kubectl rollout status deployment/worker-service --timeout=120s
+            kubectl -n $NS rollout status deployment/keywords-service --timeout=120s
+            kubectl -n $NS rollout status deployment/semantic-service --timeout=120s
+            kubectl -n $NS rollout status deployment/storage-service --timeout=120s
+            kubectl -n $NS rollout status deployment/tags-service --timeout=120s
+            kubectl -n $NS rollout status deployment/bot-service --timeout=120s
+            kubectl -n $NS rollout status deployment/ip-service --timeout=120s
+            kubectl -n $NS rollout status deployment/html-renderer --timeout=300s
+            kubectl -n $NS rollout status deployment/app-service --timeout=300s
+            kubectl -n $NS rollout status deployment/worker-service --timeout=120s
 
             echo ">>> Deployment complete!"
