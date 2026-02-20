@@ -1,21 +1,20 @@
 #
 #   project/server/main/tasks.py
 #
+import os
+import sys
+import time
+import json
+import glob
+import logging
+import re
+
+import requests
+import sentry_sdk
+from sentry_sdk.integrations.logging import LoggingIntegration
 from rq.decorators import job
 from rq import get_current_job
 from rq_helpers import redis_connection
-import time
-import json
-import requests
-import glob
-import logging
-import sys
-
-
-import os
-import sentry_sdk
-from sentry_sdk.integrations.logging import LoggingIntegration
-import logging
 
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
@@ -65,7 +64,6 @@ logger.info(f"Sentry initialized for environment: {ENVIRONMENT}" if SENTRY_DSN e
 
 
 
-import re
 def remove_html_tags(text):
     clean_text = re.sub(r'<.*?>', '', text)
     return clean_text
@@ -86,8 +84,6 @@ def remove_special_characters(text):
     return clean_text
 
 
-import requests
-
 @job('default', connection=redis_connection, timeout=600, result_ttl=600)
 def clean_tags():
     self_job = get_current_job()
@@ -96,7 +92,7 @@ def clean_tags():
     num_iterations = 2000
     
     url_short = f"{TAGS_SERVICE_URL}/api/v1/tags/tags/group/"
-    response = requests.get(url_short)
+    response = requests.get(url_short, timeout=30)
     
     self_job = get_current_job() 
     self_job.meta['type'] = "responced"
@@ -120,7 +116,7 @@ def clean_tags():
         self_job.meta['type'] = "active"
         idd = t['id']
         urld = f"{TAGS_SERVICE_URL}/api/v1/tags/{idd}/"
-        r = requests.delete(urld)
+        r = requests.delete(urld, timeout=15)
         time.sleep(.001)
         self_job.meta['progress'] = {
             'num_iterations': num_iterations,
@@ -130,13 +126,13 @@ def clean_tags():
         self_job.save_meta()
     
     url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
-    response = requests.get(url)
+    response = requests.get(url, timeout=30)
     r = response.json()
     num_iterations = len(r)
     for i, t in enumerate(r):
         idd = t['id']
         urld = f"{TAGS_SERVICE_URL}/api/v1/tags/{idd}/"
-        r = requests.delete(urld)
+        r = requests.delete(urld, timeout=15)
         time.sleep(.001)
         self_job = get_current_job() 
         self_job.meta['progress'] = {
@@ -287,10 +283,6 @@ def dostep(step):
         # print("hrases:", hrases)
         
 
-        # semantic analyze 2
-        # 
-        import json
-        import requests                       
         url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
         headers = {'content-type': 'application/json'}
         rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
@@ -334,24 +326,22 @@ def dostep(step):
 
 
     sentry_sdk.logger.info(f"semantic_service write {step['step']} to store")
-    #
-    # write to file
-    #
-    import json
-    import requests
+
     url = f"{STORAGE_SERVICE_URL}/store"
     headers = {'content-type': 'application/json'}
-    step['text'] 
-    step['text'] = text    
-    del step['headers'] 
-    del step['src_url']
-    del step['current_url'] 
-    del step['step']
-    response = requests.post(url, data=json.dumps(step), headers=headers)
+    step['text'] = text
+    step_number_val = step.pop('step', None)
+    step.pop('headers', None)
+    step.pop('src_url', None)
+    step.pop('current_url', None)
     try:
+        response = requests.post(url, data=json.dumps(step), headers=headers, timeout=30)
         r = response.json()
-    except Exception:
-        r = {"raw": response.text}
+    except Exception as e:
+        logger.warning(f"Storage service error: {e}")
+        r = {"error": str(e)}
+    if step_number_val is not None:
+        step['step'] = step_number_val
 
 
 
@@ -430,22 +420,20 @@ def do_geo(ip):
     location['longitude'] = 0
     location['error'] = ""
     try:
-
-        import json
-        import requests
         url = f"{IP_SERVICE_URL}/api/v1/ip/{ip}/"
         headers = {'content-type': 'application/json'}
-        data = {'ip': ip}
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
         geo = response.json()
 
-        location['city'] = geo['city']
-        location['latitude'] = geo['latitude']
-        location['longitude'] = geo['longitude']
-        location['error'] = geo['error']
-        
+        location['city'] = geo.get('city', '')
+        location['latitude'] = geo.get('latitude', 0)
+        location['longitude'] = geo.get('longitude', 0)
+        location['error'] = geo.get('error', '')
+
     except Exception as e:
-        error = str(e)
+        location['error'] = str(e)
+        logger.warning(f"do_geo failed for {ip}: {e}")
     
     self_job = get_current_job()    
     self_job.meta['progress'] = {
