@@ -319,8 +319,7 @@ class NetSpider():
     def notify_about_step(self, step: Step):
         if self.send_step:
             try:
-                r = requests.post(STEP_URL, data = step.to_data())            
-                # logging.info(f"url: {STEP_URL}")
+                r = requests.post(STEP_URL, data = step.to_data(), timeout=10)            
             except Exception as e0:
                 logging.error(f"error send step data {STEP_URL}")
                 self.send_step = False
@@ -343,7 +342,7 @@ class NetSpider():
         if self.send_events:
             try:
                 url = EVENT_URL + f"/{event_name}/"
-                r = requests.post(url, {"data": data}, timeout=10)
+                r = requests.post(url, {"data": data}, timeout=3)
                 if r.status_code != 200:
                     logging.warning(f"event {event_name} status {r.status_code} {url}")
             except Exception as e0:
@@ -361,7 +360,7 @@ class NetSpider():
     def notify_about_sublink(self, data):
         if self.send_sublinks:      
             try:      
-                r = requests.post(SUBLINK_URL, data)
+                r = requests.post(SUBLINK_URL, data, timeout=3)
             except Exception as e0:
                 logging.error(f"error send sublink data {SUBLINK_URL}")
                 self.send_sublinks = False
@@ -532,15 +531,6 @@ class NetSpider():
                     #
                     logging.debug(f"start load  {current_url}")
                     
-                    # step_data = {"step":self.step_number, 
-                    #         "src_url": src_url, 
-                    #         "current_url": current_url,
-                    #         "status_code": 0,
-                    #         "headers": {},
-                    #         "link_elements": len({}),
-                    #         "ip":0,
-                    #         "text":""}
-                    
                     response = requests.get(current_url,
                                             headers={
                                                     'Accept-Language': 'en-US, en;q=0.5',
@@ -579,7 +569,7 @@ class NetSpider():
                         self.notify_about_step(self.step)
                         
                     else:                        
-                        self.notify_about_eventp("analyze_page_fix_codepage", response.encoding)                       
+                        self.notify_about_eventp("analyze_page_fix_codepage", response.encoding)
                         html_content = response.content.decode('utf-8')                                                    
 
 
