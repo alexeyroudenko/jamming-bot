@@ -155,17 +155,15 @@ def clean_tags():
 
 @job('default', connection=redis_connection, timeout=90, result_ttl=90)
 def add_tags(tags):
-    tags = {}
-    for w in tags:
-        print(f"tags: {w}")
-        tags = w[0:50]        
-        import json
-        import requests
+    results = []
+    for word in tags:
+        tag_name = str(word)[0:50]
         url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
         headers = {'content-type': 'application/json'}
-        data = {'name': tags, "count": 0}
-        response = requests.post(url, data=json.dumps(data), headers=headers)
-        tags = response.json()
+        data = {'name': tag_name, "count": 0}
+        response = requests.post(url, data=json.dumps(data), headers=headers, timeout=15)
+        results.append(response.json())
+    return results
 
 
 
@@ -195,16 +193,15 @@ def add_tags_from_steps():
         
         url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
         headers = {'content-type': 'application/json'}
-        rr = requests.post(url_semantic, data = json.dumps({"text": text}), headers=headers)                
-        data = rr.json()
-        if "sim" in data.keys(): 
-            sim = rr.json()['sim']
-        
-        for hras in sim:       
+        rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
+        sem_data = rr.json()
+        sim = sem_data.get('sim', [])
+
+        for hras in sim:
             url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
             headers = {'content-type': 'application/json'}
-            data = {'name': hras, "count": 0}
-            response = requests.post(url, data=json.dumps(data), headers=headers)
+            tag_data = {'name': hras, "count": 0}
+            response = requests.post(url, data=json.dumps(tag_data), headers=headers, timeout=15)
         
         self_job = get_current_job()
         self_job.meta['step'] = step
@@ -296,18 +293,17 @@ def dostep(step):
         import requests                       
         url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
         headers = {'content-type': 'application/json'}
-        rr = requests.post(url_semantic, data = json.dumps({"text": text}), headers=headers)                
-        data = rr.json()
-        sentry_sdk.logger.info(f"semantic_service data: {data}")
-        if "sim" in data.keys(): 
-            sim = rr.json()['sim']
-        
-        for hras in sim:       
+        rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
+        sem_data = rr.json()
+        sentry_sdk.logger.info(f"semantic_service data: {sem_data}")
+        sim = sem_data.get('sim', [])
+        words = sim
+
+        for hras in sim:
             url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
             headers = {'content-type': 'application/json'}
-            data = {'name': hras, "count": 0}
-            response = requests.post(url, data=json.dumps(data), headers=headers)
-            words = sim
+            tag_data = {'name': hras, "count": 0}
+            response = requests.post(url, data=json.dumps(tag_data), headers=headers, timeout=15)
         
     self_job.meta['progress'] = {
         'num_iterations': 4,
