@@ -3,6 +3,7 @@ import sys
 import time
 import json
 import logging
+import threading
 import requests
 
 from flask import Flask, Response, Blueprint, jsonify, request, redirect, render_template
@@ -125,6 +126,24 @@ def _ensure_redis_defaults():
         if not redis.get(key):
             redis.set(key, default)
     return {k: float(redis.get(k)) for k in defaults}
+
+
+def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5):
+    """Poll an RQ job in a background thread and emit result via SocketIO."""
+    def _poll():
+        elapsed = 0.0
+        while elapsed < timeout:
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+            job.refresh()
+            if job.is_finished:
+                socketio.emit(event_name, job.result)
+                return
+            if job.is_failed:
+                logger.warning(f"Job {job.id} failed for event {event_name}")
+                return
+        logger.warning(f"Job {job.id} timed out after {timeout}s for event {event_name}")
+    threading.Thread(target=_poll, daemon=True).start()
 
 
 def _tags_response_json(r):
@@ -318,43 +337,25 @@ def step():
         else:
             socketio.emit('step', data)
 
-        # GEO
+        # GEO — fire-and-forget with background poll
         if float(current_cfg['do_geo']) == 1.0:
             send_node_red_event(f"try {data.keys()}")
             if "ip" in data.keys():
                 ip = data['ip']
                 if ip != "0":
                     job = jobs.do_geo.delay(ip)
-                    while True:
-                        time.sleep(0.01)
-                        job.refresh()
-                        if job.is_finished:
-                            socketio.emit('location', job.result)
-                            break
+                    _poll_job_and_emit(job, 'location', timeout=90)
 
-        # ANALYZE
+        # ANALYZE — fire-and-forget with background poll
         if float(current_cfg['do_analyze']) == 1.0:
             html = data.get('html', data.get('text', ''))
             job = jobs.analyze.delay(html)
-            while True:
-                time.sleep(0.01)
-                job.refresh()
-                if job.is_finished:
-                    data['analyzed'] = job.result
-                    socketio.emit('analyzed', job.result)
-                    break
+            _poll_job_and_emit(job, 'analyzed', timeout=90)
 
-        # SCREENSHOT
+        # SCREENSHOT — fire-and-forget with background poll
         if data.get('url'):
             job = jobs.do_screenshot.delay(data)
-            while True:
-                time.sleep(0.01)
-                job.refresh()
-                if job.is_finished:
-                    socketio.emit('screenshot', job.result)
-                    break
-                if job.is_failed:
-                    break
+            _poll_job_and_emit(job, 'screenshot', timeout=120)
 
     return "done"
 
