@@ -211,6 +211,7 @@ def clean_tags():
 
 
 
+
 @http_bp.route("/api/tags/get/", methods=["GET"])
 def get_tags():
     url = f"{TAGS_SERVICE_URL}/api/v1/tags/tags/group/"
