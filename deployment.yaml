@@ -292,6 +292,18 @@ spec:
     port: 80
     targetPort: 8000
 ---
+# ===================== tags-db PVC =====================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tags-db-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
 # ===================== tags-db (PostgreSQL) =====================
 apiVersion: apps/v1
 kind: Deployment
@@ -345,9 +357,11 @@ spec:
         volumeMounts:
         - name: pg-data
           mountPath: /var/lib/postgresql/data
+          subPath: pgdata
       volumes:
       - name: pg-data
-        emptyDir: {}
+        persistentVolumeClaim:
+          claimName: tags-db-pvc
 ---
 apiVersion: v1
 kind: Service
