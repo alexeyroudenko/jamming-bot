@@ -31,7 +31,7 @@ services:
 
 
   redis: 
-    image: redislabs/redismod
+    image: redis:7-alpine
     container_name: redis
     restart: unless-stopped
     ports:
@@ -228,7 +228,7 @@ services:
 
 
   tags_db:
-    image: postgres:12.1-alpine
+    image: postgres:16-alpine
     restart: unless-stopped
     volumes:
       - postgres_data_tags:/var/lib/postgresql/data/
