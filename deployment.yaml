@@ -4,7 +4,12 @@ kind: Deployment
 metadata:
   name: html-renderer
 spec:
-  replicas: 2 # Запускаем два пода для отказоустойчивости
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: html-renderer

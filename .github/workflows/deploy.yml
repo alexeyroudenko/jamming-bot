@@ -82,13 +82,13 @@ jobs:
             kubectl rollout restart deployment worker-service
 
             echo ">>> Waiting for rollouts..."
-            kubectl rollout status deployment/html-renderer --timeout=120s
             kubectl rollout status deployment/keywords-service --timeout=120s
             kubectl rollout status deployment/semantic-service --timeout=120s
             kubectl rollout status deployment/storage-service --timeout=120s
             kubectl rollout status deployment/tags-service --timeout=120s
             kubectl rollout status deployment/bot-service --timeout=120s
             kubectl rollout status deployment/ip-service --timeout=120s
+            kubectl rollout status deployment/html-renderer --timeout=300s
             kubectl rollout status deployment/app-service --timeout=300s
             kubectl rollout status deployment/worker-service --timeout=120s
 
