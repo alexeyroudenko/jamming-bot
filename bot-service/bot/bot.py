@@ -2,28 +2,24 @@
 import os
 import sys
 import csv
-from datetime import datetime
-import time
-from urllib.parse import urlparse
+import json
+import signal
+import asyncio
+import logging
+import mimetypes
 import traceback
+from datetime import datetime
+from urllib.parse import urlparse
+
+import httpx
 import requests
 from bs4 import BeautifulSoup
 from databases import Database
-import asyncio
-
-import json
-
 from tld import get_tld
 import validators
-import signal
-import time
-
-import logging, sys
 import yaml
 from yaml.loader import SafeLoader
-
 from pythonosc import udp_client
-
 import tldextract
 
 config_file = "bot.yaml"
@@ -282,9 +278,8 @@ class NetSpider():
             pass
         
     async def retrieve_stored_links_for_domain(self, current_base_domain):
-        query = f"SELECT * FROM Urls where hostname='{current_base_domain}'" 
-        # logging.info(f"{query}")
-        rows = await self.database.fetch_all(query=query)
+        query = "SELECT * FROM Urls WHERE hostname = :hostname"
+        rows = await self.database.fetch_all(query=query, values={"hostname": current_base_domain})
         stored_lnks = []
         for row in rows:
             stored_lnks.append(row[2])
@@ -365,9 +360,7 @@ class NetSpider():
             already added link for current domain
         '''              
         stored_links_for_domain = await self.retrieve_stored_links_for_domain(current_base_domain)
-                                
-        import mimetypes
-        
+
         for link_element in link_elements:
             
             url = link_element['href']
@@ -465,8 +458,8 @@ class NetSpider():
             #
             self.notify_about_eventp("set_visited", url_id)
             #
-            query = f"UPDATE Urls SET visited=1 WHERE id={url_id}"
-            await self.database.execute(query=query)
+            query = "UPDATE Urls SET visited=1 WHERE id = :id"
+            await self.database.execute(query=query, values={"id": url_id})
             
             
             #
@@ -510,19 +503,21 @@ class NetSpider():
                     #
                     #
                     self.notify_about_eventp("retrieve_page", current_url)
-                    #
                     logging.debug(f"start load  {current_url}")
-                    
-                    response = requests.get(current_url,
-                                            headers={
-                                                    'Accept-Language': 'en-US, en;q=0.5',
-                                                    'Accept-Charset':  'utf-8',
-                                                    'Accept-Encoding': 'gzip',
-                                                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-                                                },
-                                            timeout=3, 
-                                            stream=True)                    
-                    ip = response.raw._connection.sock.getpeername()
+
+                    async with httpx.AsyncClient(follow_redirects=True) as client:
+                        response = await client.get(
+                            current_url,
+                            headers={
+                                'Accept-Language': 'en-US, en;q=0.5',
+                                'Accept-Charset': 'utf-8',
+                                'Accept-Encoding': 'gzip',
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                            },
+                            timeout=10,
+                        )
+                    ip_addr = str(response.extensions.get("network_stream", ""))
+                    ip = (ip_addr, 0)
                         
                     
                     headers_dump = json.dumps(dict(response.headers))                    
@@ -551,8 +546,9 @@ class NetSpider():
                         self.notify_about_step(self.step)
                         
                     else:                        
-                        self.notify_about_eventp("analyze_page_fix_codepage", response.encoding)
-                        html_content = response.content.decode('utf-8')                                                    
+                        encoding = response.charset_encoding or 'utf-8'
+                        self.notify_about_eventp("analyze_page_fix_codepage", encoding)
+                        html_content = response.content.decode('utf-8', errors='replace')
 
 
                         #
@@ -632,18 +628,16 @@ class NetSpider():
                     self.step.status_code = 801         
                     self.notify_about_step(self.step)
                     
-        except Exception as e2:
-            self.count_errors += 1
-            logging.error(f"Exception step 2 {e2} line:{e2.__traceback__.tb_lineno}")
-            print(f"Exception in step 2: {e2}", traceback.print_exc())
-            self.step.status_code = 802
-            self.notify_about_step(self.step)
-            
         except IndexError as e2:
             self.count_errors += 1
             logging.error(f"IndexError step 2 {e2} line:{e2.__traceback__.tb_lineno}")
-            print(f"IndexError in step 2: {e2}", traceback.print_exc())
             self.step.status_code = 803
+            self.notify_about_step(self.step)
+
+        except Exception as e2:
+            self.count_errors += 1
+            logging.error(f"Exception step 2 {e2} line:{e2.__traceback__.tb_lineno}")
+            self.step.status_code = 802
             self.notify_about_step(self.step)
 
     """
@@ -774,8 +768,7 @@ async def main():
             EVENT_URL = config["event_url"]
             SUBLINK_URL = config["sublink_url"]
             
-            time.sleep(spider.sleep_time)
-            time.sleep(0.01)
+            await asyncio.sleep(spider.sleep_time)
             
             if killer.kill_now:
                 # osc_server.stop_osc_receiver()
