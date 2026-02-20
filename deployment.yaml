@@ -147,19 +147,19 @@ spec:
         resources:
           requests:
             cpu: "250m"
-            memory: "512Mi"
+            memory: "1536Mi"
           limits:
             cpu: "500m"
-            memory: "1Gi"
+            memory: "2Gi"
         readinessProbe:
           tcpSocket:
             port: 8005
-          initialDelaySeconds: 15
+          initialDelaySeconds: 45
           periodSeconds: 10
         livenessProbe:
           tcpSocket:
             port: 8005
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 20
 ---
 apiVersion: v1
