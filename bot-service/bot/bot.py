@@ -30,6 +30,7 @@ STEP_URL = f"http://{FLASK_HOST}:{FLASK_PORT}/bot/step/"
 EVENT_URL = f"http://{FLASK_HOST}:{FLASK_PORT}/bot/events"
 SUBLINK_URL = f"http://{FLASK_HOST}:{FLASK_PORT}/bot/sublink/add/"
 
+
 import sentry_sdk
 
 SENTRY_DSN = os.getenv('SHHH_SENTRY_URL', '')
@@ -797,6 +798,8 @@ if __name__ == '__main__':
                         encoding='utf-8',
                         level=logging.INFO,
                         datefmt='%Y-%m-%d %H:%M:%S')
+
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     
 
     asyncio.run(main())
