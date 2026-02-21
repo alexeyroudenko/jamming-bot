@@ -221,7 +221,9 @@ def add_tags_from_steps():
 #  1. STEP
 #   
 @job('default', connection=redis_connection, timeout=90, result_ttl=120)
-def dostep(step): 
+def dostep(step):
+
+    logger.info(f"job dostep step {step}")
         
     self_job = get_current_job()
     self_job.meta['progress'] = {
@@ -402,6 +404,8 @@ def dostep(step):
 #   
 @job('default', connection=redis_connection, timeout=90, result_ttl=270)
 def do_geo(ip):
+
+    logger.info(f"job do_geo ip {ip}")
     
     self_job = get_current_job()    
     self_job.meta['progress'] = {
@@ -456,6 +460,8 @@ def do_geo(ip):
 #   
 @job('default', connection=redis_connection, timeout=90, result_ttl=90)
 def save(data):
+
+    logger.info(f"job save data {data}")
 
     url = data['current_url']
     step = data['step']
@@ -613,6 +619,9 @@ def do_screenshot(data):
     3. Upload the PNG to S3
     4. Return the public URL
     """
+    logger.info(f"job do_screenshot start")
+    logger.info(f"job do_screenshot data {data}")
+
     self_job = get_current_job()
     self_job.meta['type'] = "screenshot"
     self_job.meta['progress'] = {

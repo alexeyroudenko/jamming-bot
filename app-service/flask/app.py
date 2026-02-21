@@ -363,9 +363,10 @@ def step():
             _poll_job_and_emit(job, 'analyzed', timeout=90)
 
         # SCREENSHOT — fire-and-forget with background poll
-        if data.get('url'):
-            job = jobs.do_screenshot.delay(data)
-            _poll_job_and_emit(job, 'screenshot', timeout=120)
+        if float(current_cfg['do_screenshot']) == 1.0:
+            if data.get('url'):
+                job = jobs.do_screenshot.delay(data)
+                _poll_job_and_emit(job, 'screenshot', timeout=120)
 
     return "done"
 
