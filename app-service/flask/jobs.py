@@ -220,7 +220,7 @@ def add_tags_from_steps():
 #
 #  1. STEP
 #   
-@job('default', connection=redis_connection, timeout=90, result_ttl=120)
+@job('default', connection=redis_connection, timeout=90, result_ttl=270)
 def dostep(step):
 
     logger.info(f"job dostep step {step}")
@@ -327,23 +327,27 @@ def dostep(step):
     #         tags = response.json()
 
 
-    sentry_sdk.logger.info(f"semantic_service write {step['step']} to store")
+    do_save = float(redis_connection.get('do_save') or 0)
+    if do_save == 1.0:
+        sentry_sdk.logger.info(f"semantic_service write {step['step']} to store")
 
-    url = f"{STORAGE_SERVICE_URL}/store"
-    headers = {'content-type': 'application/json'}
-    step['text'] = text
-    step_number_val = step.pop('step', None)
-    step.pop('headers', None)
-    step.pop('src_url', None)
-    step.pop('current_url', None)
-    try:
-        response = requests.post(url, data=json.dumps(step), headers=headers, timeout=30)
-        r = response.json()
-    except Exception as e:
-        logger.warning(f"Storage service error: {e}")
-        r = {"error": str(e)}
-    if step_number_val is not None:
-        step['step'] = step_number_val
+        url = f"{STORAGE_SERVICE_URL}/store"
+        headers = {'content-type': 'application/json'}
+        step['text'] = text
+        step_number_val = step.pop('step', None)
+        step.pop('headers', None)
+        step.pop('src_url', None)
+        step.pop('current_url', None)
+        try:
+            response = requests.post(url, data=json.dumps(step), headers=headers, timeout=30)
+            r = response.json()
+        except Exception as e:
+            logger.warning(f"Storage service error: {e}")
+            r = {"error": str(e)}
+        if step_number_val is not None:
+            step['step'] = step_number_val
+    else:
+        logger.info("do_save disabled, skipping storage write")
 
 
 
@@ -514,7 +518,7 @@ def save(data):
 #
 #   ANALYZE
 #
-@job('default', connection=redis_connection, timeout=90, result_ttl=120)
+@job('default', connection=redis_connection, timeout=90, result_ttl=270)
 def analyze(html):
     """Analyze HTML content using spaCy NER."""
     self_job = get_current_job()

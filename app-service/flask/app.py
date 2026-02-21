@@ -246,6 +246,15 @@ def queue_page():
     return render_template('queue.html', joblist=l, cfg=_ensure_redis_defaults())
 
 
+@app.route("/queue/clear_failed/", methods=["POST"])
+def clear_failed():
+    from rq_helpers import queue
+    registry = queue.failed_job_registry
+    for job_id in registry.get_job_ids():
+        registry.remove(job_id, delete_job=True)
+    return redirect("/queue/")
+
+
 @app.route("/ctrl/", methods=["GET"])
 def ctrl():
     return render_template('ctrl.html', cfg=_ensure_redis_defaults())

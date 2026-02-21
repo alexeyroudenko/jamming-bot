@@ -97,6 +97,9 @@
         <div class="col-md-12">
             <h3>Job list</h3>
             <p>Finished and failed jobs will linger around until their result_ttl or failure_ttl has expired and they will be deleted.</p>
+            <form action="/queue/clear_failed/" method="post" style="display:inline; margin-bottom:12px;">
+                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Clear all failed jobs?')">Clear failed jobs</button>
+            </form>
             <table class="table">
                 <thead><tr>
                     <th>State</th>
