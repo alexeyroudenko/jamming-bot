@@ -684,12 +684,23 @@ async def main():
     
     logging.info(f"init bot version: {config['version']}")
     
+    pubsub = None
     if config['receive_events']:        
         from redis import Redis
-        redis = Redis(host=os.getenv('REDIS_HOST', 'redis'), port=int(os.getenv('REDIS_PORT', '6379')))        
-        pubsub = redis.pubsub()
-        CHANNEL_NAME = 'ctrl'
-        pubsub.subscribe(CHANNEL_NAME)
+        for _attempt in range(30):
+            try:
+                redis = Redis(host=os.getenv('REDIS_HOST', 'redis'), port=int(os.getenv('REDIS_PORT', '6379')))
+                redis.ping()
+                pubsub = redis.pubsub()
+                CHANNEL_NAME = 'ctrl'
+                pubsub.subscribe(CHANNEL_NAME)
+                logging.info("Connected to Redis")
+                break
+            except Exception as e:
+                logging.warning(f"Redis not ready, retrying in 2s... ({e})")
+                await asyncio.sleep(2)
+        else:
+            logging.error("Could not connect to Redis after 60s, continuing without event control")
     
     killer = GracefulKiller()
     
@@ -725,7 +736,7 @@ async def main():
             #
             try:
                                 
-                if config['receive_events']:
+                if config['receive_events'] and pubsub is not None:
                     message = pubsub.get_message()                                    
                     if message:                                        
                         logging.info(f"message {message} - {message["data"]}")

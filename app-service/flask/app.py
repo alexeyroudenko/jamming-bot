@@ -135,7 +135,11 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5):
         while elapsed < timeout:
             time.sleep(poll_interval)
             elapsed += poll_interval
-            job.refresh()
+            try:
+                job.refresh()
+            except Exception:
+                logger.debug(f"Job {job.id} no longer exists for event {event_name}")
+                return
             if job.is_finished:
                 socketio.emit(event_name, job.result)
                 return
