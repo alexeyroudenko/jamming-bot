@@ -251,6 +251,18 @@ services:
     image: worker-image
     command: rq worker --name worker --disable-job-desc-logging --url redis://redis:6379/0
     restart: unless-stopped
+    environment:
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - S3_HOST=${S3_HOST}
+      - S3_PORT=${S3_PORT}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - SENTRY_DSN=${SHHH_SENTRY_URL}
+      - TAGS_SERVICE_URL=http://tags_service:8000
+      - SEMANTIC_SERVICE_URL=http://semantic_service:8005
+      - STORAGE_SERVICE_URL=http://storage_service:7781
+      - IP_SERVICE_URL=http://ip_service:8004
+      - RENDERER_SERVICE_URL=http://html-renderer-service:3000
     volumes:
       - type: bind
         source: ./app-service/flask
@@ -267,11 +279,22 @@ services:
         limits:
           cpus: '0.25'
 
-  #uncomment to have a another worker
   worker2:
     image: worker-image
     command: rq worker --name worker2 --disable-job-desc-logging --url redis://redis:6379/0
     restart: unless-stopped
+    environment:
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - S3_HOST=${S3_HOST}
+      - S3_PORT=${S3_PORT}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - SENTRY_DSN=${SHHH_SENTRY_URL}
+      - TAGS_SERVICE_URL=http://tags_service:8000
+      - SEMANTIC_SERVICE_URL=http://semantic_service:8005
+      - STORAGE_SERVICE_URL=http://storage_service:7781
+      - IP_SERVICE_URL=http://ip_service:8004
+      - RENDERER_SERVICE_URL=http://html-renderer-service:3000
     volumes:
       - type: bind
         source: ./app-service/flask
@@ -288,6 +311,38 @@ services:
         limits:
           cpus: '0.25'  
 
+
+  worker3:
+    image: worker-image
+    command: rq worker --name worker3 --disable-job-desc-logging --url redis://redis:6379/0
+    restart: unless-stopped
+    environment:
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - S3_HOST=${S3_HOST}
+      - S3_PORT=${S3_PORT}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - SENTRY_DSN=${SHHH_SENTRY_URL}
+      - TAGS_SERVICE_URL=http://tags_service:8000
+      - SEMANTIC_SERVICE_URL=http://semantic_service:8005
+      - STORAGE_SERVICE_URL=http://storage_service:7781
+      - IP_SERVICE_URL=http://ip_service:8004
+      - RENDERER_SERVICE_URL=http://html-renderer-service:3000
+    volumes:
+      - type: bind
+        source: ./app-service/flask
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data    
+    depends_on:
+      - redis
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
 
   html-renderer-service:
     build: ./html-renderer-service
