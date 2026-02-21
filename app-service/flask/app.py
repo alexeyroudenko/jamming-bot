@@ -267,12 +267,29 @@ def queue_page():
     return render_template('queue.html', joblist=l, cfg=_ensure_redis_defaults())
 
 
-@app.route("/queue/clear_failed/", methods=["POST"])
+@app.route("/queue/clear_failed/", methods=["GET", "POST"])
 def clear_failed():
-    from rq_helpers import queue
-    registry = queue.failed_job_registry
+    from rq_helpers import queue as q
+    registry = q.failed_job_registry
     for job_id in registry.get_job_ids():
-        registry.remove(job_id, delete_job=True)
+        try:
+            registry.remove(job_id, delete_job=True)
+        except Exception:
+            pass
+    return redirect("/queue/")
+
+
+@app.route("/queue/clear_all/", methods=["GET", "POST"])
+def clear_all():
+    from rq_helpers import queue as q, get_all_job_ids
+    for job_id in get_all_job_ids():
+        job = q.fetch_job(job_id)
+        if job:
+            try:
+                job.delete()
+            except Exception:
+                pass
+    q.empty()
     return redirect("/queue/")
 
 
