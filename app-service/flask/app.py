@@ -28,6 +28,7 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 SVC_NAME = "app-service"
 SENTRY_DSN = os.getenv('SENTRY_DSN', '')
 TAGS_SERVICE_URL = os.getenv('TAGS_SERVICE_URL', 'http://tags_service:8000')
+SEMANTIC_SERVICE_URL = os.getenv('SEMANTIC_SERVICE_URL', 'http://semantic_service:8005')
 
 cfg = getConfig()
 redis = getRedis()
@@ -197,6 +198,26 @@ def status():
 @cross_origin()
 def tags_cloud():
     return render_template('tags.html')
+
+
+@app.route('/tags/phrases/')
+@cross_origin()
+def tags_phrases():
+    return render_template('phrases.html')
+
+
+@app.route('/api/tags/combine/', methods=['POST'])
+@cross_origin()
+def combine_tags_proxy():
+    data = request.get_json()
+    url = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/combine/"
+    try:
+        resp = requests.post(url, json=data, timeout=60)
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except Exception as e:
+        logger.warning(f"Combine tags error: {e}")
+        return jsonify({"error": str(e), "phrases": []}), 502
 
 
 @app.route('/help/')
