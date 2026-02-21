@@ -94,6 +94,12 @@ k3s-app-service:
 .PHONY: k3s-all
 k3s-all: k3s-html-renderer k3s-keywords-service k3s-semantic-service k3s-storage-service k3s-tags-service k3s-bot-service k3s-ip-service k3s-app-service
 
+.PHONY: k3s-cert-manager
+k3s-cert-manager:
+	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.4/cert-manager.yaml
+	@echo "Waiting for cert-manager pods to be ready..."
+	kubectl wait --for=condition=Ready pods --all -n cert-manager --timeout=120s
+
 .PHONY: k3s-apply
 k3s-apply:
 	@test -f k8s-secrets.yaml && kubectl apply -f k8s-secrets.yaml || echo "WARN: k8s-secrets.yaml not found — create it from k8s-secrets.yaml.template"
