@@ -11,123 +11,157 @@
       background: #000;
       color: #fff;
       font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
     }
 
     nav {
+      position: fixed;
+      top: 0;
+      left: 0;
       width: 100%;
-      padding: 16px 24px;
-      font-size: 12px;
-      color: #666;
-    }
-    nav a { color: #888; text-decoration: none; }
-    nav a:hover { color: #fff; }
-
-    h1 {
-      font-size: 14px;
-      font-weight: normal;
-      color: #555;
-      margin-bottom: 32px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-    }
-
-    #cloud {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      align-items: center;
-      gap: 6px 14px;
-      max-width: 900px;
-      padding: 24px;
-      line-height: 1.6;
-    }
-
-    #cloud .tag {
-      display: inline-block;
-      transition: color 0.2s, transform 0.2s;
-      cursor: default;
-      white-space: nowrap;
-    }
-
-    #cloud .tag:hover {
-      color: #fff !important;
-      transform: scale(1.15);
-    }
-
-    #loading {
-      color: #333;
-      font-size: 12px;
-      margin-top: 40vh;
-    }
-
-    #total {
-      margin-top: 40px;
+      padding: 12px 20px;
       font-size: 11px;
-      color: #333;
+      color: #666;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+    }
+    nav a { color: #555; text-decoration: none; }
+    nav a:hover { color: #fff; }
+    #status { color: #333; font-size: 10px; }
+
+    svg { display: block; }
+
+    text {
+      cursor: default;
+      transition: fill 0.15s;
+    }
+    text:hover {
+      fill: #fff !important;
     }
   </style>
 </head>
 <body>
 
-  <nav><a href="/">← back</a></nav>
-  <h1>tag cloud</h1>
+<nav>
+  <a href="/">← back</a>
+  <span id="status"></span>
+</nav>
 
-  <div id="loading">loading tags…</div>
-  <div id="cloud"></div>
-  <div id="total"></div>
-
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-cloud@1.2.7/build/d3.layout.cloud.min.js"></script>
 <script>
 (function () {
   var API = '/api/tags/get/';
+  var REFRESH_INTERVAL = 30000;
+  var statusEl = document.getElementById('status');
 
-  fetch(API)
-    .then(function (r) { return r.json(); })
-    .then(function (tags) {
-      document.getElementById('loading').style.display = 'none';
-      if (!tags || !tags.length) {
-        document.getElementById('cloud').textContent = 'no tags yet';
-        return;
-      }
+  var width = window.innerWidth;
+  var height = window.innerHeight;
 
-      var maxCount = 0;
-      for (var i = 0; i < tags.length; i++) {
-        if (tags[i].count > maxCount) maxCount = tags[i].count;
-      }
+  var svg = d3.select('body').append('svg')
+    .attr('width', width)
+    .attr('height', height);
 
-      tags.sort(function (a, b) { return a.name.localeCompare(b.name); });
+  var g = svg.append('g')
+    .attr('transform', 'translate(' + width / 2 + ',' + height / 2 + ')');
 
-      var cloud = document.getElementById('cloud');
-      var frag = document.createDocumentFragment();
+  var color = d3.scaleLinear()
+    .range(['#1a3a4a', '#00ffcc']);
 
-      for (var i = 0; i < tags.length; i++) {
-        var t = tags[i];
-        var ratio = maxCount > 0 ? t.count / maxCount : 0;
+  var currentWords = [];
 
-        var size = 11 + ratio * 42;
-        var lightness = 20 + ratio * 55;
-        var hue = 200 + ratio * 160;
+  function fetchAndDraw() {
+    statusEl.textContent = 'updating…';
+    fetch(API)
+      .then(function (r) { return r.json(); })
+      .then(function (tags) {
+        if (!tags || !tags.length) {
+          statusEl.textContent = 'no tags';
+          return;
+        }
+        drawCloud(tags);
+        statusEl.textContent = tags.length + ' tags';
+      })
+      .catch(function (err) {
+        console.error(err);
+        statusEl.textContent = 'error';
+      });
+  }
 
-        var span = document.createElement('span');
-        span.className = 'tag';
-        span.textContent = t.name;
-        span.title = t.name + ' (' + t.count + ')';
-        span.style.fontSize = size.toFixed(1) + 'px';
-        span.style.color = 'hsl(' + hue.toFixed(0) + ', 60%, ' + lightness.toFixed(0) + '%)';
+  function drawCloud(tags) {
+    var maxCount = d3.max(tags, function (d) { return d.count; }) || 1;
 
-        frag.appendChild(span);
-      }
+    color.domain([0, maxCount]);
 
-      cloud.appendChild(frag);
-      document.getElementById('total').textContent = tags.length + ' tags';
-    })
-    .catch(function (err) {
-      document.getElementById('loading').textContent = 'error loading tags';
-      console.error(err);
+    var sizeScale = d3.scaleSqrt()
+      .domain([0, maxCount])
+      .range([12, Math.min(width, height) / 8]);
+
+    var words = tags.map(function (d) {
+      return { text: d.name, size: sizeScale(d.count), count: d.count };
     });
+
+    d3.layout.cloud()
+      .size([width * 0.9, height * 0.85])
+      .words(words)
+      .padding(4)
+      .rotate(function () { return (~~(Math.random() * 3) - 1) * 30; })
+      .font('"Lucida Grande", "Droid Sans", Arial, sans-serif')
+      .fontSize(function (d) { return d.size; })
+      .spiral('archimedean')
+      .on('end', function (placed) { render(placed, maxCount); })
+      .start();
+  }
+
+  function render(words, maxCount) {
+    var t = d3.transition().duration(800);
+
+    var texts = g.selectAll('text')
+      .data(words, function (d) { return d.text; });
+
+    texts.exit()
+      .transition(t)
+      .style('opacity', 0)
+      .attr('font-size', 0)
+      .remove();
+
+    texts.transition(t)
+      .attr('transform', function (d) {
+        return 'translate(' + d.x + ',' + d.y + ')rotate(' + d.rotate + ')';
+      })
+      .attr('font-size', function (d) { return d.size + 'px'; })
+      .style('fill', function (d) { return color(d.count); });
+
+    texts.enter().append('text')
+      .attr('text-anchor', 'middle')
+      .attr('transform', function (d) {
+        return 'translate(' + d.x + ',' + d.y + ')rotate(' + d.rotate + ')';
+      })
+      .attr('font-size', 0)
+      .attr('font-family', '"Lucida Grande", "Droid Sans", Arial, sans-serif')
+      .style('fill', function (d) { return color(d.count); })
+      .style('opacity', 0)
+      .text(function (d) { return d.text; })
+      .append('title').text(function (d) { return d.text + ' (' + d.count + ')'; })
+      .select(function () { return this.parentNode; })
+      .transition(t)
+      .attr('font-size', function (d) { return d.size + 'px'; })
+      .style('opacity', 1);
+  }
+
+  window.addEventListener('resize', function () {
+    width = window.innerWidth;
+    height = window.innerHeight;
+    svg.attr('width', width).attr('height', height);
+    g.attr('transform', 'translate(' + width / 2 + ',' + height / 2 + ')');
+    fetchAndDraw();
+  });
+
+  fetchAndDraw();
+  setInterval(fetchAndDraw, REFRESH_INTERVAL);
 })();
 </script>
 
