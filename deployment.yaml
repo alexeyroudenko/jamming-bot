@@ -289,15 +289,18 @@ spec:
           limits:
             cpu: "250m"
             memory: "256Mi"
+        startupProbe:
+          tcpSocket:
+            port: 8000
+          failureThreshold: 15
+          periodSeconds: 5
         readinessProbe:
           tcpSocket:
             port: 8000
-          initialDelaySeconds: 10
           periodSeconds: 10
         livenessProbe:
           tcpSocket:
             port: 8000
-          initialDelaySeconds: 20
           periodSeconds: 20
 ---
 apiVersion: v1
@@ -566,11 +569,11 @@ spec:
           value: "80"
         resources:
           requests:
-            cpu: "500m"
+            cpu: "250m"
             memory: "512Mi"
           limits:
             cpu: "500m"
-            memory: "512Mi"
+            memory: "1536Mi"
         livenessProbe:
           exec:
             command: ["python", "-c", "import os; os.path.exists('database.db')"]
