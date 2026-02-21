@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 from app.api.models import TagIn, TagOut
 
 from collections import Counter
+from itertools import combinations
 import spacy
 
 # Initialize spaCy model with error handling
@@ -122,3 +123,33 @@ async def get_geo(text_data: SemanticCalculate):
     out.hrases = hrases
     out.sim = sim
     return out
+
+
+class CombineIn(BaseModel):
+    words: List[str]
+    limit: int = 50
+    max_phrases: int = 1024
+
+
+@semantic.post('/combine/')
+async def combine_tags(data: CombineIn):
+    if nlp_lg is None:
+        raise HTTPException(status_code=503, detail="SpaCy model not loaded")
+
+    words = [w.strip() for w in data.words if w.strip()][:data.limit]
+    phrases = []
+
+    for a, b in combinations(words, 2):
+        doc = nlp_lg(f"{a} {b}")
+        pos_a = doc[0].pos_
+        pos_b = doc[-1].pos_
+
+        if pos_a in ("NOUN", "PROPN", "ADJ") and pos_b in ("NOUN", "PROPN"):
+            phrases.append(f"the {a} {b}")
+        elif pos_a == "VERB":
+            phrases.append(f"to {a} {b}")
+
+        if len(phrases) >= data.max_phrases:
+            break
+
+    return {"phrases": phrases, "count": len(phrases)}
