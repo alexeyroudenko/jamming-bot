@@ -228,7 +228,7 @@ services:
 
 
   tags_db:
-    image: postgres:16-alpine
+    image: postgres:12-alpine
     restart: unless-stopped
     volumes:
       - postgres_data_tags:/var/lib/postgresql/data/

@@ -345,7 +345,7 @@ spec:
     spec:
       containers:
       - name: tags-db
-        image: postgres:16-alpine
+        image: postgres:12-alpine
         ports:
         - containerPort: 5432
         env:
