@@ -32,13 +32,11 @@ def get_job_from_id(job_id):
 
 # get all jobs
 def get_all_jobs():
-    # init all_jobs list
     all_jobs = []
-    # get all job ids
-    all_job_ids = get_all_job_ids()
-    # iterate over job ids list and fetch jobs
-    for job_id in all_job_ids:
-        all_jobs.append(get_job_from_id(job_id))
+    for job_id in get_all_job_ids():
+        job = get_job_from_id(job_id)
+        if job is not None:
+            all_jobs.append(job)
     return all_jobs
 
 
