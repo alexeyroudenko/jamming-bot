@@ -120,7 +120,7 @@
         return fetch(COMBINE_API, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ words: words, limit: 50, max_phrases: 2048 })
+          body: JSON.stringify({ words: words, limit: 128, max_phrases: 16384 })
         });
       })
       .then(function (r) { if (r) return r.json(); })
