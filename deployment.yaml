@@ -1,8 +1,14 @@
 # deployment.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: jamming-bot
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: html-renderer
+  namespace: jamming-bot
 spec:
   replicas: 2
   strategy:
@@ -55,6 +61,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: html-renderer-service
+  namespace: jamming-bot
 spec:
   type: ClusterIP
   selector:
@@ -69,6 +76,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: keywords-service
+  namespace: jamming-bot
 spec:
   replicas: 1
   selector:
@@ -107,6 +115,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: keywords-service
+  namespace: jamming-bot
 spec:
   type: ClusterIP
   selector:
@@ -121,6 +130,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: semantic-service
+  namespace: jamming-bot
 spec:
   replicas: 1
   selector:
@@ -147,25 +157,26 @@ spec:
         resources:
           requests:
             cpu: "250m"
-            memory: "512Mi"
+            memory: "1536Mi"
           limits:
             cpu: "500m"
-            memory: "1Gi"
+            memory: "2Gi"
         readinessProbe:
           tcpSocket:
             port: 8005
-          initialDelaySeconds: 15
+          initialDelaySeconds: 45
           periodSeconds: 10
         livenessProbe:
           tcpSocket:
             port: 8005
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 20
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: semantic-service
+  namespace: jamming-bot
 spec:
   type: ClusterIP
   selector:
@@ -180,6 +191,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: storage-service
+  namespace: jamming-bot
 spec:
   replicas: 1
   selector:
@@ -219,6 +231,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: storage-service
+  namespace: jamming-bot
 spec:
   type: ClusterIP
   selector:
@@ -233,6 +246,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: tags-service
+  namespace: jamming-bot
 spec:
   replicas: 1
   selector:
@@ -283,6 +297,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: tags-service
+  namespace: jamming-bot
 spec:
   type: ClusterIP
   selector:
@@ -297,6 +312,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: tags-db-pvc
+  namespace: jamming-bot
 spec:
   accessModes:
     - ReadWriteOnce
@@ -309,6 +325,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: tags-db
+  namespace: jamming-bot
 spec:
   replicas: 1
   selector:
@@ -367,6 +384,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: tags-db
+  namespace: jamming-bot
 spec:
   type: ClusterIP
   selector:
@@ -381,6 +399,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: redis
+  namespace: jamming-bot
 spec:
   replicas: 1
   selector:
@@ -418,6 +437,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: redis
+  namespace: jamming-bot
 spec:
   type: ClusterIP
   selector:
@@ -432,6 +452,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: worker-service
+  namespace: jamming-bot
 spec:
   replicas: 2
   selector:
@@ -498,6 +519,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: bot-service
+  namespace: jamming-bot
 spec:
   replicas: 1
   selector:
@@ -553,6 +575,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ip-service
+  namespace: jamming-bot
 spec:
   replicas: 1
   selector:
@@ -598,6 +621,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: ip-service
+  namespace: jamming-bot
 spec:
   type: ClusterIP
   selector:
@@ -612,6 +636,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: app-service
+  namespace: jamming-bot
 spec:
   replicas: 1
   selector:
@@ -688,6 +713,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: app-service
+  namespace: jamming-bot
 spec:
   type: ClusterIP
   selector:
@@ -703,6 +729,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: app-service-metrics
+  namespace: jamming-bot
 spec:
   type: NodePort
   selector:
@@ -719,6 +746,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: app-port5000-proxy
+  namespace: jamming-bot
 spec:
   replicas: 1
   selector:
@@ -747,6 +775,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: app-metrics-lb
+  namespace: jamming-bot
 spec:
   type: LoadBalancer
   selector:
@@ -761,6 +790,7 @@ apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
   name: strip-keywords
+  namespace: jamming-bot
 spec:
   stripPrefix:
     prefixes:
@@ -770,6 +800,7 @@ apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
   name: strip-semantic
+  namespace: jamming-bot
 spec:
   stripPrefix:
     prefixes:
@@ -779,6 +810,7 @@ apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
   name: strip-storage
+  namespace: jamming-bot
 spec:
   stripPrefix:
     prefixes:
@@ -788,6 +820,7 @@ apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
   name: strip-tags
+  namespace: jamming-bot
 spec:
   stripPrefix:
     prefixes:
@@ -797,6 +830,7 @@ apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
   name: strip-ip
+  namespace: jamming-bot
 spec:
   stripPrefix:
     prefixes:
@@ -806,6 +840,7 @@ apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
   name: strip-app
+  namespace: jamming-bot
 spec:
   stripPrefix:
     prefixes:
@@ -816,8 +851,9 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: html-renderer-ingress
+  namespace: jamming-bot
   annotations:
-    traefik.ingress.kubernetes.io/router.middlewares: default-strip-keywords@kubernetescrd,default-strip-semantic@kubernetescrd,default-strip-storage@kubernetescrd,default-strip-tags@kubernetescrd,default-strip-ip@kubernetescrd,default-strip-app@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-semantic@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-tags@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-app@kubernetescrd
 spec:
   rules:
     - http:
@@ -878,6 +914,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: app-subdomain-ingress
+  namespace: jamming-bot
 spec:
   rules:
     - host: app.jamming-bot.arthew0.online
