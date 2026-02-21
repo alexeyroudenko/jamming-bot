@@ -193,6 +193,12 @@ def status():
     return jsonify({"status": "ok"})
 
 
+@app.route('/tags/')
+@cross_origin()
+def tags_cloud():
+    return render_template('tags.html')
+
+
 @app.route('/help/')
 def help_page():
     return render_template('help.html')
