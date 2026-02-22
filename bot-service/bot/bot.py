@@ -231,8 +231,8 @@ class NetSpider():
         date_time = now.strftime("%Y-%m-%d_%H-%M-%S")
         self.db_name = f"db_{date_time}.db"
         self.db_name = "data/database.db"
-        resume = self.resume_at_restart and os.path.exists(self.db_name)
-        if not resume:
+        self.resumed = self.resume_at_restart and os.path.exists(self.db_name)
+        if not self.resumed:
             try:
                 os.remove(self.db_name)
             except FileNotFoundError:
@@ -242,7 +242,7 @@ class NetSpider():
             
         self.database = Database(f'sqlite+aiosqlite:///{self.db_name}')
         await self.database.connect()
-        if not resume:
+        if not self.resumed:
             logging.info("create new db")
             query = """CREATE TABLE Urls (id INTEGER PRIMARY KEY, hostname VARCHAR(127), url VARCHAR(127) unique, src_url VARCHAR(127), visited INTEGER)"""
             await self.database.execute(query=query)
@@ -647,7 +647,7 @@ class NetSpider():
     async def start(self, start_url, src_url):
         
         await self.init_db()
-        if not self.resume_at_restart:
+        if not self.resumed:
             await self.insert(start_url, src_url)
             self.step_number = 0
             logging.info(f"start with {start_url}")
