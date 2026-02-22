@@ -390,7 +390,8 @@ def step():
         if float(current_cfg['do_pass']) == 1.0:
             socketio.emit('step', data)
             if len(data['text']) > 0:
-                jobs.dostep.delay(data)
+                job = jobs.dostep.delay(data)
+                _poll_job_and_emit(job, 'tags_updated', timeout=90)
         else:
             socketio.emit('step', data)
 
@@ -533,6 +534,7 @@ def add_tag():
             body = _tags_response_json(r)
             if not r.ok:
                 return jsonify({"error": "Tags service error", "status": r.status_code, "detail": body or r.text[:200]}), 502
+            socketio.emit('tags_updated')
             return jsonify(f"ok from POST {tag}" if body is None else {"ok": True, "tag": tag, "response": body})
         except requests.exceptions.RequestException as e:
             return jsonify({"error": "Tags service unreachable", "detail": str(e)}), 503
@@ -568,6 +570,7 @@ def add_tags():
                 if not last_r.ok:
                     body = _tags_response_json(last_r)
                     return jsonify({"error": "Tags service error", "status": last_r.status_code, "tag": tag, "detail": body or last_r.text[:200]}), 502
+            socketio.emit('tags_updated')
             return jsonify({"ok": True, "tags": tags})
         except requests.exceptions.RequestException as e:
             return jsonify({"error": "Tags service unreachable", "detail": str(e)}), 503
