@@ -230,7 +230,7 @@ class NetSpider():
         now = datetime.now()
         date_time = now.strftime("%Y-%m-%d_%H-%M-%S")
         self.db_name = f"db_{date_time}.db"
-        self.db_name = "database.db"
+        self.db_name = "data/database.db"
         resume = self.resume_at_restart and os.path.exists(self.db_name)
         if not resume:
             try:

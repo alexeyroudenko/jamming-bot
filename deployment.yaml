@@ -524,6 +524,19 @@ spec:
             cpu: "250m"
             memory: "256Mi"
 ---
+# ===================== bot-db PVC =====================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bot-db-pvc
+  namespace: jamming-bot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
 # ===================== bot-service =====================
 apiVersion: apps/v1
 kind: Deployment
@@ -567,6 +580,9 @@ spec:
           value: "app-service"
         - name: FLASK_PORT
           value: "80"
+        volumeMounts:
+        - name: bot-db
+          mountPath: /app/data
         resources:
           requests:
             cpu: "250m"
@@ -576,9 +592,13 @@ spec:
             memory: "1536Mi"
         livenessProbe:
           exec:
-            command: ["python", "-c", "import os; os.path.exists('database.db')"]
+            command: ["python", "-c", "import os; os.path.exists('data/database.db')"]
           initialDelaySeconds: 30
           periodSeconds: 30
+      volumes:
+      - name: bot-db
+        persistentVolumeClaim:
+          claimName: bot-db-pvc
 ---
 # ===================== ip-service =====================
 apiVersion: apps/v1
