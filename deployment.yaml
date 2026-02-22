@@ -1002,3 +1002,24 @@ spec:
       listName: rq:queue:default
       listLength: "5"
       databaseIndex: "0"
+---
+# ===================== KEDA: html-renderer autoscaler =====================
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: html-renderer-scaler
+  namespace: jamming-bot
+spec:
+  scaleTargetRef:
+    name: html-renderer
+  minReplicaCount: 1
+  maxReplicaCount: 5
+  cooldownPeriod: 120
+  pollingInterval: 10
+  triggers:
+  - type: redis
+    metadata:
+      address: redis.jamming-bot.svc.cluster.local:6379
+      listName: rq:queue:default
+      listLength: "10"
+      databaseIndex: "0"
