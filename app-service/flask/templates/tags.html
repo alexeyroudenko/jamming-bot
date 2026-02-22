@@ -10,7 +10,7 @@
     body {
       background: #000;
       color: #fff;
-      font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
+      font-family: "Lucida Grande", Arial, Helvetica, sans-serif;
       overflow: hidden;
       width: 100vw;
       height: 100vh;
@@ -28,19 +28,11 @@
       display: flex;
       justify-content: space-between;
     }
-    nav a { color: #555; text-decoration: none; }
+    nav a { color: #555; text-decoration: none; margin-right: 12px; }
     nav a:hover { color: #fff; }
     #status { color: #333; font-size: 10px; }
 
-    svg { display: block; }
-
-    text {
-      cursor: default;
-      transition: fill 0.15s;
-    }
-    text:hover {
-      fill: #fff !important;
-    }
+    canvas { display: block; cursor: default; }
   </style>
 </head>
 <body>
@@ -53,28 +45,49 @@
   <span id="status"></span>
 </nav>
 
-<script src="https://d3js.org/d3.v7.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/d3-cloud@1.2.7/build/d3.layout.cloud.min.js"></script>
+<canvas id="cloud"></canvas>
+
 <script>
 (function () {
   var API = '/api/tags/get/';
   var REFRESH_INTERVAL = 30000;
+  var REPEL_RADIUS = 150;
+  var REPEL_STRENGTH = 80;
+  var RETURN_SPEED = 0.06;
+  var FONT = '"Lucida Grande", Arial, Helvetica, sans-serif';
+
   var statusEl = document.getElementById('status');
+  var canvas = document.getElementById('cloud');
+  var ctx = canvas.getContext('2d');
 
-  var width = window.innerWidth;
-  var height = window.innerHeight;
+  var W, H, cx, cy;
+  var mouse = { x: -9999, y: -9999 };
+  var particles = [];
+  var raf;
 
-  var svg = d3.select('body').append('svg')
-    .attr('width', width)
-    .attr('height', height);
+  function resize() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    cx = W / 2;
+    cy = H / 2;
+    canvas.width = W;
+    canvas.height = H;
+  }
+  resize();
 
-  var g = svg.append('g')
-    .attr('transform', 'translate(' + width / 2 + ',' + height / 2 + ')');
+  window.addEventListener('resize', function () {
+    resize();
+    if (particles.length) layoutWords();
+  });
 
-  var color = d3.scaleLinear()
-    .range(['#1a3a4a', '#00ffcc']);
-
-  var currentWords = [];
+  canvas.addEventListener('mousemove', function (e) {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+  });
+  canvas.addEventListener('mouseleave', function () {
+    mouse.x = -9999;
+    mouse.y = -9999;
+  });
 
   function fetchAndDraw() {
     statusEl.textContent = 'updating…';
@@ -85,7 +98,7 @@
           statusEl.textContent = 'no tags';
           return;
         }
-        drawCloud(tags);
+        buildParticles(tags);
         statusEl.textContent = tags.length + ' tags';
       })
       .catch(function (err) {
@@ -94,74 +107,127 @@
       });
   }
 
-  function drawCloud(tags) {
-    var maxCount = d3.max(tags, function (d) { return d.count; }) || 1;
+  function buildParticles(tags) {
+    var maxCount = 1;
+    for (var i = 0; i < tags.length; i++) {
+      if (tags[i].count > maxCount) maxCount = tags[i].count;
+    }
 
-    color.domain([0, maxCount]);
+    var minSize = 11;
+    var maxSize = Math.min(W, H) / 10;
 
-    var sizeScale = d3.scaleSqrt()
-      .domain([0, maxCount])
-      .range([12, Math.min(width, height) / 8]);
-
-    var words = tags.map(function (d) {
-      return { text: d.name, size: sizeScale(d.count), count: d.count };
+    particles = tags.map(function (t) {
+      var ratio = Math.sqrt(t.count / maxCount);
+      var size = minSize + ratio * (maxSize - minSize);
+      var bright = 40 + Math.round(ratio * 180);
+      return {
+        text: t.name,
+        count: t.count,
+        size: size,
+        color: 'rgb(' + bright + ',' + bright + ',' + bright + ')',
+        homeX: 0, homeY: 0,
+        x: 0, y: 0,
+        vx: 0, vy: 0
+      };
     });
 
-    d3.layout.cloud()
-      .size([width * 0.9, height * 0.85])
-      .words(words)
-      .padding(4)
-      .rotate(function () { return (~~(Math.random() * 3) - 1) * 30; })
-      .font('"Lucida Grande", "Droid Sans", Arial, sans-serif')
-      .fontSize(function (d) { return d.size; })
-      .spiral('archimedean')
-      .on('end', function (placed) { render(placed, maxCount); })
-      .start();
+    layoutWords();
+    if (!raf) animate();
   }
 
-  function render(words, maxCount) {
-    var t = d3.transition().duration(800);
+  function layoutWords() {
+    // Simple spiral placement
+    particles.sort(function (a, b) { return b.size - a.size; });
+    var placed = [];
 
-    var texts = g.selectAll('text')
-      .data(words, function (d) { return d.text; });
+    for (var i = 0; i < particles.length; i++) {
+      var p = particles[i];
+      ctx.font = p.size + 'px ' + FONT;
+      var tw = ctx.measureText(p.text).width;
+      var th = p.size;
+      p._w = tw;
+      p._h = th;
 
-    texts.exit()
-      .transition(t)
-      .style('opacity', 0)
-      .attr('font-size', 0)
-      .remove();
+      var ok = false;
+      for (var r = 0; r < Math.max(W, H); r += 3) {
+        var step = Math.max(0.05, 0.5 / (r + 1));
+        for (var a = 0; a < Math.PI * 2; a += step) {
+          var tx = cx + r * Math.cos(a);
+          var ty = cy + r * Math.sin(a);
+          var left = tx - tw / 2;
+          var top = ty - th / 2;
+          var right = left + tw;
+          var bottom = top + th;
 
-    texts.transition(t)
-      .attr('transform', function (d) {
-        return 'translate(' + d.x + ',' + d.y + ')rotate(' + d.rotate + ')';
-      })
-      .attr('font-size', function (d) { return d.size + 'px'; })
-      .style('fill', function (d) { return color(d.count); });
+          if (left < 4 || top < 36 || right > W - 4 || bottom > H - 4) continue;
 
-    texts.enter().append('text')
-      .attr('text-anchor', 'middle')
-      .attr('transform', function (d) {
-        return 'translate(' + d.x + ',' + d.y + ')rotate(' + d.rotate + ')';
-      })
-      .attr('font-size', 0)
-      .attr('font-family', '"Lucida Grande", "Droid Sans", Arial, sans-serif')
-      .style('fill', function (d) { return color(d.count); })
-      .style('opacity', 0)
-      .text(function (d) { return d.text; })
-      .append('title').text(function (d) { return d.text + ' (' + d.count + ')'; })
-      .select(function () { return this.parentNode; })
-      .transition(t)
-      .attr('font-size', function (d) { return d.size + 'px'; })
-      .style('opacity', 1);
+          var overlap = false;
+          for (var j = 0; j < placed.length; j++) {
+            var q = placed[j];
+            var ql = q.homeX - q._w / 2 - 4;
+            var qt = q.homeY - q._h / 2 - 2;
+            var qr = ql + q._w + 8;
+            var qb = qt + q._h + 4;
+            if (left < qr && right > ql && top < qb && bottom > qt) {
+              overlap = true;
+              break;
+            }
+          }
+          if (!overlap) {
+            p.homeX = tx;
+            p.homeY = ty;
+            p.x = tx;
+            p.y = ty;
+            placed.push(p);
+            ok = true;
+            break;
+          }
+        }
+        if (ok) break;
+      }
+      if (!ok) {
+        p.homeX = cx + (Math.random() - 0.5) * W * 0.8;
+        p.homeY = cy + (Math.random() - 0.5) * H * 0.8;
+        p.x = p.homeX;
+        p.y = p.homeY;
+      }
+    }
   }
 
-  window.addEventListener('resize', function () {
-    width = window.innerWidth;
-    height = window.innerHeight;
-    svg.attr('width', width).attr('height', height);
-    g.attr('transform', 'translate(' + width / 2 + ',' + height / 2 + ')');
-    fetchAndDraw();
-  });
+  function animate() {
+    ctx.clearRect(0, 0, W, H);
+
+    for (var i = 0; i < particles.length; i++) {
+      var p = particles[i];
+
+      var dx = p.x - mouse.x;
+      var dy = p.y - mouse.y;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < REPEL_RADIUS && dist > 0) {
+        var force = (REPEL_RADIUS - dist) / REPEL_RADIUS * REPEL_STRENGTH;
+        p.vx += (dx / dist) * force * 0.08;
+        p.vy += (dy / dist) * force * 0.08;
+      }
+
+      p.vx += (p.homeX - p.x) * RETURN_SPEED;
+      p.vy += (p.homeY - p.y) * RETURN_SPEED;
+
+      p.vx *= 0.82;
+      p.vy *= 0.82;
+
+      p.x += p.vx;
+      p.y += p.vy;
+
+      ctx.font = p.size + 'px ' + FONT;
+      ctx.fillStyle = p.color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(p.text, p.x, p.y);
+    }
+
+    raf = requestAnimationFrame(animate);
+  }
 
   fetchAndDraw();
   setInterval(fetchAndDraw, REFRESH_INTERVAL);
