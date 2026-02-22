@@ -6,7 +6,9 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 class Config(object):
     DEBUG = False
     TESTING = False
-    SECRET_KEY = 'base'
+    SECRET_KEY = os.getenv('SECRET_KEY', 'jamming-bot-secret-key-change-me')
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
     REDIS_URL = os.getenv('REDIS_URL', "redis://redis:6379/0")
     QUEUES = ["default"]
 

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Login — Jamming Bot</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; color: #ccc; font-family: monospace; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .login-box { background: #111; border: 1px solid #333; padding: 2rem; width: 280px; }
+        .login-box h1 { font-size: 1rem; margin-bottom: 1.5rem; color: #fff; }
+        .login-box input { width: 100%; padding: 0.5rem; margin-bottom: 0.75rem; background: #000; border: 1px solid #333; color: #fff; font-family: monospace; }
+        .login-box input:focus { outline: none; border-color: #666; }
+        .login-box button { width: 100%; padding: 0.5rem; background: #222; border: 1px solid #444; color: #fff; cursor: pointer; font-family: monospace; }
+        .login-box button:hover { background: #333; }
+        .error { color: #c44; font-size: 0.85rem; margin-bottom: 0.75rem; }
+    </style>
+</head>
+<body>
+    <form class="login-box" method="post">
+        <h1>jamming-bot</h1>
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        <input type="text" name="username" placeholder="username" autofocus required>
+        <input type="password" name="password" placeholder="password" required>
+        <button type="submit">login</button>
+    </form>
+</body>
+</html>

@@ -545,6 +545,8 @@ metadata:
   namespace: jamming-bot
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: bot-service

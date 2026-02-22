@@ -247,12 +247,18 @@ class NetSpider():
             query = """CREATE TABLE Urls (id INTEGER PRIMARY KEY, hostname VARCHAR(127), url VARCHAR(127) unique, src_url VARCHAR(127), visited INTEGER)"""
             await self.database.execute(query=query)
         else:
-            query = """SELECT count(*) FROM Urls WHERE visited=1"""
-            count_res = await self.database.fetch_one(query=query)
-            logging.info(f"resume db from {count_res} {count_res[0]}")
-            count = int(count_res[0])
-            logging.info(f"resume db from {count}")
-            self.step_number = count
+            try:
+                query = """SELECT count(*) FROM Urls WHERE visited=1"""
+                count_res = await self.database.fetch_one(query=query)
+                logging.info(f"resume db from {count_res} {count_res[0]}")
+                count = int(count_res[0])
+                logging.info(f"resume db from {count}")
+                self.step_number = count
+            except Exception as e:
+                logging.warning(f"resume failed ({e}), creating new db")
+                self.resumed = False
+                query = """CREATE TABLE Urls (id INTEGER PRIMARY KEY, hostname VARCHAR(127), url VARCHAR(127) unique, src_url VARCHAR(127), visited INTEGER)"""
+                await self.database.execute(query=query)
 
 
     async def set_visited(self, url):

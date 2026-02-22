@@ -6,7 +6,8 @@ import logging
 import threading
 import requests
 
-from flask import Flask, Response, Blueprint, jsonify, request, redirect, render_template
+from functools import wraps
+from flask import Flask, Response, Blueprint, jsonify, request, redirect, render_template, session, url_for
 from flask_cors import CORS, cross_origin
 from flask_socketio import SocketIO, emit
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -120,6 +121,39 @@ def send_node_red_event(event):
             print("error ", e)
 
 
+AUTH_USER = os.getenv("AUTH_USER", "x")
+AUTH_PASS = os.getenv("AUTH_PASS", "x")
+
+PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
+                   "/tags/", "/screenshots/", "/api/tags/get/", "/api/tags/combine/")
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login", next=request.path))
+        return f(*args, **kwargs)
+    return decorated
+
+
+PUBLIC_PATHS = ("/", "/login")
+
+
+@app.before_request
+def _check_auth():
+    if request.path in PUBLIC_PATHS or any(request.path.startswith(p) for p in PUBLIC_PREFIXES):
+        return
+    if not session.get("logged_in"):
+        return redirect(url_for("login", next=request.path))
+
+
+def _ctrl_log(action: str, source: str):
+    ip = request.remote_addr if request else "?"
+    logger.info(f"ctrl '{action}' from {source} (ip={ip})")
+    redis.publish("ctrl", json.dumps(action))
+
+
 def _ensure_redis_defaults():
     defaults = {'value': 0.5, 'do_pass': 0.5, 'do_geo': 0.5,
                 'do_save': 0.5, 'do_analyze': 0.5, 'do_screenshot': 0.5,
@@ -178,6 +212,27 @@ BASE_TEXT = (
     "mood of humanity in the fragments of meaning on the pages of the "
     "internet. It is a bot that has no goal, only a path."
 )
+
+
+# =========================================================================
+#  Auth
+# =========================================================================
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        if request.form["username"] == AUTH_USER and request.form["password"] == AUTH_PASS:
+            session["logged_in"] = True
+            return redirect(request.args.get("next") or "/")
+        error = "Invalid credentials"
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.pop("logged_in", None)
+    return redirect("/login")
 
 
 # =========================================================================
@@ -322,7 +377,7 @@ def set_values():
 
 @app.route("/ctrl/<action>/", methods=["GET"])
 def ctrl_action(action):
-    redis.publish('ctrl', json.dumps(action))
+    _ctrl_log(action, f"HTTP /ctrl/{action}/")
     return redirect('/ctrl/')
 
 
@@ -468,7 +523,7 @@ def words_service():
 
 @app.route('/set_tick/', methods=['GET', 'POST'])
 def set_tick():
-    redis.publish('ctrl', json.dumps("restart"))
+    _ctrl_log("restart", "HTTP /set_tick/")
     return redirect('/ctrl/')
 
 
@@ -670,22 +725,20 @@ def handle_update(message):
 
 @socketio.on('start')
 def handle_start():
-    print("handle start")
-    redis.publish('ctrl', json.dumps("start"))
+    _ctrl_log("start", "WebSocket")
 
 @socketio.on('stop')
 def handle_stop():
-    print("handle stop")
-    redis.publish('ctrl', json.dumps("stop"))
+    _ctrl_log("stop", "WebSocket")
 
 @socketio.on('restart')
 def handle_restart():
     socketio.emit('clear')
-    redis.publish('ctrl', json.dumps("restart"))
+    _ctrl_log("restart", "WebSocket")
 
 @socketio.on('step')
 def handle_step():
-    redis.publish('ctrl', json.dumps("step"))
+    _ctrl_log("step", "WebSocket")
 
 @socketio.on('value')
 def handle_value(value):
