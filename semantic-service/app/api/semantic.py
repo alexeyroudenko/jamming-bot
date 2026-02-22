@@ -127,8 +127,8 @@ async def get_geo(text_data: SemanticCalculate):
 
 class CombineIn(BaseModel):
     words: List[str]
-    limit: int = 50
-    max_phrases: int = 1024
+    limit: int = 32
+    max_phrases: int = 256
 
 
 @semantic.post('/combine/')
