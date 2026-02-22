@@ -16,6 +16,7 @@ from prometheus_client import Gauge, generate_latest, CONTENT_TYPE_LATEST
 
 import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.integrations.rq import RqIntegration
 
 from rq_helpers import queue, get_all_jobs
 from config import Config, getConfig, getRedis
@@ -43,6 +44,7 @@ if SENTRY_DSN:
         dsn=SENTRY_DSN,
         integrations=[
             LoggingIntegration(level=logging.DEBUG, event_level=logging.INFO),
+            RqIntegration(),
         ],
         enable_logs=True,
         environment=ENVIRONMENT,

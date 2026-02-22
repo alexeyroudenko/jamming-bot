@@ -12,6 +12,7 @@ import re
 import requests
 import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.integrations.rq import RqIntegration
 from rq.decorators import job
 from rq import get_current_job
 from rq_helpers import redis_connection
@@ -45,6 +46,7 @@ if SENTRY_DSN:
         dsn=SENTRY_DSN,
         integrations=[
             logging_integration,
+            RqIntegration(),
         ],
         enable_logs=True,
         environment=ENVIRONMENT,
@@ -87,62 +89,51 @@ def remove_special_characters(text):
 @job('default', connection=redis_connection, timeout=600, result_ttl=600)
 def clean_tags():
     self_job = get_current_job()
-    self_job.meta['type'] = "wait"
+    self_job.meta['type'] = "clean_tags"
     self_job.save_meta()
-    num_iterations = 2000
-    
-    url_short = f"{TAGS_SERVICE_URL}/api/v1/tags/tags/group/"
-    response = requests.get(url_short, timeout=30)
-    
-    self_job = get_current_job() 
-    self_job.meta['type'] = "responced"
-    self_job.save_meta()
-    
-    r = response.json()
-    
-    self_job = get_current_job() 
-    self_job.meta['type'] = "parsed"
-    self_job.meta['data'] = r
-    self_job.save_meta()
-    
-    num_iterations = len(r)
-    
-    self_job = get_current_job() 
-    self_job.meta['type'] = "begining"
-    self_job.save_meta()
-    
-    for i, t in enumerate(r):
-        self_job = get_current_job() 
-        self_job.meta['type'] = "active"
-        idd = t['id']
-        urld = f"{TAGS_SERVICE_URL}/api/v1/tags/{idd}/"
-        r = requests.delete(urld, timeout=15)
-        time.sleep(.001)
-        self_job.meta['progress'] = {
-            'num_iterations': num_iterations,
-            'iteration': i,
-            'percent': i / num_iterations * 100
-        }
-        self_job.save_meta()
-    
-    url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
-    response = requests.get(url, timeout=30)
-    r = response.json()
-    num_iterations = len(r)
-    for i, t in enumerate(r):
-        idd = t['id']
-        urld = f"{TAGS_SERVICE_URL}/api/v1/tags/{idd}/"
-        r = requests.delete(urld, timeout=15)
-        time.sleep(.001)
-        self_job = get_current_job() 
-        self_job.meta['progress'] = {
-            'num_iterations': num_iterations,
-            'iteration': i,
-            'percent': i / num_iterations * 100
-        }
-        self_job.save_meta()
-        
-    
+
+    with sentry_sdk.start_span(op="http.client", description="tags_service get grouped"):
+        url_short = f"{TAGS_SERVICE_URL}/api/v1/tags/tags/group/"
+        response = requests.get(url_short, timeout=30)
+        r = response.json()
+
+    with sentry_sdk.start_span(op="http.client", description="tags_service delete grouped") as span:
+        span.set_data("count", len(r))
+        for i, t in enumerate(r):
+            idd = t['id']
+            urld = f"{TAGS_SERVICE_URL}/api/v1/tags/{idd}/"
+            requests.delete(urld, timeout=15)
+            time.sleep(.001)
+            if i % 50 == 0:
+                self_job = get_current_job()
+                self_job.meta['progress'] = {
+                    'num_iterations': len(r),
+                    'iteration': i,
+                    'percent': i / max(len(r), 1) * 100
+                }
+                self_job.save_meta()
+
+    with sentry_sdk.start_span(op="http.client", description="tags_service get all"):
+        url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
+        response = requests.get(url, timeout=30)
+        r = response.json()
+
+    with sentry_sdk.start_span(op="http.client", description="tags_service delete all") as span:
+        span.set_data("count", len(r))
+        for i, t in enumerate(r):
+            idd = t['id']
+            urld = f"{TAGS_SERVICE_URL}/api/v1/tags/{idd}/"
+            requests.delete(urld, timeout=15)
+            time.sleep(.001)
+            if i % 50 == 0:
+                self_job = get_current_job()
+                self_job.meta['progress'] = {
+                    'num_iterations': len(r),
+                    'iteration': i,
+                    'percent': i / max(len(r), 1) * 100
+                }
+                self_job.save_meta()
+
     from datetime import datetime
     now = datetime.now()
     date_time = now.strftime("%Y-%m-%d_%H-%M-%S")    
@@ -167,53 +158,45 @@ def add_tags(tags):
 def add_tags_from_steps():
     MAX_STEPS = 80000
     self_job = get_current_job()
-    self_job.meta['type'] = "wait"
+    self_job.meta['type'] = "add_tags_from_steps"
     self_job.save_meta()
-    
-    files = sorted(glob.glob("data/path/steps/*"))
-    files_txt = sorted(glob.glob("data/path/txt/*"))
 
-    self_job = get_current_job()
-    self_job.meta['type'] = "starting"
-    self_job.save_meta()
-        
-    num_iterations = MAX_STEPS
-    i = 0
-    for file in files[0:MAX_STEPS]:        
+    with sentry_sdk.start_span(op="fs", description="read step files"):
+        files = sorted(glob.glob("data/path/steps/*"))
+        files_txt = sorted(glob.glob("data/path/txt/*"))
+
+    num_iterations = min(len(files), MAX_STEPS)
+    for i, file in enumerate(files[0:MAX_STEPS]):
         contents = open(file).readlines()
-        step = int(contents[0].strip())         
-        # step = i + 1   
-        # print(file, step)   
-        text_path = files_txt[step]     
-        text = open(files_txt[step-1]).read().strip().replace("\n","")
+        step = int(contents[0].strip())
+        text = open(files_txt[step-1]).read().strip().replace("\n", "")
         
-        url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
-        headers = {'content-type': 'application/json'}
-        rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
-        sem_data = rr.json()
-        sim = sem_data.get('sim', [])
-
-        for hras in sim:
-            url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
+        with sentry_sdk.start_span(op="http.client", description=f"semantic+tags step {step}"):
+            url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
             headers = {'content-type': 'application/json'}
-            tag_data = {'name': hras, "count": 0}
-            response = requests.post(url, data=json.dumps(tag_data), headers=headers, timeout=15)
+            rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
+            sem_data = rr.json()
+            sim = sem_data.get('sim', [])
+
+            for hras in sim:
+                url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
+                headers = {'content-type': 'application/json'}
+                tag_data = {'name': hras, "count": 0}
+                requests.post(url, data=json.dumps(tag_data), headers=headers, timeout=15)
         
-        self_job = get_current_job()
-        self_job.meta['step'] = step
-        self_job.meta['type'] = "active"
-        self_job.meta['progress'] = {
-            'num_iterations': num_iterations,
-            'iteration': i,
-            'percent': 100 * i / num_iterations
-        }
-        self_job.save_meta()
-        i += 1
-        
-        if i > MAX_STEPS:
+        if i % 50 == 0:
+            self_job = get_current_job()
+            self_job.meta['step'] = step
+            self_job.meta['type'] = "active"
+            self_job.meta['progress'] = {
+                'num_iterations': num_iterations,
+                'iteration': i,
+                'percent': 100 * i / max(num_iterations, 1)
+            }
+            self_job.save_meta()
+
+        if i >= MAX_STEPS:
             return text
-            
-            # break
 
 
 #
@@ -226,157 +209,75 @@ def dostep(step):
     logger.info(f"job dostep step {step}")
         
     self_job = get_current_job()
-    self_job.meta['progress'] = {
-        'num_iterations': 4,
-        'iteration': 1,
-        'percent': 25
-    }
-
     self_job.meta['type'] = "step"
     if "current_url" in step.keys():
         self_job.meta['url'] = step['current_url']
 
-    ip = "0.0.0.0" 
-    if "ip" in step.keys():
-        ip = step['ip']
+    ip = step.get('ip', '0.0.0.0')
     self_job.meta['ip'] = ip
-        
-    text = "" 
-    if "text" in step.keys():
-        text = step['text']
+    text = step.get('text', '')
     self_job.meta['text'] = text
-    
     self_job.save_meta()
-        
-    self_job.meta['progress'] = {
-        'num_iterations': 4,
-        'iteration': 2,
-        'percent': 50
-    }
-    self_job.save_meta()
-    
-    
-    text = remove_html_tags(text)
-    text = remove_special_characters(text)
-    
-    print(text)    
+
+    with sentry_sdk.start_span(op="parse", description="clean text"):
+        text = remove_html_tags(text)
+        text = remove_special_characters(text)
 
     tags = []
     words = []
     hrases = []
         
     if len(text) > 128:
-        # semantic analyze 1
-        #
-        # import json
-        # import requests
-        # url = "http://spacyapi/ent"
-        # headers = {'content-type': 'application/json'}
-        # d = {'text': text , 'model': 'en_core_web_md'}
-        # response = requests.post(url, data=json.dumps(d), headers=headers)
-        # r = response.json()
-        # print(r)
-        # # Always define hrases as a list, even if ents is missing or empty
-        # hrases = []
-        # if isinstance(r, dict):
-        #     hrases = [ent["text"] for ent in r.get("ents", []) if "text" in ent]
-        # elif isinstance(r, list):
-        #     hrases = [ent["text"] for ent in r if isinstance(ent, dict) and "text" in ent]
-        # print("hrases:", hrases)
-        
-
-        url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
-        headers = {'content-type': 'application/json'}
-        rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
-        sem_data = rr.json()
-        sentry_sdk.logger.info(f"semantic_service data: {sem_data}")
-        sim = sem_data.get('sim', [])
-        words = sim
-
-        for hras in sim:
-            url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
+        with sentry_sdk.start_span(op="http.client", description="semantic_service /tags/"):
+            url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
             headers = {'content-type': 'application/json'}
-            tag_data = {'name': hras, "count": 0}
-            response = requests.post(url, data=json.dumps(tag_data), headers=headers, timeout=15)
-        
-    self_job.meta['progress'] = {
-        'num_iterations': 4,
-        'iteration': 3,
-        'percent': 100
-    }    
-    self_job.save_meta()
-    
-    
-    #
-    # Calculate cloud
-    #
-    # print(f"category: {category}")
-    # tags = {}
-    # if category != "Undefined topic":
+            rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
+            sem_data = rr.json()
+            sentry_sdk.logger.info(f"semantic_service data: {sem_data}")
+            sim = sem_data.get('sim', [])
+            words = sim
 
-    # for w in words:
-    #     print(f"word: {w}")
-    #     if len(w) > 4:
-    #         word = w[0:50]
-    #         import json
-    #         import requests
-    #         url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
-    #         headers = {'content-type': 'application/json'}
-    #         data = {'name': word, "count": 0}
-    #         response = requests.post(url, data=json.dumps(data), headers=headers)
-    #         tags = response.json()
-
+        with sentry_sdk.start_span(op="http.client", description="tags_service add tags") as span:
+            span.set_data("tags_count", len(sim))
+            for hras in sim:
+                url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
+                headers = {'content-type': 'application/json'}
+                tag_data = {'name': hras, "count": 0}
+                response = requests.post(url, data=json.dumps(tag_data), headers=headers, timeout=15)
 
     do_save = float(redis_connection.get('do_save') or 0)
     if do_save == 1.0:
-        sentry_sdk.logger.info(f"semantic_service write {step['step']} to store")
-
-        url = f"{STORAGE_SERVICE_URL}/store"
-        headers = {'content-type': 'application/json'}
-        step['text'] = text
-        step_number_val = step.pop('step', None)
-        step.pop('headers', None)
-        step.pop('src_url', None)
-        step.pop('current_url', None)
-        try:
-            response = requests.post(url, data=json.dumps(step), headers=headers, timeout=30)
-            r = response.json()
-        except Exception as e:
-            logger.warning(f"Storage service error: {e}")
-            r = {"error": str(e)}
-        if step_number_val is not None:
-            step['step'] = step_number_val
+        with sentry_sdk.start_span(op="http.client", description="storage_service /store"):
+            sentry_sdk.logger.info(f"semantic_service write {step['step']} to store")
+            url = f"{STORAGE_SERVICE_URL}/store"
+            headers = {'content-type': 'application/json'}
+            step['text'] = text
+            step_number_val = step.pop('step', None)
+            step.pop('headers', None)
+            step.pop('src_url', None)
+            step.pop('current_url', None)
+            try:
+                response = requests.post(url, data=json.dumps(step), headers=headers, timeout=30)
+                r = response.json()
+            except Exception as e:
+                logger.warning(f"Storage service error: {e}")
+                r = {"error": str(e)}
+            if step_number_val is not None:
+                step['step'] = step_number_val
     else:
         logger.info("do_save disabled, skipping storage write")
-
-
-
-
 
     self_job.meta['progress'] = {
         "tags": tags,
         "semantic": tags,
         "semantic_words": words,
         "semantic_hrases": hrases,
-        "text":text[0:1024] + "...",
+        "text": text[0:1024] + "...",
         'num_iterations': 4,
         'iteration': 4,
         'percent': 100
     }    
     self_job.save_meta()
-
-    from sentry_sdk import metrics
-    metrics.count("step", step['number'])
-    
-    # metrics.count("step.failed", 0)
-    # metrics.count("step.timeout", 0)
-    # metrics.count("step.error", 0)
-    # metrics.count("step.canceled", 0)
-    # metrics.count("step.pending", 0)
-    # metrics.count("step.running", 0)
-    # metrics.count("step.completed", 0)
-    # metrics.count("step.failed", 0)
-
 
     return_obj = {
             "step": step['number'],
@@ -388,7 +289,7 @@ def dostep(step):
             "semantic": tags,
             "semantic_words": words,
             "semantic_hrases": hrases,
-            "text":text[0:1024] + "..."
+            "text": text[0:1024] + "..."
         }
 
     return return_obj
@@ -412,45 +313,31 @@ def do_geo(ip):
     logger.info(f"job do_geo ip {ip}")
     
     self_job = get_current_job()    
-    self_job.meta['progress'] = {
-        'num_iterations': 2,
-        'iteration': 1,
-        'percent': 50
-    }                
     self_job.meta['type'] = "geo"        
     self_job.meta['ip'] = ip
     self_job.save_meta()
     
-    location = {}
-    location['ip'] = ip
-    location['city'] = ""
-    location['latitude'] = 0
-    location['longitude'] = 0
-    location['error'] = ""
-    try:
-        url = f"{IP_SERVICE_URL}/api/v1/ip/{ip}/"
-        headers = {'content-type': 'application/json'}
-        response = requests.get(url, headers=headers, timeout=15)
-        response.raise_for_status()
-        geo = response.json()
+    location = {'ip': ip, 'city': '', 'latitude': 0, 'longitude': 0, 'error': ''}
 
-        location['city'] = geo.get('city', '')
-        location['latitude'] = geo.get('latitude', 0)
-        location['longitude'] = geo.get('longitude', 0)
-        location['error'] = geo.get('error', '')
+    with sentry_sdk.start_span(op="http.client", description="ip_service geo lookup") as span:
+        span.set_data("ip", ip)
+        try:
+            url = f"{IP_SERVICE_URL}/api/v1/ip/{ip}/"
+            headers = {'content-type': 'application/json'}
+            response = requests.get(url, headers=headers, timeout=15)
+            response.raise_for_status()
+            geo = response.json()
 
-    except Exception as e:
-        location['error'] = str(e)
-        logger.warning(f"do_geo failed for {ip}: {e}")
-    
-    self_job = get_current_job()    
-    self_job.meta['progress'] = {
-        'num_iterations': 2,
-        'iteration': 2,
-        'percent': 100
-    }            
-    self_job.meta['type'] = "geo"        
-    self_job.meta['ip'] = ip
+            location['city'] = geo.get('city', '')
+            location['latitude'] = geo.get('latitude', 0)
+            location['longitude'] = geo.get('longitude', 0)
+            location['error'] = geo.get('error', '')
+
+        except Exception as e:
+            location['error'] = str(e)
+            logger.warning(f"do_geo failed for {ip}: {e}")
+
+    self_job.meta['progress'] = {'num_iterations': 2, 'iteration': 2, 'percent': 100}
     self_job.save_meta()
        
     return location
@@ -474,38 +361,24 @@ def save(data):
     
     self_job = get_current_job()    
     self_job.meta['type'] = "save"
-    self_job.meta['step'] = data
-    self_job.meta['progress'] = {
-        'num_iterations': 2,
-        'iteration': 0,
-        'percent':100
-    }
     self_job.meta['url'] = url
     self_job.meta['filename'] = filename
     self_job.save_meta()
         
     if len(text) > 0:
-        with open(filename, 'w') as file:
-            file.write(text)
+        with sentry_sdk.start_span(op="fs", description="write text/html/headers"):
+            with open(filename, 'w') as file:
+                file.write(text)
 
-        with open(f'data/txt/{step.zfill(4)}.html', 'w') as file:
-            file.write(data['html'])
+            with open(f'data/txt/{step.zfill(4)}.html', 'w') as file:
+                file.write(data['html'])
 
-        with open(f'data/txt/{step.zfill(4)}_headers.txt', 'w') as file:
-            file.write(data['current_url']+"\n")
-            file.write(data['ip']+"\n")            
-            file.write(data['headers'])
+            with open(f'data/txt/{step.zfill(4)}_headers.txt', 'w') as file:
+                file.write(data['current_url']+"\n")
+                file.write(data['ip']+"\n")            
+                file.write(data['headers'])
 
-    self_job = get_current_job()    
-    self_job.meta['type'] = "save"
-    self_job.meta['step'] = data
-    self_job.meta['progress'] = {
-        'num_iterations': 2,
-        'iteration': 2,
-        'percent':100
-    }
-    self_job.meta['url'] = url
-    self_job.meta['filename'] = filename
+    self_job.meta['progress'] = {'num_iterations': 2, 'iteration': 2, 'percent': 100}
     self_job.save_meta()
     
     return filename
@@ -523,83 +396,53 @@ def analyze(html):
     """Analyze HTML content using spaCy NER."""
     self_job = get_current_job()
     self_job.meta['type'] = "analyze"
-    self_job.meta['progress'] = {
-        'num_iterations': 2,
-        'iteration': 1,
-        'percent': 50
-    }
     self_job.save_meta()
 
-    text = remove_html_tags(html)
-    text = remove_special_characters(text)
+    with sentry_sdk.start_span(op="parse", description="clean html"):
+        text = remove_html_tags(html)
+        text = remove_special_characters(text)
 
     entities = []
-    try:
-        import spacy
-        nlp = spacy.load("en_core_web_sm")
-        doc = nlp(text[:100000])  # limit to 100k chars
-        entities = [{"text": ent.text, "label": ent.label_} for ent in doc.ents]
-    except Exception as e:
-        sentry_sdk.logger.warning(f"analyze error: {e}")
-
-
-
+    with sentry_sdk.start_span(op="ml", description="spacy NER") as span:
+        span.set_data("text_length", len(text))
+        try:
+            import spacy
+            nlp = spacy.load("en_core_web_sm")
+            doc = nlp(text[:100000])
+            entities = [{"text": ent.text, "label": ent.label_} for ent in doc.ents]
+            span.set_data("entities_count", len(entities))
+        except Exception as e:
+            sentry_sdk.logger.warning(f"analyze error: {e}")
 
     tags = []
     words = []
     hrases = []
         
     if len(text) > 128:
-
-        # semantic analyze 1
-        # import json
-        # import requests
-        # url = "http://spacyapi/ent"
-        # headers = {'content-type': 'application/json'}
-        # d = {'text': text , 'model': 'en_core_web_md'}
-        # response = requests.post(url, data=json.dumps(d), headers=headers)
-        # r = response.json()
-        # print(r)
-        # # Always define hrases as a list, even if ents is missing or empty
-        # hrases = []
-        # if isinstance(r, dict):
-        #     hrases = [ent["text"] for ent in r.get("ents", []) if "text" in ent]
-        # elif isinstance(r, list):
-        #     hrases = [ent["text"] for ent in r if isinstance(ent, dict) and "text" in ent]
-        # print("hrases:", hrases)
-        
-        url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
-        headers = {'content-type': 'application/json'}
-        rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
-        sem_data = rr.json()
-        sentry_sdk.logger.info(f"semantic_service data: {sem_data}")
-        sim = sem_data.get('sim', [])
-        words = sim
-
-        if len(tags) == 0:
+        with sentry_sdk.start_span(op="http.client", description="semantic_service /tags/"):
+            url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
+            headers = {'content-type': 'application/json'}
+            rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
+            sem_data = rr.json()
+            sentry_sdk.logger.info(f"semantic_service data: {sem_data}")
+            sim = sem_data.get('sim', [])
+            words = sim
             tags = words
-            
-        if len(hrases) == 0:
             hrases = words
 
-        for tagg in tags:
-            sentry_sdk.logger.info(f"add tag: {tagg}")
-            url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
-            headers = {'content-type': 'application/json'}
-            tag_data = {'name': tagg, "count": 0}
-            response = requests.post(url, data=json.dumps(tag_data), headers=headers, timeout=15)
-
+        with sentry_sdk.start_span(op="http.client", description="tags_service add tags") as span:
+            span.set_data("tags_count", len(tags))
+            for tagg in tags:
+                url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
+                headers = {'content-type': 'application/json'}
+                tag_data = {'name': tagg, "count": 0}
+                response = requests.post(url, data=json.dumps(tag_data), headers=headers, timeout=15)
 
     self_job = get_current_job()
-    self_job.meta['type'] = "analyze"
     self_job.meta['tags'] = tags
     self_job.meta['words'] = words
     self_job.meta['hrases'] = hrases
-    self_job.meta['progress'] = {
-        'num_iterations': 2,
-        'iteration': 2,
-        'percent': 100
-    }
+    self_job.meta['progress'] = {'num_iterations': 2, 'iteration': 2, 'percent': 100}
     self_job.save_meta()
 
     return {
@@ -649,80 +492,48 @@ def do_screenshot(data):
     4. Return the public URL
     """
     logger.info(f"job do_screenshot start")
-    logger.info(f"job do_screenshot data {data}")
 
     self_job = get_current_job()
     self_job.meta['type'] = "screenshot"
-    self_job.meta['progress'] = {
-        'num_iterations': 3,
-        'iteration': 1,
-        'percent': 33
-    }
     self_job.save_meta()
 
-    sentry_sdk.logger.info(f"do_screenshot start")
-    sentry_sdk.logger.info(f"data {data}")
-    
     current_url = data.get('current_url', data.get('url', ''))
     step_number = data.get('step', data.get('number', '0'))
 
-    sentry_sdk.logger.info(f"data {step_number}")
-    sentry_sdk.logger.info(f"current_url {current_url}")
+    with sentry_sdk.start_span(op="http.client", description="html-renderer render") as span:
+        span.set_data("url", current_url)
+        render_url = f"{RENDERER_SERVICE_URL}/render"
+        params = {
+            'url': current_url,
+            'width': 1080,
+            'height': 1920,
+            'format': 'jpeg',
+            'quality': 80,
+            'dsf': '1',
+        }
+        response = requests.get(render_url, params=params, timeout=90)
+        response.raise_for_status()
+        image_bytes = response.content
+        span.set_data("image_size", len(image_bytes))
 
-    # 1. Render screenshot via html-renderer-service
-    render_url = f"{RENDERER_SERVICE_URL}/render"
-    params = {
-        'url': current_url,
-        'width': 1080,
-        'height': 1920,
-        'format': 'jpeg',
-        'quality': 80,
-        'dsf': '1',
-    }
-    response = requests.get(render_url, params=params, timeout=90)
-    sentry_sdk.logger.info(f"do_screenshot response {response}")
-    response.raise_for_status()
-    image_bytes = response.content
+    with sentry_sdk.start_span(op="s3", description="s3 upload screenshot") as span:
+        safe_name = _filenamify(current_url)
+        s3_key = f"screenshots/{str(step_number).zfill(8)}-{safe_name}.jpg"
+        span.set_data("s3_key", s3_key)
+        s3 = _get_s3_client()
+        s3.put_object(
+            Bucket=S3_BUCKET_NAME,
+            Key=s3_key,
+            Body=image_bytes,
+            ContentType='image/jpeg',
+            ACL='public-read',
+        )
 
-    sentry_sdk.logger.info(f"do_screenshot image_bytes {image_bytes}")
-    sentry_sdk.logger.info(f"do_screenshot image_bytes length {len(image_bytes)}")
-
-    time.sleep(1)
-
-    self_job = get_current_job()
-    self_job.meta['progress'] = {
-        'num_iterations': 3,
-        'iteration': 2,
-        'percent': 66
-    }
-    sentry_sdk.logger.info(f"do_screenshot progress {self_job.meta['progress']}")
-    self_job.save_meta()
-
-    # 2. Generate filename from URL
-    safe_name = _filenamify(current_url)
-    s3_key = f"screenshots/{str(step_number).zfill(8)}-{safe_name}.jpg"
-    sentry_sdk.logger.info(f"do_screenshot s3_key {s3_key}")
-    # 3. Upload to S3
-    s3 = _get_s3_client()
-    s3.put_object(
-        Bucket=S3_BUCKET_NAME,
-        Key=s3_key,
-        Body=image_bytes,
-        ContentType='image/jpeg',
-        ACL='public-read',
-    )
-
-    # Build public URL
     public_url = f"https://{S3_HOST}/{S3_BUCKET_NAME}/{s3_key}"
 
     self_job = get_current_job()
-    self_job.meta['type'] = "screenshot"
     self_job.meta['screenshot_url'] = public_url
-    self_job.meta['progress'] = {
-        'num_iterations': 3,
-        'iteration': 3,
-        'percent': 100
-    }
+    self_job.meta['progress'] = {'num_iterations': 3, 'iteration': 3, 'percent': 100}
     self_job.save_meta()
 
     sentry_sdk.logger.info(f"screenshot uploaded: {public_url}")
