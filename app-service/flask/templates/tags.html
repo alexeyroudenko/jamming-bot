@@ -79,6 +79,17 @@
   var RETURN_SPEED = 0.06;
   var FONT = 'monospace';
   var PAD = 6;
+  var HIGHLIGHT_COLOR = 'rgb(0,255,160)';
+  var HIGHLIGHT_DECAY = 0.015;
+
+  function highlightTags(names) {
+    for (var i = 0; i < names.length; i++) {
+      var p = particleMap[names[i]];
+      if (p && !p.removing) {
+        p.highlightT = 1.0;
+      }
+    }
+  }
 
   var statusEl = document.getElementById('status');
   var canvas = document.getElementById('cloud');
@@ -272,6 +283,7 @@
           vx: 0, vy: 0,
           opacity: 0,
           removing: false,
+          highlightT: 0,
           _w: 0, _h: 0
         };
         p._w = measureWord(p.text, size);
@@ -385,13 +397,34 @@
       p.x += p.vx;
       p.y += p.vy;
 
+      // Highlight decay
+      if (p.highlightT > 0) {
+        p.highlightT = Math.max(0, p.highlightT - HIGHLIGHT_DECAY);
+      }
+
       // Draw
-      ctx.globalAlpha = p.opacity;
-      ctx.font = Math.round(p.size) + 'px ' + FONT;
-      ctx.fillStyle = p.color;
+      var fontSize = Math.round(p.size);
+      ctx.font = fontSize + 'px ' + FONT;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(p.text, p.x, p.y);
+
+      if (p.highlightT > 0) {
+        var ht = p.highlightT;
+        ctx.globalAlpha = p.opacity * ht * 0.6;
+        ctx.shadowColor = HIGHLIGHT_COLOR;
+        ctx.shadowBlur = 20 * ht;
+        ctx.fillStyle = HIGHLIGHT_COLOR;
+        ctx.fillText(p.text, p.x, p.y);
+        ctx.shadowBlur = 0;
+
+        ctx.globalAlpha = p.opacity;
+        ctx.fillStyle = lerpColor(p.color, HIGHLIGHT_COLOR, ht);
+        ctx.fillText(p.text, p.x, p.y);
+      } else {
+        ctx.globalAlpha = p.opacity;
+        ctx.fillStyle = p.color;
+        ctx.fillText(p.text, p.x, p.y);
+      }
     }
 
     ctx.globalAlpha = 1;
@@ -430,7 +463,8 @@
     wsLog('location ' + JSON.stringify(data));
   });
   socket.on('analyzed', function (data) {
-    if (data.tags) {
+    if (data && data.tags) {
+      highlightTags(data.tags);
       fetchAndDraw();
     }
     wsLog('analyzed ' + JSON.stringify(data));
