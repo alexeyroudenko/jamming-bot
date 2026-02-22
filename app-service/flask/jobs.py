@@ -583,6 +583,11 @@ def analyze(html):
             tag_data = {'name': hras, "count": 0}
             response = requests.post(url, data=json.dumps(tag_data), headers=headers, timeout=15)
 
+    if len(tags) == 0:
+        tags = words
+        
+    if len(hrases) == 0:
+        hrases = words
 
     self_job = get_current_job()
     self_job.meta['type'] = "analyze"
