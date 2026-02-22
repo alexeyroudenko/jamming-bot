@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      force_all:
+        description: 'Rebuild all services (ignore diff)'
+        required: false
+        default: 'false'
 
 env:
   DEPLOY_HOST: b0ts.arthew0.online
@@ -24,74 +29,98 @@ jobs:
           key: ${{ secrets.K3S_SSH_PRIVATE_KEY }}
           password: ${{ secrets.K3S_SSH_PASSWORD }}
           port: ${{ secrets.K3S_SSH_PORT || '22' }}
+          command_timeout: 30m
           script: |
             set -e
             DEPLOY_PATH="${{ secrets.K3S_DEPLOY_PATH || '/opt/jamming-bot' }}"
+            FORCE_ALL="${{ github.event.inputs.force_all || 'false' }}"
             cd "$DEPLOY_PATH"
+
+            PREV=$(git rev-parse HEAD 2>/dev/null || echo "")
 
             echo ">>> Pulling latest code..."
             git fetch origin main
             git reset --hard origin/main
 
-            echo ">>> Building and importing Docker images..."
+            CURR=$(git rev-parse HEAD)
 
-            # html-renderer (uses custom image name)
-            docker build -t 1325gy/my_dev:v5 ./html-renderer-service
-            docker save 1325gy/my_dev:v5 | k3s ctr images import -
+            changed() {
+              if [ "$FORCE_ALL" = "true" ] || [ -z "$PREV" ] || [ "$PREV" = "$CURR" ]; then
+                return 0
+              fi
+              git diff --name-only "$PREV" "$CURR" -- "$1" | grep -q .
+            }
 
-            # keywords-service
-            docker build -t keywords-service:latest ./keywords-service
-            docker save keywords-service:latest | k3s ctr images import -
+            NS="jamming-bot"
+            BUILT=""
 
-            # semantic-service
-            docker build -t semantic-service:latest ./semantic-service
-            docker save semantic-service:latest | k3s ctr images import -
+            build_and_import() {
+              local dir="$1" image="$2"
+              if changed "$dir/"; then
+                echo ">>> Building $image (changes in $dir/)..."
+                docker build -t "$image" "./$dir"
+                docker save "$image" | k3s ctr images import -
+                BUILT="$BUILT $dir"
+              else
+                echo ">>> Skipping $image (no changes in $dir/)"
+              fi
+            }
 
-            # storage-service
-            docker build -t storage-service:latest ./storage-service
-            docker save storage-service:latest | k3s ctr images import -
-
-            # tags-service
-            docker build -t tags-service:latest ./tags-service
-            docker save tags-service:latest | k3s ctr images import -
-
-            # bot-service
-            docker build -t bot-service:latest ./bot-service
-            docker save bot-service:latest | k3s ctr images import -
-
-            # ip-service
-            docker build -t ip-service:latest ./ip-service
-            docker save ip-service:latest | k3s ctr images import -
-
-            # app-service (also used by worker-service)
-            docker build -t app-service:latest ./app-service
-            docker save app-service:latest | k3s ctr images import -
+            build_and_import html-renderer-service 1325gy/my_dev:v5
+            build_and_import keywords-service     keywords-service:latest
+            build_and_import semantic-service      semantic-service:latest
+            build_and_import storage-service       storage-service:latest
+            build_and_import tags-service          tags-service:latest
+            build_and_import bot-service           bot-service:latest
+            build_and_import ip-service            ip-service:latest
+            build_and_import app-service           app-service:latest
 
             echo ">>> Applying Kubernetes manifests..."
             kubectl apply -f deployment.yaml
 
-            NS="jamming-bot"
+            restart_if_built() {
+              local dir="$1" deploy="$2"
+              if echo "$BUILT" | grep -q "$dir"; then
+                echo ">>> Restarting $deploy..."
+                kubectl -n $NS rollout restart deployment "$deploy"
+                return 0
+              fi
+              return 1
+            }
 
-            echo ">>> Restarting deployments for rolling update..."
-            kubectl -n $NS rollout restart deployment html-renderer
-            kubectl -n $NS rollout restart deployment keywords-service
-            kubectl -n $NS rollout restart deployment semantic-service
-            kubectl -n $NS rollout restart deployment storage-service
-            kubectl -n $NS rollout restart deployment tags-service
-            kubectl -n $NS rollout restart deployment bot-service
-            kubectl -n $NS rollout restart deployment ip-service
-            kubectl -n $NS rollout restart deployment app-service
-            kubectl -n $NS rollout restart deployment worker-service
+            WAIT=""
 
-            echo ">>> Waiting for rollouts..."
-            kubectl -n $NS rollout status deployment/keywords-service --timeout=120s
-            kubectl -n $NS rollout status deployment/semantic-service --timeout=120s
-            kubectl -n $NS rollout status deployment/storage-service --timeout=120s
-            kubectl -n $NS rollout status deployment/tags-service --timeout=120s
-            kubectl -n $NS rollout status deployment/bot-service --timeout=120s
-            kubectl -n $NS rollout status deployment/ip-service --timeout=120s
-            kubectl -n $NS rollout status deployment/html-renderer --timeout=300s
-            kubectl -n $NS rollout status deployment/app-service --timeout=300s
-            kubectl -n $NS rollout status deployment/worker-service --timeout=120s
+            restart_if_built html-renderer-service html-renderer     && WAIT="$WAIT html-renderer"
+            restart_if_built keywords-service      keywords-service   && WAIT="$WAIT keywords-service"
+            restart_if_built semantic-service       semantic-service   && WAIT="$WAIT semantic-service"
+            restart_if_built storage-service        storage-service    && WAIT="$WAIT storage-service"
+            restart_if_built tags-service           tags-service       && WAIT="$WAIT tags-service"
+            restart_if_built bot-service            bot-service        && WAIT="$WAIT bot-service"
+            restart_if_built ip-service             ip-service         && WAIT="$WAIT ip-service"
+            restart_if_built app-service            app-service        && WAIT="$WAIT app-service"
+            restart_if_built app-service            worker-service     && WAIT="$WAIT worker-service"
 
+            if [ -z "$WAIT" ]; then
+              echo ">>> No services rebuilt — nothing to restart."
+            fi
+
+            FAILED=0
+            for dep in $WAIT; do
+              TIMEOUT=120s
+              if [ "$dep" = "html-renderer" ] || [ "$dep" = "app-service" ] || [ "$dep" = "semantic-service" ]; then
+                TIMEOUT=300s
+              fi
+              echo ">>> Waiting for $dep (timeout $TIMEOUT)..."
+              kubectl -n $NS rollout status deployment/"$dep" --timeout="$TIMEOUT" || FAILED=1
+            done
+
+            if [ "$FAILED" = "1" ]; then
+              echo ">>> Some rollouts failed:"
+              kubectl -n $NS get pods
+              exit 1
+            fi
+
+            if [ -n "$BUILT" ]; then
+              echo ">>> Rebuilt:$BUILT"
+            fi
             echo ">>> Deployment complete!"
