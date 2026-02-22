@@ -542,8 +542,53 @@ def analyze(html):
     except Exception as e:
         sentry_sdk.logger.warning(f"analyze error: {e}")
 
+
+
+
+    tags = []
+    words = []
+    hrases = []
+        
+    if len(text) > 128:
+
+        # semantic analyze 1
+        # import json
+        # import requests
+        # url = "http://spacyapi/ent"
+        # headers = {'content-type': 'application/json'}
+        # d = {'text': text , 'model': 'en_core_web_md'}
+        # response = requests.post(url, data=json.dumps(d), headers=headers)
+        # r = response.json()
+        # print(r)
+        # # Always define hrases as a list, even if ents is missing or empty
+        # hrases = []
+        # if isinstance(r, dict):
+        #     hrases = [ent["text"] for ent in r.get("ents", []) if "text" in ent]
+        # elif isinstance(r, list):
+        #     hrases = [ent["text"] for ent in r if isinstance(ent, dict) and "text" in ent]
+        # print("hrases:", hrases)
+        
+        url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
+        headers = {'content-type': 'application/json'}
+        rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
+        sem_data = rr.json()
+        sentry_sdk.logger.info(f"semantic_service data: {sem_data}")
+        sim = sem_data.get('sim', [])
+        words = sim
+
+        for hras in sim:
+            sentry_sdk.logger.info(f"add tag: {hras}")
+            url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
+            headers = {'content-type': 'application/json'}
+            tag_data = {'name': hras, "count": 0}
+            response = requests.post(url, data=json.dumps(tag_data), headers=headers, timeout=15)
+
+
     self_job = get_current_job()
     self_job.meta['type'] = "analyze"
+    self_job.meta['tags'] = tags
+    self_job.meta['words'] = words
+    self_job.meta['hrases'] = hrases
     self_job.meta['progress'] = {
         'num_iterations': 2,
         'iteration': 2,
@@ -552,38 +597,12 @@ def analyze(html):
     self_job.save_meta()
 
     return {
+        "tags": tags,
+        "words": words,
+        "hrases": hrases,
         "entities": entities,
         "text_length": len(text),
     }
-
-
-# #
-# #
-# #   
-# @job('default', connection=redis_connection, timeout=90, result_ttl=90)
-# def screenshot(data):
-    
-#     step = data['step']  
-#     current_url = data['current_url']
-#     out_filename = f'data/txt/{step.zfill(4)}.jpg'
-#     img_url = f"http://192.168.31.18:8080/screenshot?url={current_url}&viewport-width=1024&viewport-height=1024"
-#     import requests
-#     response = requests.get(img_url)
-#     if response.status_code == 200:
-#         with open(out_filename, 'wb') as f:
-#             f.write(response.content)
-            
-#     self_job = get_current_job()
-#     self_job.meta['progress'] = {
-#         'num_iterations': 1,
-#         'iteration': 1,
-#         'percent':100,
-#         'type': "screenshot"
-#     }
-#     self_job.meta['type'] = "screenshot"
-#     self_job.save_meta()
-    
-#     return out_filename
 
 
 def _filenamify(url):
