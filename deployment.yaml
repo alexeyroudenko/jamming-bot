@@ -477,7 +477,7 @@ spec:
       - name: worker
         image: app-service:latest
         imagePullPolicy: Never
-        command: ["rq", "worker", "--disable-job-desc-logging", "--url", "redis://redis:6379/0"]
+        command: ["python", "worker.py"]
         env:
         - name: REDIS_HOST
           value: "redis"

@@ -36,21 +36,20 @@ S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'steps')
 
 SENTRY_DSN = os.getenv('SENTRY_DSN', '')
 
-if SENTRY_DSN:
-    logging_integration = LoggingIntegration(
-        level=logging.DEBUG,
-        event_level=logging.INFO
-    )
-    
+def _traces_sampler(ctx):
+    return 1.0
+
+
+if SENTRY_DSN and not sentry_sdk.is_initialized():
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         integrations=[
-            logging_integration,
+            LoggingIntegration(level=logging.INFO, event_level=logging.WARNING),
             RqIntegration(),
         ],
         enable_logs=True,
         environment=ENVIRONMENT,
-        traces_sample_rate=1.0,
+        traces_sampler=_traces_sampler,
         profiles_sample_rate=1.0,
         send_default_pii=False,
     )

@@ -39,16 +39,20 @@ redis = getRedis()
 # Sentry
 # ---------------------------------------------------------------------------
 
+def _traces_sampler(ctx):
+    return 1.0
+
+
 if SENTRY_DSN:
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         integrations=[
-            LoggingIntegration(level=logging.DEBUG, event_level=logging.INFO),
+            LoggingIntegration(level=logging.INFO, event_level=logging.WARNING),
             RqIntegration(),
         ],
         enable_logs=True,
         environment=ENVIRONMENT,
-        traces_sample_rate=1.0,
+        traces_sampler=_traces_sampler,
         profiles_sample_rate=1.0,
         send_default_pii=False,
     )
