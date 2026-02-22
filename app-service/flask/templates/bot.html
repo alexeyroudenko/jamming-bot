@@ -1163,8 +1163,8 @@ return length
 
     socket.on('my_pong', function () {
         const latency = (new Date).getTime() - start_time;
-        $('#latency').html(latency);
-        $('#counter').html(counter);
+        $('#latency').html(String(latency).padStart(4, '0'));
+        $('#counter').html(String(counter).padStart(4, '0'));
     });
 
     socket.on('disconnect', function() {

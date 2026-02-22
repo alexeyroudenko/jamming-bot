@@ -93,6 +93,27 @@
     mouse.y = -9999;
   });
 
+  canvas.addEventListener('touchstart', function (e) {
+    e.preventDefault();
+    var t = e.touches[0];
+    mouse.x = t.clientX;
+    mouse.y = t.clientY;
+  }, { passive: false });
+  canvas.addEventListener('touchmove', function (e) {
+    e.preventDefault();
+    var t = e.touches[0];
+    mouse.x = t.clientX;
+    mouse.y = t.clientY;
+  }, { passive: false });
+  canvas.addEventListener('touchend', function () {
+    mouse.x = -9999;
+    mouse.y = -9999;
+  });
+  canvas.addEventListener('touchcancel', function () {
+    mouse.x = -9999;
+    mouse.y = -9999;
+  });
+
   function randomPos(tw, th) {
     var margin = 50;
     var x = margin + Math.random() * (W - tw - margin * 2) + tw / 2;
