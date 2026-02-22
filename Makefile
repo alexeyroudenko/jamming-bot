@@ -46,50 +46,50 @@ cert:
 k3s-html-renderer:
 	docker build -t 1325gy/my_dev:v5 ./html-renderer-service
 	docker save 1325gy/my_dev:v5 | k3s ctr images import -
-	kubectl rollout restart deployment html-renderer
+	kubectl rollout restart deployment html-renderer -n jamming-bot
 
 .PHONY: k3s-keywords-service
 k3s-keywords-service:
 	docker build -t keywords-service:latest ./keywords-service
 	docker save keywords-service:latest | k3s ctr images import -
-	kubectl rollout restart deployment keywords-service
+	kubectl rollout restart deployment keywords-service -n jamming-bot
 
 .PHONY: k3s-semantic-service
 k3s-semantic-service:
 	docker build -t semantic-service:latest ./semantic-service
 	docker save semantic-service:latest | k3s ctr images import -
-	kubectl rollout restart deployment semantic-service
+	kubectl rollout restart deployment semantic-service -n jamming-bot
 
 .PHONY: k3s-storage-service
 k3s-storage-service:
 	docker build -t storage-service:latest ./storage-service
 	docker save storage-service:latest | k3s ctr images import -
-	kubectl rollout restart deployment storage-service
+	kubectl rollout restart deployment storage-service -n jamming-bot
 
 .PHONY: k3s-tags-service
 k3s-tags-service:
 	docker build -t tags-service:latest ./tags-service
 	docker save tags-service:latest | k3s ctr images import -
-	kubectl rollout restart deployment tags-service
+	kubectl rollout restart deployment tags-service -n jamming-bot
 
 .PHONY: k3s-bot-service
 k3s-bot-service:
 	docker build -t bot-service:latest ./bot-service
 	docker save bot-service:latest | k3s ctr images import -
-	kubectl rollout restart deployment bot-service
+	kubectl rollout restart deployment bot-service -n jamming-bot
 
 .PHONY: k3s-ip-service
 k3s-ip-service:
 	docker build -t ip-service:latest ./ip-service
 	docker save ip-service:latest | k3s ctr images import -
-	kubectl rollout restart deployment ip-service
+	kubectl rollout restart deployment ip-service -n jamming-bot
 
 .PHONY: k3s-app-service
 k3s-app-service:
 	docker build -t app-service:latest ./app-service
 	docker save app-service:latest | k3s ctr images import -
-	kubectl rollout restart deployment app-service
-	kubectl rollout restart deployment worker-service
+	kubectl rollout restart deployment app-service -n jamming-bot
+	kubectl rollout restart deployment worker-service -n jamming-bot
 
 .PHONY: k3s-all
 k3s-all: k3s-html-renderer k3s-keywords-service k3s-semantic-service k3s-storage-service k3s-tags-service k3s-bot-service k3s-ip-service k3s-app-service
