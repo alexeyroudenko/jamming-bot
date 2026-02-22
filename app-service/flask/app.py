@@ -194,6 +194,12 @@ def status():
     return jsonify({"status": "ok"})
 
 
+@app.route('/screenshots/')
+@cross_origin()
+def screenshots():
+    return render_template('screenshots.html')
+
+
 @app.route('/tags/')
 @cross_origin()
 def tags_cloud():
