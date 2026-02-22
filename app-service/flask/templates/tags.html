@@ -33,6 +33,26 @@
     #status { color: #333; font-size: 10px; }
 
     canvas { display: block; cursor: default; }
+
+    #console {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 120px;
+      background: rgba(0, 0, 0, 0.85);
+      border-top: 1px solid #222;
+      overflow-y: auto;
+      padding: 6px 10px;
+      font-family: monospace;
+      font-size: 10px;
+      color: #555;
+      z-index: 20;
+      pointer-events: auto;
+    }
+    #console .line { white-space: pre; margin: 0; }
+    #console .ts { color: #333; }
+    #console .ws { color: #4a8; }
   </style>
 </head>
 <body>
@@ -46,6 +66,7 @@
 </nav>
 
 <canvas id="cloud"></canvas>
+<div id="console"></div>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
 <script>
@@ -61,6 +82,23 @@
   var statusEl = document.getElementById('status');
   var canvas = document.getElementById('cloud');
   var ctx = canvas.getContext('2d');
+  var consoleEl = document.getElementById('console');
+  var MAX_LINES = 200;
+
+  function wsLog(msg) {
+    var now = new Date();
+    var ts = [now.getHours(), now.getMinutes(), now.getSeconds()]
+      .map(function (n) { return n < 10 ? '0' + n : n; }).join(':');
+    var line = document.createElement('p');
+    line.className = 'line';
+    line.innerHTML = '<span class="ts">' + ts + '</span> <span class="ws">' + msg + '</span>';
+    consoleEl.appendChild(line);
+    while (consoleEl.children.length > MAX_LINES) {
+      consoleEl.removeChild(consoleEl.firstChild);
+    }
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+    console.log('[ws] ' + msg);
+  }
 
   var W, H;
   var mouse = { x: -9999, y: -9999 };
@@ -375,12 +413,27 @@
   var socket = io({ transports: ['websocket', 'polling'] });
   socket.on('connect', function () {
     statusEl.textContent = 'live';
+    wsLog('connected');
   });
-  socket.on('tags_updated', function () {
+  socket.on('tags_updated', function (data) {
+    wsLog('tags_updated' + (data ? ' ' + JSON.stringify(data) : ''));
     fetchAndDraw();
+  });
+  socket.on('step', function (data) {
+    wsLog('step ' + (data && data.url ? data.url : JSON.stringify(data)));
+  });
+  socket.on('screenshot', function (data) {
+    wsLog('screenshot ' + (data && data.screenshot_url ? data.screenshot_url : JSON.stringify(data)));
+  });
+  socket.on('location', function (data) {
+    wsLog('location ' + JSON.stringify(data));
+  });
+  socket.on('analyzed', function (data) {
+    wsLog('analyzed ' + JSON.stringify(data));
   });
   socket.on('disconnect', function () {
     statusEl.textContent = 'disconnected';
+    wsLog('disconnected');
   });
 })();
 </script>
