@@ -122,7 +122,8 @@ def send_node_red_event(event):
 
 def _ensure_redis_defaults():
     defaults = {'value': 0.5, 'do_pass': 0.5, 'do_geo': 0.5,
-                'do_save': 0.5, 'do_analyze': 0.5, 'do_screenshot': 0.5}
+                'do_save': 0.5, 'do_analyze': 0.5, 'do_screenshot': 0.5,
+                'sleep_time': 2.0}
     for key, default in defaults.items():
         if not redis.get(key):
             redis.set(key, default)
@@ -709,6 +710,10 @@ def handle_do_analyze(value):
 @socketio.on('do_screenshot')
 def handle_do_screenshot(value):
     redis.set('do_screenshot', float(value))
+
+@socketio.on('sleep_time')
+def handle_sleep_time(value):
+    redis.set('sleep_time', float(value))
 
 @socketio.event
 def my_ping():

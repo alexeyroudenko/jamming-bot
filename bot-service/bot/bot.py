@@ -779,7 +779,15 @@ async def main():
             STEP_URL = config["step_url"]
             EVENT_URL = config["event_url"]
             SUBLINK_URL = config["sublink_url"]
-            
+
+            if config['receive_events'] and pubsub is not None:
+                try:
+                    redis_sleep = redis.get('sleep_time')
+                    if redis_sleep is not None:
+                        spider.sleep_time = float(redis_sleep)
+                except Exception:
+                    pass
+
             await asyncio.sleep(spider.sleep_time)
             
             if killer.kill_now:
