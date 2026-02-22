@@ -55,21 +55,21 @@
   var REPEL_STRENGTH = 80;
   var RETURN_SPEED = 0.06;
   var FONT = '"Lucida Grande", Arial, Helvetica, sans-serif';
+  var PAD = 6;
 
   var statusEl = document.getElementById('status');
   var canvas = document.getElementById('cloud');
   var ctx = canvas.getContext('2d');
 
-  var W, H, cx, cy;
+  var W, H;
   var mouse = { x: -9999, y: -9999 };
+  var particleMap = {};
   var particles = [];
   var raf;
 
   function resize() {
     W = window.innerWidth;
     H = window.innerHeight;
-    cx = W / 2;
-    cy = H / 2;
     canvas.width = W;
     canvas.height = H;
   }
@@ -77,7 +77,10 @@
 
   window.addEventListener('resize', function () {
     resize();
-    if (particles.length) layoutWords();
+    particles.forEach(function (p) {
+      p.homeX = Math.min(W - 40, Math.max(40, p.homeX));
+      p.homeY = Math.min(H - 20, Math.max(44, p.homeY));
+    });
   });
 
   canvas.addEventListener('mousemove', function (e) {
@@ -89,6 +92,160 @@
     mouse.y = -9999;
   });
 
+  function randomPos(tw, th) {
+    var margin = 50;
+    var x = margin + Math.random() * (W - tw - margin * 2) + tw / 2;
+    var y = margin + Math.random() * (H - th - margin * 2) + th / 2;
+    return { x: x, y: y };
+  }
+
+  function calcSize(count, maxCount) {
+    var minSize = 11;
+    var maxSize = Math.min(W, H) / 9;
+    var ratio = Math.sqrt(count / maxCount);
+    return minSize + ratio * (maxSize - minSize);
+  }
+
+  function calcColor(count, maxCount) {
+    var ratio = Math.sqrt(count / maxCount);
+    var bright = 35 + Math.round(ratio * 190);
+    return 'rgb(' + bright + ',' + bright + ',' + bright + ')';
+  }
+
+  function measureWord(text, size) {
+    ctx.font = size + 'px ' + FONT;
+    return ctx.measureText(text).width;
+  }
+
+  // Scatter placement: random positions with overlap relaxation
+  function scatterPlace(list) {
+    // Measure all
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i];
+      p._w = measureWord(p.text, p.size);
+      p._h = p.size;
+    }
+
+    // Sort biggest first for placement priority
+    list.sort(function (a, b) { return b.size - a.size; });
+
+    // Place each word randomly, with a few retries to avoid overlap
+    var placed = [];
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i];
+      var best = null;
+      var bestOverlap = Infinity;
+
+      for (var attempt = 0; attempt < 30; attempt++) {
+        var pos = randomPos(p._w, p._h);
+        var overlapCount = 0;
+
+        for (var j = 0; j < placed.length; j++) {
+          var q = placed[j];
+          if (rectsOverlap(pos.x, pos.y, p._w, p._h, q.homeX, q.homeY, q._w, q._h)) {
+            overlapCount++;
+          }
+        }
+
+        if (overlapCount === 0) {
+          best = pos;
+          break;
+        }
+        if (overlapCount < bestOverlap) {
+          bestOverlap = overlapCount;
+          best = pos;
+        }
+      }
+
+      p.homeX = best.x;
+      p.homeY = best.y;
+      placed.push(p);
+    }
+  }
+
+  function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+    var al = ax - aw / 2 - PAD, ar = ax + aw / 2 + PAD;
+    var at = ay - ah / 2 - PAD, ab = ay + ah / 2 + PAD;
+    var bl = bx - bw / 2 - PAD, br = bx + bw / 2 + PAD;
+    var bt = by - bh / 2 - PAD, bb = by + bh / 2 + PAD;
+    return al < br && ar > bl && at < bb && ab > bt;
+  }
+
+  function mergeParticles(tags) {
+    var maxCount = 1;
+    for (var i = 0; i < tags.length; i++) {
+      if (tags[i].count > maxCount) maxCount = tags[i].count;
+    }
+
+    var newMap = {};
+    var toPlace = [];
+
+    for (var i = 0; i < tags.length; i++) {
+      var t = tags[i];
+      var key = t.name;
+      var size = calcSize(t.count, maxCount);
+      var color = calcColor(t.count, maxCount);
+
+      if (particleMap[key]) {
+        // Existing tag: update size/color, keep position
+        var p = particleMap[key];
+        p.targetSize = size;
+        p.targetColor = color;
+        p.count = t.count;
+        p._w = measureWord(p.text, size);
+        p._h = size;
+        p.removing = false;
+        p.opacity = typeof p.opacity === 'number' ? p.opacity : 1;
+        newMap[key] = p;
+      } else {
+        // New tag: create particle, will need placement
+        var p = {
+          text: t.name,
+          count: t.count,
+          size: size * 0.01,
+          targetSize: size,
+          color: color,
+          targetColor: color,
+          homeX: 0, homeY: 0,
+          x: 0, y: 0,
+          vx: 0, vy: 0,
+          opacity: 0,
+          removing: false,
+          _w: 0, _h: 0
+        };
+        p._w = measureWord(p.text, size);
+        p._h = size;
+        newMap[key] = p;
+        toPlace.push(p);
+      }
+    }
+
+    // Mark removed tags for fade-out
+    for (var key in particleMap) {
+      if (!newMap[key]) {
+        var p = particleMap[key];
+        p.removing = true;
+        newMap[key] = p;
+      }
+    }
+
+    // Place only new tags in random spots
+    if (toPlace.length) {
+      scatterPlace(toPlace);
+      for (var i = 0; i < toPlace.length; i++) {
+        var p = toPlace[i];
+        p.x = p.homeX;
+        p.y = p.homeY;
+      }
+    }
+
+    particleMap = newMap;
+    particles = [];
+    for (var key in particleMap) {
+      particles.push(particleMap[key]);
+    }
+  }
+
   function fetchAndDraw() {
     statusEl.textContent = 'updating…';
     fetch(API)
@@ -98,7 +255,8 @@
           statusEl.textContent = 'no tags';
           return;
         }
-        buildParticles(tags);
+        mergeParticles(tags);
+        if (!raf) animate();
         statusEl.textContent = tags.length + ' tags';
       })
       .catch(function (err) {
@@ -107,99 +265,45 @@
       });
   }
 
-  function buildParticles(tags) {
-    var maxCount = 1;
-    for (var i = 0; i < tags.length; i++) {
-      if (tags[i].count > maxCount) maxCount = tags[i].count;
-    }
-
-    var minSize = 11;
-    var maxSize = Math.min(W, H) / 10;
-
-    particles = tags.map(function (t) {
-      var ratio = Math.sqrt(t.count / maxCount);
-      var size = minSize + ratio * (maxSize - minSize);
-      var bright = 40 + Math.round(ratio * 180);
-      return {
-        text: t.name,
-        count: t.count,
-        size: size,
-        color: 'rgb(' + bright + ',' + bright + ',' + bright + ')',
-        homeX: 0, homeY: 0,
-        x: 0, y: 0,
-        vx: 0, vy: 0
-      };
-    });
-
-    layoutWords();
-    if (!raf) animate();
-  }
-
-  function layoutWords() {
-    // Simple spiral placement
-    particles.sort(function (a, b) { return b.size - a.size; });
-    var placed = [];
-
-    for (var i = 0; i < particles.length; i++) {
-      var p = particles[i];
-      ctx.font = p.size + 'px ' + FONT;
-      var tw = ctx.measureText(p.text).width;
-      var th = p.size;
-      p._w = tw;
-      p._h = th;
-
-      var ok = false;
-      for (var r = 0; r < Math.max(W, H); r += 3) {
-        var step = Math.max(0.05, 0.5 / (r + 1));
-        for (var a = 0; a < Math.PI * 2; a += step) {
-          var tx = cx + r * Math.cos(a);
-          var ty = cy + r * Math.sin(a);
-          var left = tx - tw / 2;
-          var top = ty - th / 2;
-          var right = left + tw;
-          var bottom = top + th;
-
-          if (left < 4 || top < 36 || right > W - 4 || bottom > H - 4) continue;
-
-          var overlap = false;
-          for (var j = 0; j < placed.length; j++) {
-            var q = placed[j];
-            var ql = q.homeX - q._w / 2 - 4;
-            var qt = q.homeY - q._h / 2 - 2;
-            var qr = ql + q._w + 8;
-            var qb = qt + q._h + 4;
-            if (left < qr && right > ql && top < qb && bottom > qt) {
-              overlap = true;
-              break;
-            }
-          }
-          if (!overlap) {
-            p.homeX = tx;
-            p.homeY = ty;
-            p.x = tx;
-            p.y = ty;
-            placed.push(p);
-            ok = true;
-            break;
-          }
-        }
-        if (ok) break;
-      }
-      if (!ok) {
-        p.homeX = cx + (Math.random() - 0.5) * W * 0.8;
-        p.homeY = cy + (Math.random() - 0.5) * H * 0.8;
-        p.x = p.homeX;
-        p.y = p.homeY;
-      }
-    }
+  function lerpColor(from, to, t) {
+    var f = from.match(/\d+/g).map(Number);
+    var tt = to.match(/\d+/g).map(Number);
+    var r = Math.round(f[0] + (tt[0] - f[0]) * t);
+    var g = Math.round(f[1] + (tt[1] - f[1]) * t);
+    var b = Math.round(f[2] + (tt[2] - f[2]) * t);
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
   }
 
   function animate() {
     ctx.clearRect(0, 0, W, H);
 
+    var toRemove = [];
+
     for (var i = 0; i < particles.length; i++) {
       var p = particles[i];
 
+      // Animate size towards target
+      if (p.targetSize) {
+        p.size += (p.targetSize - p.size) * 0.08;
+      }
+
+      // Animate color
+      if (p.targetColor && p.color !== p.targetColor) {
+        p.color = lerpColor(p.color, p.targetColor, 0.08);
+      }
+
+      // Fade in new / fade out removed
+      if (p.removing) {
+        p.opacity -= 0.02;
+        if (p.opacity <= 0) {
+          toRemove.push(p.text);
+          continue;
+        }
+      } else if (p.opacity < 1) {
+        p.opacity = Math.min(1, p.opacity + 0.03);
+      }
+
+      // Mouse repel
       var dx = p.x - mouse.x;
       var dy = p.y - mouse.y;
       var dist = Math.sqrt(dx * dx + dy * dy);
@@ -210,6 +314,7 @@
         p.vy += (dy / dist) * force * 0.08;
       }
 
+      // Spring back to home
       p.vx += (p.homeX - p.x) * RETURN_SPEED;
       p.vy += (p.homeY - p.y) * RETURN_SPEED;
 
@@ -219,11 +324,24 @@
       p.x += p.vx;
       p.y += p.vy;
 
-      ctx.font = p.size + 'px ' + FONT;
+      // Draw
+      ctx.globalAlpha = p.opacity;
+      ctx.font = Math.round(p.size) + 'px ' + FONT;
       ctx.fillStyle = p.color;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(p.text, p.x, p.y);
+    }
+
+    ctx.globalAlpha = 1;
+
+    // Cleanup fully faded particles
+    for (var i = 0; i < toRemove.length; i++) {
+      delete particleMap[toRemove[i]];
+    }
+    if (toRemove.length) {
+      particles = [];
+      for (var key in particleMap) particles.push(particleMap[key]);
     }
 
     raf = requestAnimationFrame(animate);
