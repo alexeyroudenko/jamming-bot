@@ -576,18 +576,19 @@ def analyze(html):
         sim = sem_data.get('sim', [])
         words = sim
 
-        for hras in sim:
-            sentry_sdk.logger.info(f"add tag: {hras}")
+        if len(tags) == 0:
+            tags = words
+            
+        if len(hrases) == 0:
+            hrases = words
+
+        for tagg in tags:
+            sentry_sdk.logger.info(f"add tag: {tagg}")
             url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
             headers = {'content-type': 'application/json'}
-            tag_data = {'name': hras, "count": 0}
+            tag_data = {'name': tagg, "count": 0}
             response = requests.post(url, data=json.dumps(tag_data), headers=headers, timeout=15)
 
-    if len(tags) == 0:
-        tags = words
-        
-    if len(hrases) == 0:
-        hrases = words
 
     self_job = get_current_job()
     self_job.meta['type'] = "analyze"

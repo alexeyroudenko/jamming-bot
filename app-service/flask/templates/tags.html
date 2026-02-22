@@ -429,6 +429,9 @@
     wsLog('location ' + JSON.stringify(data));
   });
   socket.on('analyzed', function (data) {
+    if (data.tags) {
+      fetchAndDraw();
+    }
     wsLog('analyzed ' + JSON.stringify(data));
   });
   socket.on('disconnect', function () {
