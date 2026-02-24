@@ -504,13 +504,13 @@ def do_screenshot(data):
         render_url = f"{RENDERER_SERVICE_URL}/render"
         params = {
             'url': current_url,
-            'width': 1080,
-            'height': 1920,
+            'width': 1080/2,
+            'height': 1920/2,
             'format': 'jpeg',
             'quality': 80,
             'dsf': '1',
         }
-        response = requests.get(render_url, params=params, timeout=90)
+        response = requests.get(render_url, params=params, timeout=10)
         response.raise_for_status()
         image_bytes = response.content
         span.set_data("image_size", len(image_bytes))

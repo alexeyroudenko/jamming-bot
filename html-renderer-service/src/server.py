@@ -4,10 +4,10 @@
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import Response, PlainTextResponse
 from playwright.async_api import async_playwright
-from datetime import datetime
 from typing import Optional
 import logging
 import sys
+import asyncio
 
 # Настройка логирования
 logging.basicConfig(
@@ -21,10 +21,44 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 PORT = 3000
 
+# Глобальные объекты браузера (инициализируются при старте)
+_playwright = None
+_browser = None
+_page = None
+_render_lock = asyncio.Lock()
+
 
 @app.on_event("startup")
 async def startup_event():
+    global _playwright, _browser, _page
+    logger.info("Запуск Chromium...")
+    _playwright = await async_playwright().start()
+    _browser = await _playwright.chromium.launch(
+        args=[
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--font-render-hinting=none',
+            '--disable-infobars'
+        ]
+    )
+    _page = await _browser.new_page()
     logger.info(f"Сервис рендеринга запущен на http://0.0.0.0:{PORT}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global _playwright, _browser, _page
+    logger.info("Выгрузка Chromium...")
+    if _page:
+        await _page.close()
+    if _browser:
+        await _browser.close()
+    if _playwright:
+        await _playwright.stop()
+    _playwright = None
+    _browser = None
+    _page = None
+    logger.info("Chromium выгружен")
 
 
 @app.get("/render")
@@ -49,90 +83,89 @@ async def render_screenshot(
             }
         )
 
-    browser = None
-    try:
-        logger.info(f"Начинаем рендеринг для: {url}")
-        
-        async with async_playwright() as p:
-            # Запускаем браузер с аргументами для улучшения рендеринга
-            browser = await p.chromium.launch(
-                args=[
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--font-render-hinting=none',
-                    '--disable-infobars'
-                ]
-            )
-            
-            device_scale_factor = int(dsf) if dsf.isdigit() else 1
-            
-            # Создаем контекст с viewport и deviceScaleFactor
-            context = await browser.new_context(
-                viewport={"width": width, "height": height},
-                device_scale_factor=device_scale_factor
-            )
-            page = await context.new_page()
-            
-            logger.info(f"Viewport: {width}x{height}, DeviceScaleFactor: {device_scale_factor}")
-            
-            await page.goto(url, wait_until="load", timeout=60000)
-            # Ждем завершения JS-рендеринга после загрузки страницы
-            await page.wait_for_timeout(3000)
-            
-            # Если нужен скриншот всей страницы, прокручиваем её
-            if fullPage.lower() == 'true':
-                await page.evaluate("""
-                    async () => {
-                        await new Promise((resolve) => {
-                            let totalHeight = 0;
-                            const distance = 100;
-                            const timer = setInterval(() => {
-                                const scrollHeight = document.body.scrollHeight;
-                                window.scrollBy(0, distance);
-                                totalHeight += distance;
-                                
-                                if (totalHeight >= scrollHeight) {
-                                    clearInterval(timer);
-                                    resolve();
-                                }
-                            }, 100);
-                        });
-                    }
-                """)
-            
-            # Определяем параметры скриншота
-            screenshot_options = {
-                "full_page": fullPage.lower() == 'true',
-                "type": format if format in ['png', 'jpeg', 'webp'] else 'png'
-            }
-            
-            # Устанавливаем качество для JPEG/WebP
-            if screenshot_options["type"] in ['jpeg', 'webp']:
-                if quality is not None:
-                    screenshot_options["quality"] = max(0, min(100, quality))
-                elif screenshot_options["type"] == 'jpeg':
-                    screenshot_options["quality"] = 90  # Хорошее качество по умолчанию для JPEG
-            
-            image_bytes = await page.screenshot(**screenshot_options)
-            
-            logger.info(f"Рендеринг успешно завершен для: {url}")
-            
-            # Закрываем браузер перед возвратом ответа
-            await browser.close()
-            
-            content_type = f"image/{screenshot_options['type']}"
-            return Response(content=image_bytes, media_type=content_type)
-            
-    except Exception as error:
-        logger.error(f"Ошибка рендеринга для {url}: {str(error)}", exc_info=True)
-        # Браузер будет автоматически закрыт при выходе из async with блока
+    if _page is None:
         raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Не удалось отрендерить страницу.",
-                "details": str(error)
-            }
+            status_code=503,
+            detail={"error": "Сервис рендеринга ещё не готов. Chromium запускается."}
         )
+
+    async with _render_lock:
+        try:
+            logger.info(f"Начинаем рендеринг для: {url}")
+
+            device_scale_factor = int(dsf) if dsf.isdigit() else 1
+
+            # Выбираем страницу: при dsf != 1 нужен отдельный контекст (dsf задаётся при создании)
+            page = _page
+            context_to_close = None
+            if device_scale_factor != 1:
+                context_to_close = await _browser.new_context(
+                    viewport={"width": width, "height": height},
+                    device_scale_factor=device_scale_factor
+                )
+                page = await context_to_close.new_page()
+
+            try:
+                if device_scale_factor == 1:
+                    await _page.set_viewport_size({"width": width, "height": height})
+
+                logger.info(f"Viewport: {width}x{height}, DeviceScaleFactor: {device_scale_factor}")
+
+                # Переходим на страницу
+                await page.goto(url, wait_until="load", timeout=60000)
+                await page.wait_for_timeout(3000)
+
+                if fullPage.lower() == 'true':
+                    await page.evaluate("""
+                        async () => {
+                            await new Promise((resolve) => {
+                                let totalHeight = 0;
+                                const distance = 100;
+                                const timer = setInterval(() => {
+                                    const scrollHeight = document.body.scrollHeight;
+                                    window.scrollBy(0, distance);
+                                    totalHeight += distance;
+
+                                    if (totalHeight >= scrollHeight) {
+                                        clearInterval(timer);
+                                        resolve();
+                                    }
+                                }, 100);
+                            });
+                        }
+                    """)
+
+                screenshot_options = {
+                    "full_page": fullPage.lower() == 'true',
+                    "type": format if format in ['png', 'jpeg', 'webp'] else 'png'
+                }
+
+                if screenshot_options["type"] in ['jpeg', 'webp']:
+                    if quality is not None:
+                        screenshot_options["quality"] = max(0, min(100, quality))
+                    elif screenshot_options["type"] == 'jpeg':
+                        screenshot_options["quality"] = 90
+
+                image_bytes = await page.screenshot(**screenshot_options)
+
+                logger.info(f"Рендеринг успешно завершен для: {url}")
+
+                content_type = f"image/{screenshot_options['type']}"
+                return Response(content=image_bytes, media_type=content_type)
+
+            finally:
+                if context_to_close:
+                    await context_to_close.close()
+
+        except Exception as error:
+            logger.error(f"Ошибка рендеринга для {url}: {str(error)}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "Не удалось отрендерить страницу.",
+                    "details": str(error)
+                }
+            )
 
 
 @app.get("/")
