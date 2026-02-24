@@ -784,5 +784,5 @@ def my_ping():
 # =========================================================================
 
 if __name__ == '__main__':
-    print("start flask 2.1.0")
+    print("start flask 2.2.0")
     socketio.run(app, host='0.0.0.0', allow_unsafe_werkzeug=True, debug=True)
