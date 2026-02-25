@@ -8,6 +8,7 @@ from typing import Optional
 import logging
 import sys
 import asyncio
+import time
 
 # Настройка логирования
 logging.basicConfig(
@@ -87,6 +88,7 @@ async def render_screenshot(
         )
 
     async with _render_lock:
+        render_start = time.perf_counter()
         try:
             last_error = None
             for attempt in range(2):
@@ -147,10 +149,15 @@ async def render_screenshot(
 
                         image_bytes = await page.screenshot(**screenshot_options)
 
-                        logger.info(f"Рендеринг успешно завершен для: {url}")
+                        elapsed = time.perf_counter() - render_start
+                        logger.info(f"Рендеринг успешно завершен для: {url} (время: {elapsed:.2f}s)")
 
                         content_type = f"image/{screenshot_options['type']}"
-                        return Response(content=image_bytes, media_type=content_type)
+                        return Response(
+                            content=image_bytes,
+                            media_type=content_type,
+                            headers={"X-Render-Time-Seconds": f"{elapsed:.2f}"}
+                        )
 
                     finally:
                         if context_to_close:
@@ -169,7 +176,8 @@ async def render_screenshot(
                 raise last_error
 
         except Exception as error:
-            logger.error(f"Ошибка рендеринга для {url}: {str(error)}", exc_info=True)
+            elapsed = time.perf_counter() - render_start
+            logger.error(f"Ошибка рендеринга для {url} (время: {elapsed:.2f}s): {str(error)}", exc_info=True)
             raise HTTPException(
                 status_code=500,
                 detail={
