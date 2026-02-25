@@ -509,8 +509,22 @@ def do_screenshot(data):
             'format': 'jpeg',
             'quality': 80,
             'dsf': '1',
+            'json_on_error': 'true',
         }
-        response = requests.get(render_url, params=params, timeout=10)
+        response = requests.get(render_url, params=params, timeout=60)
+        # При ошибке рендеринга сервис возвращает 200 + JSON {"error": "..."}
+        if response.headers.get('content-type', '').startswith('application/json'):
+            try:
+                data = response.json()
+                if 'error' in data:
+                    logger.warning(f"do_screenshot: renderer error for {current_url}: {data['error']}")
+                    return {
+                        'step': step_number,
+                        'url': current_url,
+                        'error': data['error'],
+                    }
+            except Exception:
+                pass
         response.raise_for_status()
         image_bytes = response.content
         span.set_data("image_size", len(image_bytes))

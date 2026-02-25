@@ -2,7 +2,7 @@
 # server.py - Python version of the screenshot service
 
 from fastapi import FastAPI, Query, HTTPException
-from fastapi.responses import Response, PlainTextResponse
+from fastapi.responses import Response, PlainTextResponse, JSONResponse
 from playwright.async_api import async_playwright
 from typing import Optional
 import logging
@@ -67,7 +67,8 @@ async def render_screenshot(
     format: str = Query("png", description="Image format: png, jpeg, or webp"),
     fullPage: str = Query("false", description="Full page screenshot: true or false"),
     quality: Optional[int] = Query(None, description="Quality for jpeg/webp (0-100)"),
-    dsf: str = Query("1", description="Device Scale Factor for Retina/HiDPI quality")
+    dsf: str = Query("1", description="Device Scale Factor for Retina/HiDPI quality"),
+    json_on_error: str = Query("false", description="On error return 200+JSON {\"error\": \"...\"} instead of 500")
 ):
     """
     Render a screenshot of the given URL.
@@ -181,11 +182,17 @@ async def render_screenshot(
         except Exception as error:
             elapsed = time.perf_counter() - render_start
             logger.error(f"Ошибка рендеринга для {url} (время: {elapsed:.2f}s): {str(error)}", exc_info=True)
+            error_str = f"{type(error).__module__}.{type(error).__name__}: {error}"
+            if json_on_error.lower() in ('true', '1', 'yes'):
+                return JSONResponse(
+                    status_code=200,
+                    content={"error": error_str}
+                )
             raise HTTPException(
                 status_code=500,
                 detail={
                     "error": "Не удалось отрендерить страницу.",
-                    "details": str(error)
+                    "details": error_str
                 }
             )
 
