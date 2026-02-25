@@ -1034,7 +1034,7 @@ metadata:
 spec:
   scaleTargetRef:
     name: html-renderer
-  minReplicaCount: 1
+  minReplicaCount: 2
   maxReplicaCount: 5
   cooldownPeriod: 120
   pollingInterval: 10
