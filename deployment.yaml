@@ -32,11 +32,11 @@ spec:
         - containerPort: 3000
         resources:
           requests:
-            cpu: "500m"
-            memory: "1Gi"
+            cpu: "250m"
+            memory: "512Mi"
           limits:
-            cpu: "1"
-            memory: "2Gi"
+            cpu: "250m"
+            memory: "512Mi"
         readinessProbe:
           httpGet:
             path: /
@@ -218,11 +218,11 @@ spec:
         command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7781"]
         resources:
           requests:
-            cpu: "125m"
-            memory: "128Mi"
+            cpu: "25m"
+            memory: "64Mi"
           limits:
-            cpu: "250m"
-            memory: "256Mi"
+            cpu: "25m"
+            memory: "64Mi"
         readinessProbe:
           tcpSocket:
             port: 7781
@@ -653,8 +653,8 @@ spec:
             cpu: "250m"
             memory: "512Mi"
           limits:
-            cpu: "500m"
-            memory: "1536Mi"
+            cpu: "250m"
+            memory: "512Mi"
         livenessProbe:
           exec:
             command: ["python", "-c", "import os; os.path.exists('data/database.db')"]
@@ -696,11 +696,11 @@ spec:
               key: DATABASE_URI
         resources:
           requests:
-            cpu: "125m"
+            cpu: "100m"
             memory: "128Mi"
           limits:
-            cpu: "250m"
-            memory: "256Mi"
+            cpu: "100m"
+            memory: "128Mi"
         readinessProbe:
           tcpSocket:
             port: 8004
