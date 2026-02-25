@@ -24,13 +24,12 @@ PORT = 3000
 # Глобальные объекты браузера (инициализируются при старте)
 _playwright = None
 _browser = None
-_page = None
 _render_lock = asyncio.Lock()
 
 
 @app.on_event("startup")
 async def startup_event():
-    global _playwright, _browser, _page
+    global _playwright, _browser
     logger.info("Запуск Chromium...")
     _playwright = await async_playwright().start()
     _browser = await _playwright.chromium.launch(
@@ -38,26 +37,24 @@ async def startup_event():
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--font-render-hinting=none',
-            '--disable-infobars'
+            '--disable-infobars',
+            '--disable-dev-shm-usage',  # Использовать /tmp вместо /dev/shm при нехватке памяти
+            '--disable-gpu',
         ]
     )
-    _page = await _browser.new_page()
     logger.info(f"Сервис рендеринга запущен на http://0.0.0.0:{PORT}")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    global _playwright, _browser, _page
+    global _playwright, _browser
     logger.info("Выгрузка Chromium...")
-    if _page:
-        await _page.close()
     if _browser:
         await _browser.close()
     if _playwright:
         await _playwright.stop()
     _playwright = None
     _browser = None
-    _page = None
     logger.info("Chromium выгружен")
 
 
@@ -83,7 +80,7 @@ async def render_screenshot(
             }
         )
 
-    if _page is None:
+    if _browser is None:
         raise HTTPException(
             status_code=503,
             detail={"error": "Сервис рендеринга ещё не готов. Chromium запускается."}
@@ -91,71 +88,85 @@ async def render_screenshot(
 
     async with _render_lock:
         try:
-            logger.info(f"Начинаем рендеринг для: {url}")
+            last_error = None
+            for attempt in range(2):
+                try:
+                    logger.info(f"Начинаем рендеринг для: {url}" + (f" (повтор {attempt + 1})" if attempt > 0 else ""))
 
-            device_scale_factor = int(dsf) if dsf.isdigit() else 1
+                    device_scale_factor = int(dsf) if dsf.isdigit() else 1
 
-            # Выбираем страницу: при dsf != 1 нужен отдельный контекст (dsf задаётся при создании)
-            page = _page
-            context_to_close = None
-            if device_scale_factor != 1:
-                context_to_close = await _browser.new_context(
-                    viewport={"width": width, "height": height},
-                    device_scale_factor=device_scale_factor
-                )
-                page = await context_to_close.new_page()
+                    # Создаём новую страницу для каждого запроса — изолирует падения и утечки памяти
+                    context_to_close = None
+                    if device_scale_factor != 1:
+                        context_to_close = await _browser.new_context(
+                            viewport={"width": width, "height": height},
+                            device_scale_factor=device_scale_factor
+                        )
+                        page = await context_to_close.new_page()
+                    else:
+                        page = await _browser.new_page()
+                        await page.set_viewport_size({"width": width, "height": height})
 
-            try:
-                if device_scale_factor == 1:
-                    await _page.set_viewport_size({"width": width, "height": height})
+                    try:
+                        logger.info(f"Viewport: {width}x{height}, DeviceScaleFactor: {device_scale_factor}")
 
-                logger.info(f"Viewport: {width}x{height}, DeviceScaleFactor: {device_scale_factor}")
+                        # Переходим на страницу (domcontentloaded — меньше нагрузка на тяжёлых сайтах)
+                        await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                        await page.wait_for_timeout(3000)
 
-                # Переходим на страницу
-                await page.goto(url, wait_until="load", timeout=60000)
-                await page.wait_for_timeout(3000)
+                        if fullPage.lower() == 'true':
+                            await page.evaluate("""
+                                async () => {
+                                    await new Promise((resolve) => {
+                                        let totalHeight = 0;
+                                        const distance = 100;
+                                        const timer = setInterval(() => {
+                                            const scrollHeight = document.body.scrollHeight;
+                                            window.scrollBy(0, distance);
+                                            totalHeight += distance;
 
-                if fullPage.lower() == 'true':
-                    await page.evaluate("""
-                        async () => {
-                            await new Promise((resolve) => {
-                                let totalHeight = 0;
-                                const distance = 100;
-                                const timer = setInterval(() => {
-                                    const scrollHeight = document.body.scrollHeight;
-                                    window.scrollBy(0, distance);
-                                    totalHeight += distance;
+                                            if (totalHeight >= scrollHeight) {
+                                                clearInterval(timer);
+                                                resolve();
+                                            }
+                                        }, 100);
+                                    });
+                                }
+                            """)
 
-                                    if (totalHeight >= scrollHeight) {
-                                        clearInterval(timer);
-                                        resolve();
-                                    }
-                                }, 100);
-                            });
+                        screenshot_options = {
+                            "full_page": fullPage.lower() == 'true',
+                            "type": format if format in ['png', 'jpeg', 'webp'] else 'png'
                         }
-                    """)
 
-                screenshot_options = {
-                    "full_page": fullPage.lower() == 'true',
-                    "type": format if format in ['png', 'jpeg', 'webp'] else 'png'
-                }
+                        if screenshot_options["type"] in ['jpeg', 'webp']:
+                            if quality is not None:
+                                screenshot_options["quality"] = max(0, min(100, quality))
+                            elif screenshot_options["type"] == 'jpeg':
+                                screenshot_options["quality"] = 90
 
-                if screenshot_options["type"] in ['jpeg', 'webp']:
-                    if quality is not None:
-                        screenshot_options["quality"] = max(0, min(100, quality))
-                    elif screenshot_options["type"] == 'jpeg':
-                        screenshot_options["quality"] = 90
+                        image_bytes = await page.screenshot(**screenshot_options)
 
-                image_bytes = await page.screenshot(**screenshot_options)
+                        logger.info(f"Рендеринг успешно завершен для: {url}")
 
-                logger.info(f"Рендеринг успешно завершен для: {url}")
+                        content_type = f"image/{screenshot_options['type']}"
+                        return Response(content=image_bytes, media_type=content_type)
 
-                content_type = f"image/{screenshot_options['type']}"
-                return Response(content=image_bytes, media_type=content_type)
+                    finally:
+                        if context_to_close:
+                            await context_to_close.close()
+                        else:
+                            await page.close()
 
-            finally:
-                if context_to_close:
-                    await context_to_close.close()
+                except Exception as error:
+                    last_error = error
+                    if "crashed" in str(error).lower() and attempt == 0:
+                        logger.warning(f"Page crashed для {url}, повторная попытка...")
+                        continue
+                    raise
+
+            if last_error:
+                raise last_error
 
         except Exception as error:
             logger.error(f"Ошибка рендеринга для {url}: {str(error)}", exc_info=True)
