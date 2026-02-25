@@ -1110,15 +1110,16 @@ return length
     //
     words_all = ""
     socket.on('analyzed', function(data) {
-        
-        let words = data['words_str'].split(" ")
+        if (!data) return;
+        let wordsSrc = data['words_str'] || (Array.isArray(data['words']) ? data['words'].join(' ') : '');
+        let words = (wordsSrc || '').split(" ").filter(Boolean);
         let sindex = 0;
         let stimeoutId = 0
         function sanimateText() 
         {            
             if (sindex < words.length) {     
-                swords = words.slice(sindex, sindex+1)[0];            
-                if (swords != "") {
+                let swords = words.slice(sindex, sindex+1)[0];            
+                if (swords) {
                     words_all = swords + ", " + words_all;
                 }
                 sindex += 1;
@@ -1131,7 +1132,8 @@ return length
         sanimateText();
 
         // Animate log_phrases for analyzed data
-        let analyzedPhrases = "<h3>noun_phrases</h3>" + data['noun_phrases'].join('<br>');
+        let nounPhrases = data['noun_phrases'] || data['hrases'] || [];
+        let analyzedPhrases = "<h3>noun_phrases</h3>" + nounPhrases.join('<br>');
         let analyzedPhrasesIndex = 0;
         let analyzedPhrasesTimeoutId = -1;
         // Calculate delay to show all text in 2 seconds (2000ms)
@@ -1140,6 +1142,7 @@ return length
         
         function animateAnalyzedPhrases() {
             const phrasesElement = document.getElementById("log_phrases");
+            if (!phrasesElement) return;
             if (analyzedPhrasesIndex < analyzedPhrases.length) {
                 phrasesElement.innerHTML = "<code>" + analyzedPhrases.slice(0, analyzedPhrasesIndex) + "</code>";
                 analyzedPhrasesIndex += 10;
