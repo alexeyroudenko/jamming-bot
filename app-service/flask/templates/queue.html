@@ -109,6 +109,7 @@
                     <th>State</th>
                     <th>Id</th>
                     <th>Type</th>
+                    <th>Time</th>
                     <th style="width: 20%;">Meta</th>
                     <th>Result</th>
                     <th>Actions</th>
@@ -119,10 +120,23 @@
                        <td><span class="badge {{ {'finished': 'badge-success', 'started': 'badge-info', 'failed': 'badge-danger'}[job.state] | default('badge-dark') }}">{{ job.state }}</td>
                        <td style="font-size: 12px;">{{ job.id }}</td>
                        <td>{{ job.type }}</td>
+                       <td style="font-size: 12px;">
+                           {% if job.duration_sec is not none %}
+                           {{ "%.1f"|format(job.duration_sec) }}s
+                           {% elif job.created_at %}
+                           queued
+                           {% else %}
+                           —
+                           {% endif %}
+                       </td>
                        <td>
+                           {% if job.progress %}
                            <div class="progress" style="height: 24px;">
-                              <div class="progress-bar" role="progressbar" style="width: {{ job.progress.percent }}%;">{{ job.progress.iteration }}/{{ job.progress.num_iterations }}</div>
+                              <div class="progress-bar" role="progressbar" style="width: {{ job.progress.percent | default(0) }}%;">{{ job.progress.iteration | default(0) }}/{{ job.progress.num_iterations | default(0) }}</div>
                             </div>
+                           {% else %}
+                           —
+                           {% endif %}
                        </td>
                        <td style="font-size: 14px;">{{ job.result }}</td>
                        <td><a href="/delete_job/{{ job.id }}" class="btn btn-sm btn-primary">Delete</a></td>

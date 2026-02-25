@@ -113,8 +113,8 @@ async def render_screenshot(
                         logger.info(f"Viewport: {width}x{height}, DeviceScaleFactor: {device_scale_factor}")
 
                         # Переходим на страницу (domcontentloaded — меньше нагрузка на тяжёлых сайтах)
-                        await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-                        await page.wait_for_timeout(3000)
+                        await page.goto(url, wait_until="domcontentloaded", timeout=5000)
+                        await page.wait_for_timeout(1000)
 
                         if fullPage.lower() == 'true':
                             await page.evaluate("""
@@ -136,6 +136,9 @@ async def render_screenshot(
                                 }
                             """)
 
+                        elapsed = time.perf_counter() - render_start
+                        logger.info(f"Загрузка страницы успешно завершена для: {url} (время: {elapsed:.2f}s)")
+
                         screenshot_options = {
                             "full_page": fullPage.lower() == 'true',
                             "type": format if format in ['png', 'jpeg', 'webp'] else 'png'
@@ -150,7 +153,7 @@ async def render_screenshot(
                         image_bytes = await page.screenshot(**screenshot_options)
 
                         elapsed = time.perf_counter() - render_start
-                        logger.info(f"Рендеринг успешно завершен для: {url} (время: {elapsed:.2f}s)")
+                        logger.info(f"Скриншот успешно создан для: {url} (время: {elapsed:.2f}s)")
 
                         content_type = f"image/{screenshot_options['type']}"
                         return Response(

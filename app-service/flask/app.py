@@ -332,14 +332,38 @@ def queue_page():
             cfg={},
             queue_error=str(e)
         ), 503
+    from datetime import datetime, timezone
+
+    def _ensure_aware(dt):
+        """Make datetime timezone-aware (assume UTC if naive)."""
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+
     l = []
+    now = datetime.now(timezone.utc)
     for job in list(joblist):
+        created_at = getattr(job, 'created_at', None)
+        started_at = _ensure_aware(getattr(job, 'started_at', None))
+        ended_at = _ensure_aware(getattr(job, 'ended_at', None))
+        # Calculate duration: ended-start for finished, now-start for running
+        duration_sec = None
+        if ended_at and started_at:
+            duration_sec = (ended_at - started_at).total_seconds()
+        elif started_at:
+            duration_sec = (now - started_at).total_seconds()
         l.append({
             'id': job.get_id(),
             'state': job.get_status(),
             'type': job.meta.get('type'),
             'progress': job.meta.get('progress'),
             'result': job.result,
+            'created_at': created_at,
+            'started_at': started_at,
+            'ended_at': ended_at,
+            'duration_sec': duration_sec,
         })
     try:
         cfg = _ensure_redis_defaults()
