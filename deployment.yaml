@@ -1111,8 +1111,8 @@ metadata:
 spec:
   scaleTargetRef:
     name: worker-service
-  minReplicaCount: 1
-  maxReplicaCount: 10
+  minReplicaCount: 2
+  maxReplicaCount: 6
   cooldownPeriod: 60
   pollingInterval: 10
   triggers:
