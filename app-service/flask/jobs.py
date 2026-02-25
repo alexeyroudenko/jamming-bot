@@ -71,6 +71,18 @@ def remove_html_tags(text):
     clean_text = re.sub(r'<.*?>', '', text)
     return clean_text
 
+_nlp = None
+
+
+def _get_nlp():
+    """Load spaCy model once per worker process, reuse for all analyze jobs."""
+    global _nlp
+    if _nlp is None:
+        import spacy
+        _nlp = spacy.load("en_core_web_sm")
+    return _nlp
+
+
 def remove_special_characters(text):
     # Remove non-ASCII characters (keeping basic ASCII only)
     clean_text = re.sub(r'[^\x00-\x7F]+', '', text)
@@ -411,8 +423,7 @@ def analyze(html):
     with sentry_sdk.start_span(op="ml", description="spacy NER") as span:
         span.set_data("text_length", len(text))
         try:
-            import spacy
-            nlp = spacy.load("en_core_web_sm")
+            nlp = _get_nlp()
             doc = nlp(text[:100000])
             entities = [{"text": ent.text, "label": ent.label_} for ent in doc.ents]
             span.set_data("entities_count", len(entities))
