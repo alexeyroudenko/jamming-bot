@@ -549,6 +549,10 @@ spec:
         env:
         - name: RQ_DASHBOARD_REDIS_URL
           value: "redis://redis:6379/0"
+        - name: RQ_DASHBOARD_PORT
+          value: "9181"
+        - name: PORT
+          value: "9181"
         resources:
           requests:
             cpu: "50m"
