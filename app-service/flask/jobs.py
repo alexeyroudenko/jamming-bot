@@ -61,7 +61,9 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
-logger.info(f"Sentry initialized for environment: {ENVIRONMENT}" if SENTRY_DSN else "Sentry not configured")  
+logger.info(f"Sentry initialized for environment: {ENVIRONMENT}" if SENTRY_DSN else "Sentry not configured")
+
+POD_NAME = os.environ.get('HOSTNAME', 'unknown')  
 
 
 
@@ -135,8 +137,8 @@ def clean_tags():
 
     from datetime import datetime
     now = datetime.now()
-    date_time = now.strftime("%Y-%m-%d_%H-%M-%S")    
-    return date_time
+    date_time = now.strftime("%Y-%m-%d_%H-%M-%S")
+    return {'date_time': date_time, 'pod': POD_NAME}
 
 
 @job('default', connection=redis_connection, timeout=90, result_ttl=90)
@@ -149,7 +151,7 @@ def add_tags(tags):
         data = {'name': tag_name, "count": 0}
         response = requests.post(url, data=json.dumps(data), headers=headers, timeout=15)
         results.append(response.json())
-    return results
+    return {'results': results, 'pod': POD_NAME}
 
 
 
@@ -195,7 +197,9 @@ def add_tags_from_steps():
             self_job.save_meta()
 
         if i >= MAX_STEPS:
-            return text
+            return {'text': text, 'pod': POD_NAME}
+
+    return {'completed': num_iterations, 'pod': POD_NAME}
 
 
 #
@@ -280,15 +284,16 @@ def dostep(step):
 
     return_obj = {
             "step": step['number'],
-            "code": step['status_code'], 
-            "ip": ip, 
+            "code": step['status_code'],
+            "ip": ip,
             "url": step['url'],
             "src_url": step['src'],
             "tags": tags,
             "semantic": tags,
             "semantic_words": words,
             "semantic_hrases": hrases,
-            "text": text[0:1024] + "..."
+            "text": text[0:1024] + "...",
+            "pod": POD_NAME,
         }
 
     return return_obj
@@ -338,7 +343,8 @@ def do_geo(ip):
 
     self_job.meta['progress'] = {'num_iterations': 2, 'iteration': 2, 'percent': 100}
     self_job.save_meta()
-       
+
+    location['pod'] = POD_NAME
     return location
 
 
@@ -379,8 +385,8 @@ def save(data):
 
     self_job.meta['progress'] = {'num_iterations': 2, 'iteration': 2, 'percent': 100}
     self_job.save_meta()
-    
-    return filename
+
+    return {'filename': filename, 'pod': POD_NAME}
 
 
 
@@ -450,6 +456,7 @@ def analyze(html):
         "hrases": hrases,
         "entities": entities,
         "text_length": len(text),
+        "pod": POD_NAME,
     }
 
 
@@ -522,6 +529,7 @@ def do_screenshot(data):
                         'step': step_number,
                         'url': current_url,
                         'error': data['error'],
+                        'pod': POD_NAME,
                     }
             except Exception:
                 pass
@@ -556,6 +564,7 @@ def do_screenshot(data):
         'url': current_url,
         'screenshot_url': public_url,
         's3_key': s3_key,
+        'pod': POD_NAME,
     }
 
 
@@ -594,12 +603,10 @@ def wait(num_iterations):
     print(f"finish job {self_job}")
     
     from datetime import datetime
-    import random
     now = datetime.now()
     date_time = now.strftime("%Y-%m-%d_%H-%M-%S")
-    
-    return date_time
-    # return {"one":"hello", "two":7}
+
+    return {'date_time': date_time, 'pod': POD_NAME}
 
 
 @job('default', connection=redis_connection, timeout=900, result_ttl=900)
@@ -677,9 +684,10 @@ def clean_tsv_data():
             "status": "success",
             "total_lines": total_lines,
             "cleaned_lines": len(cleaned_lines),
-            "backup_file": backup_file
+            "backup_file": backup_file,
+            "pod": POD_NAME,
         }
-        
+
     except Exception as e:
         self_job = get_current_job()
         self_job.meta['type'] = "error"
@@ -687,16 +695,17 @@ def clean_tsv_data():
         self_job.save_meta()
         return {
             "status": "error",
-            "error": str(e)
+            "error": str(e),
+            "pod": POD_NAME,
         }
 
 
 @job('default', connection=redis_connection, timeout=1)
 def add(x, y):
-    return x + y
+    return {'result': x + y, 'pod': POD_NAME}
 
 
 @job('default', connection=redis_connection, timeout=1)
 def pulse():
     print("job pulse")
-    return True
+    return {'result': True, 'pod': POD_NAME}
