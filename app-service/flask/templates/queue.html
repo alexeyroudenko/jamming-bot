@@ -95,6 +95,11 @@
 
     <div class="row mt-3">
         <div class="col-md-12">
+            {% if queue_error %}
+            <div class="alert alert-danger" role="alert">
+                <strong>Queue unavailable:</strong> {{ queue_error }} — Redis may be down or unreachable.
+            </div>
+            {% endif %}
             <h3>Job list</h3>
             <p>Finished and failed jobs will linger around until their result_ttl or failure_ttl has expired and they will be deleted.</p>
             <a href="/queue/clear_failed/" class="btn btn-sm btn-danger" onclick="return confirm('Clear all failed jobs?')" style="margin-bottom:12px;">Clear failed jobs</a>

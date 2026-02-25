@@ -322,7 +322,16 @@ def get_job_status(job_id):
 
 @app.route("/queue/", methods=["GET"])
 def queue_page():
-    joblist = reversed(get_all_jobs())
+    try:
+        joblist = reversed(get_all_jobs())
+    except Exception as e:
+        logger.exception("Redis/queue error in queue_page")
+        return render_template(
+            'queue.html',
+            joblist=[],
+            cfg={},
+            queue_error=str(e)
+        ), 503
     l = []
     for job in list(joblist):
         l.append({
@@ -332,7 +341,12 @@ def queue_page():
             'progress': job.meta.get('progress'),
             'result': job.result,
         })
-    return render_template('queue.html', joblist=l, cfg=_ensure_redis_defaults())
+    try:
+        cfg = _ensure_redis_defaults()
+    except Exception as e:
+        logger.warning("Redis defaults error: %s", e)
+        cfg = {}
+    return render_template('queue.html', joblist=l, cfg=cfg)
 
 
 @app.route("/queue/clear_failed/", methods=["GET", "POST"])
