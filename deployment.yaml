@@ -941,16 +941,6 @@ spec:
     prefixes:
       - /app
 ---
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata:
-  name: strip-rq-dashboard
-  namespace: jamming-bot
-spec:
-  stripPrefix:
-    prefixes:
-      - /rq-dashboard
----
 # ===================== Ingress =====================
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -958,7 +948,7 @@ metadata:
   name: html-renderer-ingress
   namespace: jamming-bot
   annotations:
-    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-semantic@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-tags@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-app@kubernetescrd,jamming-bot-strip-rq-dashboard@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-semantic@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-tags@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-app@kubernetescrd
 spec:
   rules:
     - http:
@@ -1012,13 +1002,6 @@ spec:
               name: app-service
               port:
                 number: 80
-        - path: /rq-dashboard
-          pathType: Prefix
-          backend:
-            service:
-              name: rq-dashboard
-              port:
-                number: 80
 ---
 # ===================== cert-manager ClusterIssuer =====================
 apiVersion: cert-manager.io/v1
@@ -1045,25 +1028,28 @@ metadata:
   namespace: jamming-bot
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
-    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-rq-dashboard@kubernetescrd
 spec:
   tls:
   - hosts:
     - jamming-bot.arthew0.online
     - app.jamming-bot.arthew0.online
     - b0ts.arthew0.online
+    - rq.jamming-bot.arthew0.online
     secretName: jamming-bot-tls
   rules:
-    - host: app.jamming-bot.arthew0.online
+    - host: rq.jamming-bot.arthew0.online
       http:
         paths:
-        - path: /rq-dashboard
+        - path: /
           pathType: Prefix
           backend:
             service:
               name: rq-dashboard
               port:
                 number: 80
+    - host: app.jamming-bot.arthew0.online
+      http:
+        paths:
         - path: /
           pathType: Prefix
           backend:
@@ -1074,13 +1060,6 @@ spec:
     - host: jamming-bot.arthew0.online
       http:
         paths:
-        - path: /rq-dashboard
-          pathType: Prefix
-          backend:
-            service:
-              name: rq-dashboard
-              port:
-                number: 80
         - path: /
           pathType: Prefix
           backend:
@@ -1091,13 +1070,6 @@ spec:
     - host: b0ts.arthew0.online
       http:
         paths:
-        - path: /rq-dashboard
-          pathType: Prefix
-          backend:
-            service:
-              name: rq-dashboard
-              port:
-                number: 80
         - path: /
           pathType: Prefix
           backend:
