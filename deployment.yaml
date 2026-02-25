@@ -524,6 +524,65 @@ spec:
             cpu: "250m"
             memory: "256Mi"
 ---
+# ===================== rq-dashboard =====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rq-dashboard
+  namespace: jamming-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rq-dashboard
+  template:
+    metadata:
+      labels:
+        app: rq-dashboard
+    spec:
+      containers:
+      - name: rq-dashboard
+        image: kudaw/rq-dashboard
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9181
+        env:
+        - name: RQ_DASHBOARD_REDIS_URL
+          value: "redis://redis:6379/0"
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "250m"
+            memory: "128Mi"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 9181
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 9181
+          initialDelaySeconds: 20
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rq-dashboard
+  namespace: jamming-bot
+spec:
+  type: ClusterIP
+  selector:
+    app: rq-dashboard
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 9181
+---
 # ===================== bot-db PVC =====================
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -878,6 +937,16 @@ spec:
     prefixes:
       - /app
 ---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-rq-dashboard
+  namespace: jamming-bot
+spec:
+  stripPrefix:
+    prefixes:
+      - /rq-dashboard
+---
 # ===================== Ingress =====================
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -885,7 +954,7 @@ metadata:
   name: html-renderer-ingress
   namespace: jamming-bot
   annotations:
-    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-semantic@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-tags@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-app@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-semantic@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-tags@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-app@kubernetescrd,jamming-bot-strip-rq-dashboard@kubernetescrd
 spec:
   rules:
     - http:
@@ -939,6 +1008,13 @@ spec:
               name: app-service
               port:
                 number: 80
+        - path: /rq-dashboard
+          pathType: Prefix
+          backend:
+            service:
+              name: rq-dashboard
+              port:
+                number: 80
 ---
 # ===================== cert-manager ClusterIssuer =====================
 apiVersion: cert-manager.io/v1
@@ -965,6 +1041,7 @@ metadata:
   namespace: jamming-bot
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-rq-dashboard@kubernetescrd
 spec:
   tls:
   - hosts:
@@ -976,6 +1053,13 @@ spec:
     - host: app.jamming-bot.arthew0.online
       http:
         paths:
+        - path: /rq-dashboard
+          pathType: Prefix
+          backend:
+            service:
+              name: rq-dashboard
+              port:
+                number: 80
         - path: /
           pathType: Prefix
           backend:
@@ -986,6 +1070,13 @@ spec:
     - host: jamming-bot.arthew0.online
       http:
         paths:
+        - path: /rq-dashboard
+          pathType: Prefix
+          backend:
+            service:
+              name: rq-dashboard
+              port:
+                number: 80
         - path: /
           pathType: Prefix
           backend:
@@ -996,6 +1087,13 @@ spec:
     - host: b0ts.arthew0.online
       http:
         paths:
+        - path: /rq-dashboard
+          pathType: Prefix
+          backend:
+            service:
+              name: rq-dashboard
+              port:
+                number: 80
         - path: /
           pathType: Prefix
           backend:
