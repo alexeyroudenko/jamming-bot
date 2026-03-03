@@ -25,7 +25,7 @@ PORT = 3000
 # Глобальные объекты браузера (инициализируются при старте)
 _playwright = None
 _browser = None
-_render_lock = asyncio.Lock()
+_render_semaphore = asyncio.Semaphore(4)  # до 4 параллельных рендеров на под
 
 
 @app.on_event("startup")
@@ -88,7 +88,7 @@ async def render_screenshot(
             detail={"error": "Сервис рендеринга ещё не готов. Chromium запускается."}
         )
 
-    async with _render_lock:
+    async with _render_semaphore:
         render_start = time.perf_counter()
         try:
             last_error = None
@@ -115,7 +115,7 @@ async def render_screenshot(
 
                         # Переходим на страницу (domcontentloaded — меньше нагрузка на тяжёлых сайтах)
                         await page.goto(url, wait_until="domcontentloaded", timeout=5000)
-                        await page.wait_for_timeout(1000)
+                        await page.wait_for_timeout(400)
 
                         if fullPage.lower() == 'true':
                             await page.evaluate("""
