@@ -28,3 +28,4 @@ curl -o ya.ru.png -H "Host: html-renderer.jamming-bot.arthew0.online" "http://$(
 ```
 
 
+
