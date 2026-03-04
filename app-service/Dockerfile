@@ -25,4 +25,5 @@ ENV NAME=World
 COPY flask/ /app
 
 #This command will start the Python Flask application Docker container
-CMD ["python", "app.py"]
+# Use Gunicorn + eventlet for production (Flask-SocketIO compatible)
+CMD ["gunicorn", "-k", "eventlet", "-w", "1", "-b", "0.0.0.0:5000", "--timeout", "120", "app:app"]

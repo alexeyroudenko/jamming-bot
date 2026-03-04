@@ -111,7 +111,7 @@ cors = CORS(app, resources={
     }
 })
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading", manage_session=False)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet", manage_session=False)
 
 # ---------------------------------------------------------------------------
 # Helpers
