@@ -491,36 +491,42 @@ def step():
         data['struct_text'] = data['text']
         data['semantic'] = ""
         data['semantic_words'] = ""
+        logger.info(f"step status {data['status_string']}")
 
-        # PASS — semantic analysis via worker
-        if float(current_cfg['do_pass']) == 1.0:
-            socketio.emit('step', data)
-            if len(data['text']) > 0:
-                job = jobs.dostep.delay(data)
-                _poll_job_and_emit(job, 'tags_updated', timeout=90)
+        if data['status_string'] == "ok":
+            # PASS — semantic analysis via worker
+            if float(current_cfg['do_pass']) == 1.0:
+                socketio.emit('step', data)
+                if len(data['text']) > 0:
+                    job = jobs.dostep.delay(data)
+                    _poll_job_and_emit(job, 'tags_updated', timeout=90)
+            else:
+                socketio.emit('step', data)
+
+            # GEO — fire-and-forget with background poll
+            if float(current_cfg['do_geo']) == 1.0:
+                send_node_red_event(f"try {data.keys()}")
+                if "ip" in data.keys():
+                    ip = data['ip']
+                    if ip != "0":
+                        job = jobs.do_geo.delay(ip)
+                        _poll_job_and_emit(job, 'location', timeout=90)
+
+            # ANALYZE — fire-and-forget with background poll
+            if float(current_cfg['do_analyze']) == 1.0:
+                logger.info(f"step do_analyze")
+                html = data.get('html', data.get('text', ''))
+                job = jobs.analyze.delay(html)
+                _poll_job_and_emit(job, 'analyzed', timeout=90)
+
+            # SCREENSHOT — fire-and-forget with background poll
+            if float(current_cfg['do_screenshot']) == 1.0:
+                if data.get('url'):
+                    logger.info(f"step do_screenshot")
+                    job = jobs.do_screenshot.delay(data)
+                    _poll_job_and_emit(job, 'screenshot', timeout=120)
         else:
-            socketio.emit('step', data)
-
-        # GEO — fire-and-forget with background poll
-        if float(current_cfg['do_geo']) == 1.0:
-            send_node_red_event(f"try {data.keys()}")
-            if "ip" in data.keys():
-                ip = data['ip']
-                if ip != "0":
-                    job = jobs.do_geo.delay(ip)
-                    _poll_job_and_emit(job, 'location', timeout=90)
-
-        # ANALYZE — fire-and-forget with background poll
-        if float(current_cfg['do_analyze']) == 1.0:
-            html = data.get('html', data.get('text', ''))
-            job = jobs.analyze.delay(html)
-            _poll_job_and_emit(job, 'analyzed', timeout=90)
-
-        # SCREENSHOT — fire-and-forget with background poll
-        if float(current_cfg['do_screenshot']) == 1.0:
-            if data.get('url'):
-                job = jobs.do_screenshot.delay(data)
-                _poll_job_and_emit(job, 'screenshot', timeout=120)
+            logger.info(f"skip step actions")
 
     return "done"
 
