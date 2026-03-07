@@ -30,6 +30,18 @@ services:
           memory: 512M
 
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.52
+    container_name: jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686"
+      - "4318:4318"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - app_network
+
   redis: 
     image: redis:7-alpine
     container_name: redis
@@ -62,6 +74,9 @@ services:
       - S3_HOST=${S3_HOST}
       - S3_PORT=${S3_PORT}
       - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - OTEL_TRACING_ENABLED=${OTEL_TRACING_ENABLED:-0}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=app-service
     volumes:
       - type: bind
         source: ./app-service/flask
@@ -72,6 +87,7 @@ services:
     depends_on:
       - redis
       - tags_service
+      - jaeger
     networks:
       - app_network
     deploy:
@@ -263,6 +279,9 @@ services:
       - STORAGE_SERVICE_URL=http://storage_service:7781
       - IP_SERVICE_URL=http://ip_service:8004
       - RENDERER_SERVICE_URL=http://html-renderer-service:3000
+      - OTEL_TRACING_ENABLED=${OTEL_TRACING_ENABLED:-0}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=app-service-worker
     volumes:
       - type: bind
         source: ./app-service/flask
@@ -272,6 +291,7 @@ services:
         target: /app/data 
     depends_on:
       - redis
+      - jaeger
     networks:
       - app_network
     deploy:
@@ -295,6 +315,9 @@ services:
       - STORAGE_SERVICE_URL=http://storage_service:7781
       - IP_SERVICE_URL=http://ip_service:8004
       - RENDERER_SERVICE_URL=http://html-renderer-service:3000
+      - OTEL_TRACING_ENABLED=${OTEL_TRACING_ENABLED:-0}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=app-service-worker
     volumes:
       - type: bind
         source: ./app-service/flask
@@ -304,6 +327,7 @@ services:
         target: /app/data    
     depends_on:
       - redis
+      - jaeger
     networks:
       - app_network
     deploy:
@@ -328,6 +352,9 @@ services:
       - STORAGE_SERVICE_URL=http://storage_service:7781
       - IP_SERVICE_URL=http://ip_service:8004
       - RENDERER_SERVICE_URL=http://html-renderer-service:3000
+      - OTEL_TRACING_ENABLED=${OTEL_TRACING_ENABLED:-0}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=app-service-worker
     volumes:
       - type: bind
         source: ./app-service/flask
@@ -337,6 +364,7 @@ services:
         target: /app/data    
     depends_on:
       - redis
+      - jaeger
     networks:
       - app_network
     deploy:

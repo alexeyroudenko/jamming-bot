@@ -20,6 +20,7 @@ from sentry_sdk.integrations.rq import RqIntegration
 
 from rq_helpers import queue, get_all_jobs
 from config import Config, getConfig, getRedis
+from telemetry import init_telemetry, inject_trace_context_into_job
 import jobs
 
 # ---------------------------------------------------------------------------
@@ -70,6 +71,14 @@ logger = logging.getLogger(__name__)
 logger.info(f"Sentry initialized for environment: {ENVIRONMENT}" if SENTRY_DSN else "Sentry not configured")
 
 # ---------------------------------------------------------------------------
+# OpenTelemetry / Jaeger
+# ---------------------------------------------------------------------------
+init_telemetry(service_name=SVC_NAME)
+if os.getenv("OTEL_TRACING_ENABLED", "0") == "1":
+    from opentelemetry.instrumentation.requests import RequestsInstrumentor
+    RequestsInstrumentor().instrument()
+
+# ---------------------------------------------------------------------------
 # Flask app
 # ---------------------------------------------------------------------------
 
@@ -87,6 +96,9 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 app.config.from_object('config.Config')
 
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+if os.getenv("OTEL_TRACING_ENABLED", "0") == "1":
+    from opentelemetry.instrumentation.flask import FlaskInstrumentor
+    FlaskInstrumentor().instrument_app(app)
 
 # ---------------------------------------------------------------------------
 # Prometheus metrics
@@ -427,13 +439,15 @@ def ctrl_action(action):
 
 @app.route("/api/tags/add_tags_from_steps/", methods=["GET"])
 def add_tags_from_steps():
-    jobs.add_tags_from_steps.delay()
+    job = jobs.add_tags_from_steps.delay()
+    inject_trace_context_into_job(job)
     return "ok"
 
 
 @app.route("/api/tags/clean/", methods=["GET"])
 def clean_tags():
-    jobs.clean_tags.delay()
+    job = jobs.clean_tags.delay()
+    inject_trace_context_into_job(job)
     return "ok"
 
 
@@ -499,6 +513,7 @@ def step():
                 socketio.emit('step', data)
                 if len(data['text']) > 0:
                     job = jobs.dostep.delay(data)
+                    inject_trace_context_into_job(job)
                     _poll_job_and_emit(job, 'tags_updated', timeout=90)
             else:
                 socketio.emit('step', data)
@@ -510,6 +525,7 @@ def step():
                     ip = data['ip']
                     if ip != "0":
                         job = jobs.do_geo.delay(ip)
+                        inject_trace_context_into_job(job)
                         _poll_job_and_emit(job, 'location', timeout=90)
 
             # ANALYZE — fire-and-forget with background poll
@@ -517,6 +533,7 @@ def step():
                 logger.info(f"step do_analyze")
                 html = data.get('html', data.get('text', ''))
                 job = jobs.analyze.delay(html)
+                inject_trace_context_into_job(job)
                 _poll_job_and_emit(job, 'analyzed', timeout=90)
 
             # SCREENSHOT — fire-and-forget with background poll
@@ -524,6 +541,7 @@ def step():
                 if data.get('url'):
                     logger.info(f"step do_screenshot")
                     job = jobs.do_screenshot.delay(data)
+                    inject_trace_context_into_job(job)
                     _poll_job_and_emit(job, 'screenshot', timeout=120)
         else:
             logger.info(f"skip step actions")
@@ -582,7 +600,8 @@ def add_analyze_job():
     if request.method == 'POST':
         data = request.form
         text = data['text']
-        jobs.analyze.delay(text)
+        job = jobs.analyze.delay(text)
+        inject_trace_context_into_job(job)
     return jsonify({"message": "hello"}), 200
 
 
@@ -716,7 +735,8 @@ def get_step(step_num):
 
 @app.route("/add_wait_job/<num_iterations>", methods=["GET"])
 def run_wait_job_get(num_iterations):
-    jobs.wait.delay(int(num_iterations))
+    job = jobs.wait.delay(int(num_iterations))
+    inject_trace_context_into_job(job)
     return redirect('/queue/')
 
 

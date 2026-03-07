@@ -14,3 +14,8 @@ requests==2.32.3
 prometheus-flask-exporter==0.20.3
 prometheus-client==0.21.1
 boto3==1.35.86
+opentelemetry-api>=1.20.0
+opentelemetry-sdk>=1.20.0
+opentelemetry-exporter-otlp-proto-http>=1.20.0
+opentelemetry-instrumentation-flask>=0.41b0
+opentelemetry-instrumentation-requests>=0.41b0

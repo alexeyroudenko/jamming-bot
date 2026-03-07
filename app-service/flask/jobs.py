@@ -16,6 +16,7 @@ from sentry_sdk.integrations.rq import RqIntegration
 from rq.decorators import job
 from rq import get_current_job
 from rq_helpers import redis_connection
+from telemetry import init_telemetry, with_trace_context
 
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
@@ -63,6 +64,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.info(f"Sentry initialized for environment: {ENVIRONMENT}" if SENTRY_DSN else "Sentry not configured")
 
+init_telemetry(service_name=SVC_NAME)
+if os.getenv("OTEL_TRACING_ENABLED", "0") == "1":
+    from opentelemetry.instrumentation.requests import RequestsInstrumentor
+    RequestsInstrumentor().instrument()
+
 POD_NAME = os.environ.get('HOSTNAME', 'unknown')  
 
 
@@ -100,6 +106,7 @@ def remove_special_characters(text):
 
 
 @job('default', connection=redis_connection, timeout=600, result_ttl=600)
+@with_trace_context
 def clean_tags():
     self_job = get_current_job()
     self_job.meta['type'] = "clean_tags"
@@ -154,6 +161,7 @@ def clean_tags():
 
 
 @job('default', connection=redis_connection, timeout=90, result_ttl=90)
+@with_trace_context
 def add_tags(tags):
     results = []
     for word in tags:
@@ -168,6 +176,7 @@ def add_tags(tags):
 
 
 @job('default', connection=redis_connection, timeout=900, result_ttl=900)
+@with_trace_context
 def add_tags_from_steps():
     MAX_STEPS = 80000
     self_job = get_current_job()
@@ -219,6 +228,7 @@ def add_tags_from_steps():
 #  1. STEP
 #   
 @job('default', connection=redis_connection, timeout=90, result_ttl=270)
+@with_trace_context
 def dostep(step):
 
     logger.info(f"job dostep step {step}")
@@ -324,6 +334,7 @@ def dostep(step):
 #  GEO
 #   
 @job('default', connection=redis_connection, timeout=90, result_ttl=270)
+@with_trace_context
 def do_geo(ip):
 
     logger.info(f"job do_geo ip {ip}")
@@ -367,6 +378,7 @@ def do_geo(ip):
 #   SAVE
 #   
 @job('default', connection=redis_connection, timeout=90, result_ttl=90)
+@with_trace_context
 def save(data):
 
     logger.info(f"job save data {data}")
@@ -409,6 +421,7 @@ def save(data):
 #   ANALYZE
 #
 @job('default', connection=redis_connection, timeout=90, result_ttl=270)
+@with_trace_context
 def analyze(html):
     """Analyze HTML content using spaCy NER."""
     self_job = get_current_job()
@@ -501,6 +514,7 @@ def _get_s3_client():
 
 
 @job('default', connection=redis_connection, timeout=120, result_ttl=270)
+@with_trace_context
 def do_screenshot(data):
     """
     1. Render a screenshot of the current step URL via html-renderer-service
@@ -588,6 +602,7 @@ def do_screenshot(data):
 # for more detail: https://python-rq.org/docs/jobs/
 # 7*24*60*60
 @job('default', connection=redis_connection, timeout=90, result_ttl=90)
+@with_trace_context
 def wait(num_iterations):
     """
     wait for num_iterations seconds
@@ -621,6 +636,7 @@ def wait(num_iterations):
 
 
 @job('default', connection=redis_connection, timeout=900, result_ttl=900)
+@with_trace_context
 def clean_tsv_data():
     """
     Clean the data.tsv file by removing unsupported characters and line breaks
@@ -712,11 +728,13 @@ def clean_tsv_data():
 
 
 @job('default', connection=redis_connection, timeout=1)
+@with_trace_context
 def add(x, y):
     return {'result': x + y, 'pod': POD_NAME}
 
 
 @job('default', connection=redis_connection, timeout=1)
+@with_trace_context
 def pulse():
     print("job pulse")
     return {'result': True, 'pod': POD_NAME}
