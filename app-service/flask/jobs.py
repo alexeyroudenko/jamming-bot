@@ -16,7 +16,7 @@ from sentry_sdk.integrations.rq import RqIntegration
 from rq.decorators import job
 from rq import get_current_job
 from rq_helpers import redis_connection
-from telemetry import init_telemetry, with_trace_context
+from telemetry import init_telemetry, with_trace_context, set_step_span_attributes
 
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
@@ -238,6 +238,10 @@ def dostep(step):
     if "current_url" in step.keys():
         self_job.meta['url'] = step['current_url']
 
+    set_step_span_attributes(
+        step_number=step.get('number', step.get('step')),
+        step_url=step.get('current_url', step.get('url')),
+    )
     ip = step.get('ip', '0.0.0.0')
     self_job.meta['ip'] = ip
     text = step.get('text', '')
@@ -422,11 +426,12 @@ def save(data):
 #
 @job('default', connection=redis_connection, timeout=90, result_ttl=270)
 @with_trace_context
-def analyze(html):
+def analyze(html, step_number=None, step_url=None):
     """Analyze HTML content using spaCy NER."""
     self_job = get_current_job()
     self_job.meta['type'] = "analyze"
     self_job.save_meta()
+    set_step_span_attributes(step_number=step_number, step_url=step_url)
 
     with sentry_sdk.start_span(op="parse", description="clean html"):
         text = remove_html_tags(html)
@@ -530,6 +535,7 @@ def do_screenshot(data):
 
     current_url = data.get('current_url', data.get('url', ''))
     step_number = data.get('step', data.get('number', '0'))
+    set_step_span_attributes(step_number=step_number, step_url=current_url)
 
     with sentry_sdk.start_span(op="http.client", description="html-renderer render") as span:
         span.set_data("url", current_url)

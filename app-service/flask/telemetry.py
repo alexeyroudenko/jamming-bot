@@ -67,6 +67,40 @@ def inject_trace_context_into_job(job):
         logger.debug("Could not inject trace context into job: %s", e)
 
 
+# Map RQ function name -> job type for Jaeger (matches job.meta['type'])
+_JOB_TYPE_MAP = {
+    "dostep": "step",
+    "do_geo": "geo",
+    "analyze": "analyze",
+    "do_screenshot": "screenshot",
+    "clean_tags": "clean_tags",
+    "add_tags": "add_tags",
+    "add_tags_from_steps": "add_tags_from_steps",
+    "save": "save",
+    "wait": "wait",
+    "clean_tsv_data": "cleaning",
+    "add": "add",
+    "pulse": "pulse",
+}
+
+
+def set_step_span_attributes(step_number=None, step_url=None):
+    """Set step-related attributes on the current OTEL span so Jaeger can filter by step."""
+    if os.getenv("OTEL_TRACING_ENABLED", "0") != "1":
+        return
+    try:
+        from opentelemetry import trace
+        span = trace.get_current_span()
+        if not span or not span.is_recording():
+            return
+        if step_number is not None:
+            span.set_attribute("step.number", str(step_number))
+        if step_url is not None:
+            span.set_attribute("step.url", str(step_url)[:2048])
+    except Exception as e:
+        logger.debug("set_step_span_attributes failed: %s", e)
+
+
 def with_trace_context(f):
     """Decorator for RQ job functions: restore trace context from job.meta and run in a span."""
     @wraps(f)
@@ -87,15 +121,19 @@ def with_trace_context(f):
         try:
             from opentelemetry import trace
             from opentelemetry.propagate import extract
-            from opentelemetry.trace import set_span_in_context
 
             ctx = extract(carrier)
             tracer = trace.get_tracer(__name__)
+            job_type = _JOB_TYPE_MAP.get(f.__name__, f.__name__)
             with tracer.start_as_current_span(
                 f"rq.{f.__name__}",
                 context=ctx,
                 kind=trace.SpanKind.SERVER,
-            ):
+            ) as span:
+                if span.is_recording():
+                    span.set_attribute("rq.job_type", job_type)
+                    if job.id:
+                        span.set_attribute("rq.job_id", job.id)
                 return f(*args, **kwargs)
         except Exception as e:
             logger.debug("Trace context restore failed: %s", e)

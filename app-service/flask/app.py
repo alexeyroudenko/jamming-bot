@@ -20,7 +20,7 @@ from sentry_sdk.integrations.rq import RqIntegration
 
 from rq_helpers import queue, get_all_jobs
 from config import Config, getConfig, getRedis
-from telemetry import init_telemetry, inject_trace_context_into_job
+from telemetry import init_telemetry, inject_trace_context_into_job, set_step_span_attributes
 import jobs
 
 # ---------------------------------------------------------------------------
@@ -496,6 +496,10 @@ def step():
         current_cfg = getConfig()
         data = request.form.to_dict()
 
+        set_step_span_attributes(
+            step_number=data.get('number'),
+            step_url=data.get('url'),
+        )
         step_number.set(int(data['number']))
         data['step'] = data['number']
         data['id'] = data['url']
@@ -532,7 +536,11 @@ def step():
             if float(current_cfg['do_analyze']) == 1.0:
                 logger.info(f"step do_analyze")
                 html = data.get('html', data.get('text', ''))
-                job = jobs.analyze.delay(html)
+                job = jobs.analyze.delay(
+                    html,
+                    step_number=data.get('number'),
+                    step_url=data.get('url'),
+                )
                 inject_trace_context_into_job(job)
                 _poll_job_and_emit(job, 'analyzed', timeout=90)
 
