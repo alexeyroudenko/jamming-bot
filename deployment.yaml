@@ -1119,3 +1119,104 @@ spec:
       listName: rq:queue:default
       listLength: "8"
       databaseIndex: "0"
+---
+# ===================== rq-exporter (Prometheus metrics) =====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rq-exporter
+  namespace: jamming-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rq-exporter
+  template:
+    metadata:
+      labels:
+        app: rq-exporter
+    spec:
+      enableServiceLinks: false
+      containers:
+      - name: rq-exporter
+        image: mdawar/rq-exporter:v3.0.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9726
+          name: metrics
+        env:
+        - name: RQ_REDIS_HOST
+          value: "redis"
+        - name: RQ_REDIS_PORT
+          value: "6379"
+        - name: RQ_REDIS_DB
+          value: "0"
+        - name: PORT
+          value: "9726"
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "32Mi"
+          limits:
+            cpu: "50m"
+            memory: "64Mi"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 9726
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 9726
+          initialDelaySeconds: 10
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rq-exporter
+  namespace: jamming-bot
+  labels:
+    app: rq-exporter
+spec:
+  type: ClusterIP
+  selector:
+    app: rq-exporter
+  ports:
+  - name: metrics
+    protocol: TCP
+    port: 9726
+    targetPort: 9726
+---
+# LoadBalancer to expose rq-exporter metrics on :9101
+apiVersion: v1
+kind: Service
+metadata:
+  name: rq-exporter-lb
+  namespace: jamming-bot
+spec:
+  type: LoadBalancer
+  selector:
+    app: rq-exporter
+  ports:
+  - name: metrics
+    port: 9101
+    targetPort: 9726
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: rq-exporter
+  namespace: jamming-bot
+  labels:
+    app: rq-exporter
+spec:
+  selector:
+    matchLabels:
+      app: rq-exporter
+  endpoints:
+  - port: metrics
+    interval: 15s
+    path: /
