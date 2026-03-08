@@ -18,9 +18,9 @@ import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.rq import RqIntegration
 
-from rq_helpers import queue, get_all_jobs
+from rq_helpers import queue, get_all_jobs, redis_connection
 from config import Config, getConfig, getRedis
-from telemetry import init_telemetry, inject_trace_context_into_job, set_step_span_attributes
+from telemetry import init_telemetry, inject_trace_context_into_job, set_step_span_attributes, step_span, enqueue_with_trace
 import jobs
 
 # ---------------------------------------------------------------------------
@@ -496,10 +496,6 @@ def step():
         current_cfg = getConfig()
         data = request.form.to_dict()
 
-        set_step_span_attributes(
-            step_number=data.get('number'),
-            step_url=data.get('url'),
-        )
         step_number.set(int(data['number']))
         data['step'] = data['number']
         data['id'] = data['url']
@@ -512,45 +508,46 @@ def step():
         logger.info(f"step status {data['status_string']}")
 
         if data['status_string'] == "ok":
-            # PASS — semantic analysis via worker
-            if float(current_cfg['do_pass']) == 1.0:
-                socketio.emit('step', data)
-                if len(data['text']) > 0:
-                    job = jobs.dostep.delay(data)
-                    inject_trace_context_into_job(job)
-                    _poll_job_and_emit(job, 'tags_updated', timeout=90)
-            else:
-                socketio.emit('step', data)
-
-            # GEO — fire-and-forget with background poll
-            if float(current_cfg['do_geo']) == 1.0:
-                send_node_red_event(f"try {data.keys()}")
-                if "ip" in data.keys():
-                    ip = data['ip']
-                    if ip != "0":
-                        job = jobs.do_geo.delay(ip)
-                        inject_trace_context_into_job(job)
-                        _poll_job_and_emit(job, 'location', timeout=90)
-
-            # ANALYZE — fire-and-forget with background poll
-            if float(current_cfg['do_analyze']) == 1.0:
-                logger.info(f"step do_analyze")
-                html = data.get('html', data.get('text', ''))
-                job = jobs.analyze.delay(
-                    html,
+            with step_span(step_number=data.get('number'), step_url=data.get('url')):
+                set_step_span_attributes(
                     step_number=data.get('number'),
                     step_url=data.get('url'),
                 )
-                inject_trace_context_into_job(job)
-                _poll_job_and_emit(job, 'analyzed', timeout=90)
+                # PASS — semantic analysis via worker
+                if float(current_cfg['do_pass']) == 1.0:
+                    socketio.emit('step', data)
+                    if len(data['text']) > 0:
+                        job = enqueue_with_trace(queue, redis_connection, jobs.dostep, data, timeout=90, result_ttl=270)
+                        _poll_job_and_emit(job, 'tags_updated', timeout=90)
+                else:
+                    socketio.emit('step', data)
 
-            # SCREENSHOT — fire-and-forget with background poll
-            if float(current_cfg['do_screenshot']) == 1.0:
-                if data.get('url'):
-                    logger.info(f"step do_screenshot")
-                    job = jobs.do_screenshot.delay(data)
-                    inject_trace_context_into_job(job)
-                    _poll_job_and_emit(job, 'screenshot', timeout=120)
+                # GEO — fire-and-forget with background poll
+                if float(current_cfg['do_geo']) == 1.0:
+                    send_node_red_event(f"try {data.keys()}")
+                    if "ip" in data.keys():
+                        ip = data['ip']
+                        if ip != "0":
+                            job = enqueue_with_trace(queue, redis_connection, jobs.do_geo, ip, timeout=90, result_ttl=270)
+                            _poll_job_and_emit(job, 'location', timeout=90)
+
+                # ANALYZE — fire-and-forget with background poll
+                if float(current_cfg['do_analyze']) == 1.0:
+                    logger.info(f"step do_analyze")
+                    html = data.get('html', data.get('text', ''))
+                    job = enqueue_with_trace(
+                        queue, redis_connection, jobs.analyze, html,
+                        step_number=data.get('number'), step_url=data.get('url'),
+                        timeout=90, result_ttl=270,
+                    )
+                    _poll_job_and_emit(job, 'analyzed', timeout=90)
+
+                # SCREENSHOT — fire-and-forget with background poll
+                if float(current_cfg['do_screenshot']) == 1.0:
+                    if data.get('url'):
+                        logger.info(f"step do_screenshot")
+                        job = enqueue_with_trace(queue, redis_connection, jobs.do_screenshot, data, timeout=120, result_ttl=270)
+                        _poll_job_and_emit(job, 'screenshot', timeout=120)
         else:
             logger.info(f"skip step actions")
 
