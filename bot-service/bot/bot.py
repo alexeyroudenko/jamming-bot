@@ -5,6 +5,7 @@ import csv
 import json
 import random
 import signal
+import socket
 import time
 import asyncio
 import logging
@@ -581,7 +582,20 @@ class NetSpider():
                             },
                             timeout=10,
                         )
-                    ip_addr = str(response.extensions.get("network_stream", ""))
+                    # Resolve hostname to IP for geo (response.extensions is not the remote IP)
+                    ip_addr = "0"
+                    try:
+                        hostname = urlparse(current_url).hostname
+                        if hostname:
+                            loop = asyncio.get_event_loop()
+                            infos = await loop.run_in_executor(
+                                None,
+                                lambda: socket.getaddrinfo(hostname, None, socket.AF_INET),
+                            )
+                            if infos:
+                                ip_addr = infos[0][4][0]
+                    except (socket.gaierror, OSError, ValueError):
+                        pass
                     ip = (ip_addr, 0)
                         
                     

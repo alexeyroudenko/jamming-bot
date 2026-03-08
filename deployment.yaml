@@ -758,6 +758,7 @@ spec:
           claimName: bot-db-pvc
 ---
 # ===================== ip-service =====================
+# GeoIP DB (dbip-city-lite) is downloaded at image build; override with IP_MMDB_PATH + volume if needed.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -1209,6 +1210,7 @@ spec:
       databaseIndex: "0"
 ---
 # ===================== KEDA: html-renderer autoscaler =====================
+# Screenshot jobs (do_screenshot) call html-renderer; scale up earlier under queue load.
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -1218,15 +1220,15 @@ spec:
   scaleTargetRef:
     name: html-renderer
   minReplicaCount: 2
-  maxReplicaCount: 5
-  cooldownPeriod: 120
+  maxReplicaCount: 8
+  cooldownPeriod: 90
   pollingInterval: 10
   triggers:
   - type: redis
     metadata:
       address: redis.jamming-bot.svc.cluster.local:6379
       listName: rq:queue:default
-      listLength: "6"
+      listLength: "4"
       databaseIndex: "0"
 ---
 # ===================== rq-exporter (Prometheus metrics) =====================

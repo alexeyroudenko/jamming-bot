@@ -385,6 +385,66 @@ def queue_page():
     return render_template('queue.html', joblist=l, cfg=cfg)
 
 
+@app.route("/queue/job/<job_id>/", methods=["GET"])
+def queue_job_detail(job_id):
+    from datetime import datetime, timezone
+
+    def _ensure_aware(dt):
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+
+    job = queue.fetch_job(job_id)
+    if not job:
+        return render_template("queue_job.html", job=None, not_found=True), 404
+
+    created_at = getattr(job, "created_at", None)
+    started_at = _ensure_aware(getattr(job, "started_at", None))
+    ended_at = _ensure_aware(getattr(job, "ended_at", None))
+    duration_sec = None
+    if ended_at and started_at:
+        duration_sec = (ended_at - started_at).total_seconds()
+    elif started_at:
+        duration_sec = (datetime.now(timezone.utc) - started_at).total_seconds()
+
+    result_repr = None
+    try:
+        if job.get_status() == "failed":
+            result_repr = "(job failed — see exception below)"
+        else:
+            result_repr = job.result
+    except Exception as e:
+        result_repr = f"(error reading result: {e})"
+
+    exc_info = getattr(job, "exc_info", None) or ""
+
+    def _safe_repr(obj, max_len=2000):
+        try:
+            s = repr(obj)
+            return s[:max_len] + ("..." if len(s) > max_len else "")
+        except Exception:
+            return "(unable to repr)"
+
+    job_data = {
+        "id": job.get_id(),
+        "state": job.get_status(),
+        "type": job.meta.get("type"),
+        "func_name": getattr(job, "func_name", None) or getattr(job, "origin", ""),
+        "args": _safe_repr(getattr(job, "args", ())),
+        "kwargs": _safe_repr(getattr(job, "kwargs", {})),
+        "meta": job.meta,
+        "created_at": created_at,
+        "started_at": started_at,
+        "ended_at": ended_at,
+        "duration_sec": duration_sec,
+        "result_repr": result_repr,
+        "exc_info": exc_info,
+    }
+    return render_template("queue_job.html", job=job_data, not_found=False)
+
+
 @app.route("/queue/clear_failed/", methods=["GET", "POST"])
 def clear_failed():
     from rq_helpers import queue as q

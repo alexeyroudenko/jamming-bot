@@ -26,6 +26,8 @@ SEMANTIC_SERVICE_URL = os.getenv('SEMANTIC_SERVICE_URL', 'http://semantic_servic
 STORAGE_SERVICE_URL = os.getenv('STORAGE_SERVICE_URL', 'http://storage_service:7781')
 IP_SERVICE_URL = os.getenv('IP_SERVICE_URL', 'http://bots.arthew0.online:8004')
 RENDERER_SERVICE_URL = os.getenv('RENDERER_SERVICE_URL', 'http://html-renderer-service:3000')
+SCREENSHOT_RENDER_RETRIES = int(os.getenv('SCREENSHOT_RENDER_RETRIES', '3'))
+SCREENSHOT_RENDER_BACKOFF_SEC = float(os.getenv('SCREENSHOT_RENDER_BACKOFF_SEC', '3'))
 SVC_NAME = os.getenv("SVC_NAME", "jobs service")
 
 # S3 configuration
@@ -549,7 +551,26 @@ def do_screenshot(data):
             'dsf': '1',
             'json_on_error': 'true',
         }
-        response = requests.get(render_url, params=params, timeout=60)
+        last_error = None
+        for attempt in range(1, SCREENSHOT_RENDER_RETRIES + 1):
+            try:
+                response = requests.get(render_url, params=params, timeout=60)
+                break
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                last_error = e
+                logger.warning(
+                    "do_screenshot: html-renderer attempt %s/%s failed for url=%s: %s",
+                    attempt, SCREENSHOT_RENDER_RETRIES, current_url, e,
+                    exc_info=(attempt == SCREENSHOT_RENDER_RETRIES),
+                )
+                if attempt < SCREENSHOT_RENDER_RETRIES:
+                    time.sleep(SCREENSHOT_RENDER_BACKOFF_SEC)
+                else:
+                    logger.error(
+                        "do_screenshot: html-renderer failed after %s attempts for url=%s: %s",
+                        SCREENSHOT_RENDER_RETRIES, current_url, last_error,
+                    )
+                    raise
         # При ошибке рендеринга сервис возвращает 200 + JSON {"error": "..."}
         if response.headers.get('content-type', '').startswith('application/json'):
             try:
