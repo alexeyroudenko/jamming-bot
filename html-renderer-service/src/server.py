@@ -25,7 +25,7 @@ PORT = 3000
 # Глобальные объекты браузера (инициализируются при старте)
 _playwright = None
 _browser = None
-_render_semaphore = asyncio.Semaphore(4)  # до 4 параллельных рендеров на под
+_render_semaphore = asyncio.Semaphore(2)  # до 2 параллельных рендеров — меньше пик памяти, избегаем OOMKilled
 
 
 @app.on_event("startup")
