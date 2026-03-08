@@ -3,13 +3,16 @@ import os
 import sys
 import csv
 import json
+import random
 import signal
+import time
 import asyncio
 import logging
 import mimetypes
 import traceback
 from datetime import datetime
 from urllib.parse import urlparse
+from urllib.robotparser import RobotFileParser
 
 import httpx
 import requests
@@ -23,6 +26,12 @@ from pythonosc import udp_client
 import tldextract
 
 config_file = "bot.yaml"
+
+USER_AGENT = "JammingBot/2.1 (+https://jamming-bot.arthew0.online/)"
+# Domains to never request (e.g. reported abuse from them)
+BLOCKED_DOMAINS = frozenset({"canine.tools"})
+ROBOTS_CACHE = {}  # origin -> (RobotFileParser, fetch_timestamp)
+ROBOTS_CACHE_TTL_SEC = 86400  # 24h
 
 FLASK_HOST = os.getenv('FLASK_HOST', 'flask')
 FLASK_PORT = os.getenv('FLASK_PORT', '5000')
@@ -58,6 +67,45 @@ def get_second_level_domain(url):
     # Second-level domain is the combination of the domain and the suffix
     second_level_domain = f"{extracted.domain}.{extracted.suffix}"
     return second_level_domain
+
+
+def is_domain_blocked(url):
+    """True if the URL's host is in the blocklist (e.g. abuse reporters)."""
+    try:
+        hostname = (urlparse(url).hostname or "").lower()
+        if not hostname:
+            return True
+        sld = get_second_level_domain(url)
+        return hostname in BLOCKED_DOMAINS or sld in BLOCKED_DOMAINS
+    except Exception:
+        return True
+
+
+async def robots_can_fetch(client, url):
+    """Return True if robots.txt allows USER_AGENT to fetch url; fetches and caches robots.txt."""
+    parsed = urlparse(url)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    now = time.monotonic()
+    if origin in ROBOTS_CACHE:
+        rp, ts = ROBOTS_CACHE[origin]
+        if now - ts < ROBOTS_CACHE_TTL_SEC:
+            return rp.can_fetch(USER_AGENT, url)
+    try:
+        robots_url = f"{origin}/robots.txt"
+        r = await client.get(robots_url, headers={"User-Agent": USER_AGENT}, timeout=5)
+        rp = RobotFileParser()
+        if r.status_code == 200 and r.content:
+            rp.parse(r.text.splitlines())
+        else:
+            rp.parse([])  # allow all if no robots.txt
+        ROBOTS_CACHE[origin] = (rp, now)
+        return rp.can_fetch(USER_AGENT, url)
+    except Exception as e:
+        logging.debug("robots.txt fetch failed for %s: %s", origin, e)
+        rp = RobotFileParser()
+        rp.parse([])
+        ROBOTS_CACHE[origin] = (rp, now)
+        return True
 
 class GracefulKiller:
   kill_now = False
@@ -395,8 +443,8 @@ class NetSpider():
                         else:   
                             new_link_element = href
                                                                                     
-                if new_link_element not in stored_links_for_domain and new_link_element != "" and domain_is_en(new_link_element):
-                    
+                if new_link_element not in stored_links_for_domain and new_link_element != "" and domain_is_en(new_link_element) and not is_domain_blocked(new_link_element):
+
                     hostname = get_second_level_domain(new_link_element)
                     stored_links_for_domain = await self.retrieve_stored_links_for_domain(hostname)
                     count_stored_links_for_domain = len(stored_links_for_domain)
@@ -478,48 +526,58 @@ class NetSpider():
             valid = validators.url(current_site)
                         
             if valid:
-                
-                import tld 
+
+                if is_domain_blocked(current_url):
+                    logging.warning(f"step {self.step_number} \t BLOCK \t {current_url} \t domain in blocklist")
+                    self.step.status_code = 403
+                    self.notify_about_eventp("error_blocked_domain", current_url)
+                    self.notify_about_step(self.step)
+                    return
+
+                import tld
                 try:
                     res = get_tld(current_url, as_object=True)
                     current_base_domain = res.fld
                     current_base_domain = get_second_level_domain(current_base_domain)
-                    
-                except tld.exceptions.TldBadUrl: 
+
+                except tld.exceptions.TldBadUrl:
                     logging.warning(f"step {self.step_number} \t ERR \t {src_url} > {current_url} \t bad url")
                     self.step.status_code = 900
-                    self.notify_about_eventp("error_retrieve_url", {})                                        
-                    self.notify_about_step(self.step)
-                    return
-                
-                except tld.exceptions.TldDomainNotFound:
-                    logging.warning(f"step {self.step_number} \t ERR \t {src_url} > {current_url} \t domain not found")
-                    self.step.status_code = 901
-                    self.notify_about_eventp("error_retrieve_url", {})                                      
+                    self.notify_about_eventp("error_retrieve_url", {})
                     self.notify_about_step(self.step)
                     return
 
-                
-                
-                
+                except tld.exceptions.TldDomainNotFound:
+                    logging.warning(f"step {self.step_number} \t ERR \t {src_url} > {current_url} \t domain not found")
+                    self.step.status_code = 901
+                    self.notify_about_eventp("error_retrieve_url", {})
+                    self.notify_about_step(self.step)
+                    return
+
                 try:
-                    
+
                     #
                     #
-                    #       Retrieve page
+                    #       Retrieve page (respect robots.txt)
                     #
                     #
                     self.notify_about_eventp("retrieve_page", current_url)
                     logging.debug(f"start load  {current_url}")
 
                     async with httpx.AsyncClient(follow_redirects=True) as client:
+                        if not await robots_can_fetch(client, current_url):
+                            logging.warning(f"step {self.step_number} \t ROBOTS \t {current_url} \t disallowed by robots.txt")
+                            self.step.status_code = 403
+                            self.notify_about_eventp("error_robots_disallow", current_url)
+                            self.notify_about_step(self.step)
+                            return
                         response = await client.get(
                             current_url,
                             headers={
                                 'Accept-Language': 'en-US, en;q=0.5',
                                 'Accept-Charset': 'utf-8',
                                 'Accept-Encoding': 'gzip',
-                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                                'User-Agent': USER_AGENT,
                             },
                             timeout=10,
                         )
@@ -710,10 +768,13 @@ async def main():
     
     killer = GracefulKiller()
     
-    spider = NetSpider(config['sleep_time'], 
-                       config['osc_adress'], 
-                       config['resolve_coords'], 
-                       count_per_domain = config['count_per_domain'])
+    _sleep_base = float(config.get('sleep_time', 2.0))
+    _count_cfg = config.get('count_per_domain', 15)
+    count_per_domain = max(5, min(25, _count_cfg)) if isinstance(_count_cfg, (int, float)) else random.randint(5, 25)
+    spider = NetSpider(_sleep_base,
+                       config['osc_adress'],
+                       config['resolve_coords'],
+                       count_per_domain=count_per_domain)
     spider.resume_at_restart = config['resume_at_restart']
     spider.is_active = config['is_active']
     spider.reload_config()  # Load send_events, send_step etc from config before first step
@@ -794,7 +855,8 @@ async def main():
                 except Exception:
                     pass
 
-            await asyncio.sleep(spider.sleep_time)
+            delay = random.uniform(1.0, 4.0)
+            await asyncio.sleep(delay)
             
             if killer.kill_now:
                 # osc_server.stop_osc_receiver()
