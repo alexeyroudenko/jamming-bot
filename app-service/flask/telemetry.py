@@ -103,6 +103,7 @@ _JOB_TYPE_MAP = {
     "do_geo": "geo",
     "analyze": "analyze",
     "do_screenshot": "screenshot",
+    "do_storage": "storage",
     "clean_tags": "clean_tags",
     "add_tags": "add_tags",
     "add_tags_from_steps": "add_tags_from_steps",
@@ -132,7 +133,7 @@ def step_span(step_number=None, step_url=None):
             yield
     except Exception as e:
         logger.debug("step_span failed: %s", e)
-        yield
+        raise
 
 
 def set_step_span_attributes(step_number=None, step_url=None):

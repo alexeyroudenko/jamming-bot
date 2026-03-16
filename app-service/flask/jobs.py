@@ -620,6 +620,48 @@ def do_screenshot(data):
     }
 
 
+@job('default', connection=redis_connection, timeout=120, result_ttl=270)
+@with_trace_context
+def do_storage(data):
+    """
+    Append step data to storage-service TSV (POST /store).
+    """
+    logger.info("job do_storage start")
+
+    self_job = get_current_job()
+    self_job.meta['type'] = "storage"
+    self_job.save_meta()
+
+    step_number = data.get('step', data.get('number', '0'))
+    current_url = data.get('current_url', data.get('url', ''))
+    set_step_span_attributes(step_number=step_number, step_url=current_url)
+
+    payload = dict(data)
+    for key in ('headers', 'src_url', 'current_url'):
+        payload.pop(key, None)
+
+    url = f"{STORAGE_SERVICE_URL}/store"
+    headers = {'content-type': 'application/json'}
+    try:
+        with sentry_sdk.start_span(op="http.client", description="storage_service /store"):
+            response = requests.post(url, data=json.dumps(payload), headers=headers, timeout=30)
+            response.raise_for_status()
+        r = response.json() if response.content else {}
+    except Exception as e:
+        logger.warning("do_storage: storage service error: %s", e)
+        return {
+            'step': step_number,
+            'url': current_url,
+            'error': str(e),
+            'pod': POD_NAME,
+        }
+
+    return {
+        'step': step_number,
+        'url': current_url,
+        'storage': r.get('msg', 'ok'),
+        'pod': POD_NAME,
+    }
 
 
 # the timeout parameter specifies how long a job may take

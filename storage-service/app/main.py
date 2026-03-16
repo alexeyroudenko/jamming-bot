@@ -3,8 +3,18 @@ from pydantic import BaseModel
 from typing import List, Dict
 from starlette.status import HTTP_400_BAD_REQUEST
 import json
+import os
 
 app = FastAPI()
+
+DATA_DIR = "/usr/src/app/data"
+DATA_FILE = os.path.join(DATA_DIR, "data.tsv")
+
+
+def _ensure_data_file():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    if not os.path.isfile(DATA_FILE):
+        open(DATA_FILE, "a", encoding="utf-8").close()
 
 # Модель для входящего запроса
 class TextInput(BaseModel):
@@ -25,9 +35,10 @@ async def store(request: Request):
             status_code=HTTP_400_BAD_REQUEST,
             detail="JSON body must be a non-empty object"
         )
+    _ensure_data_file()
     values = list(data.values())
     tsv_line = "\t".join(map(str, values)) + "\n"
-    with open("/usr/src/app/data/data.tsv", "a", encoding="utf-8") as f:
+    with open(DATA_FILE, "a", encoding="utf-8") as f:
         f.write(tsv_line)
     return {"msg": "ok"}
 
@@ -38,7 +49,8 @@ async def get_latest():
     Returns the latest 3000 lines from the stored TSV file as JSON array
     """
     try:
-        with open("/usr/src/app/data/data.tsv", "r", encoding="utf-8") as f:
+        _ensure_data_file()
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
             # Read all lines and get the last 3000
             lines = f.readlines()
             latest_lines = lines[-3000:] if len(lines) > 3000 else lines

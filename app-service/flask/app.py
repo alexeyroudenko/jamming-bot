@@ -175,7 +175,7 @@ def _ctrl_log(action: str, source: str):
 def _ensure_redis_defaults():
     defaults = {'value': 0.5, 'do_pass': 0.5, 'do_geo': 0.5,
                 'do_save': 0.5, 'do_analyze': 0.5, 'do_screenshot': 0.5,
-                'sleep_time': 2.0}
+                'do_storage': 0.5, 'sleep_time': 2.0}
     for key, default in defaults.items():
         if not redis.get(key):
             redis.set(key, default)
@@ -610,7 +610,7 @@ def step():
                         _poll_job_and_emit(job, 'screenshot', timeout=120)
                         
                 # STORAGE — fire-and-forget with background poll
-                if float(current_cfg['do_storage']) == 1.0:
+                if float(current_cfg.get('do_storage', 0)) == 1.0:
                     if data.get('url'):
                         logger.info(f"step do_storage")
                         job = enqueue_with_trace(queue, redis_connection, jobs.do_storage, data, timeout=120, result_ttl=270)
@@ -905,6 +905,10 @@ def handle_do_analyze(value):
 @socketio.on('do_screenshot')
 def handle_do_screenshot(value):
     redis.set('do_screenshot', float(value))
+
+@socketio.on('do_storage')
+def handle_do_storage(value):
+    redis.set('do_storage', float(value))
 
 @socketio.on('sleep_time')
 def handle_sleep_time(value):
