@@ -230,6 +230,58 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
     threading.Thread(target=_poll, daemon=True).start()
 
 
+def _read_step_hash(step_key):
+    """Read the full aggregated step from the Redis hash, deserialising JSON values."""
+    raw = redis.hgetall(step_key)
+    if not raw:
+        return {}
+    result = {}
+    for k, v in raw.items():
+        key = k.decode() if isinstance(k, bytes) else k
+        val = v.decode() if isinstance(v, bytes) else v
+        try:
+            result[key] = json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            result[key] = val
+    return result
+
+
+def _wait_all_then_store(pending_jobs, step_key, original_data,
+                         timeout=120, poll_interval=0.5):
+    """Wait for all enrichment jobs to finish, then enqueue do_storage with the full step."""
+    def _collect():
+        remaining = set(range(len(pending_jobs)))
+        elapsed = 0.0
+        while remaining and elapsed < timeout:
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+            done = set()
+            for idx in remaining:
+                try:
+                    pending_jobs[idx].refresh()
+                except Exception:
+                    done.add(idx)
+                    continue
+                if pending_jobs[idx].is_finished or pending_jobs[idx].is_failed:
+                    done.add(idx)
+            remaining -= done
+
+        if remaining:
+            logger.warning(f"_wait_all_then_store({step_key}): "
+                           f"{len(remaining)} jobs still pending after {timeout}s")
+
+        full_step = _read_step_hash(step_key) or dict(original_data)
+        logger.info(f"do_storage: sending full step {step_key} with {len(full_step)} fields")
+
+        job = enqueue_with_trace(
+            queue, redis_connection, jobs.do_storage, full_step,
+            timeout=120, result_ttl=270,
+        )
+        _poll_job_and_emit(job, 'storage', timeout=120, step_key=step_key)
+
+    threading.Thread(target=_collect, daemon=True).start()
+
+
 def _tags_response_json(r):
     """Safely get JSON from a tags_service response."""
     if not r.text or not r.text.strip():
@@ -610,12 +662,15 @@ def step():
                     step_number=data.get('number'),
                     step_url=data.get('url'),
                 )
+                pending_jobs = []
+
                 # PASS — semantic analysis via worker
                 if float(current_cfg['do_pass']) == 1.0:
                     socketio.emit('step', data)
                     if len(data['text']) > 0:
                         job = enqueue_with_trace(queue, redis_connection, jobs.dostep, data, timeout=90, result_ttl=270)
                         _poll_job_and_emit(job, 'tags_updated', timeout=90, step_key=step_key)
+                        pending_jobs.append(job)
                 else:
                     socketio.emit('step', data)
 
@@ -627,6 +682,7 @@ def step():
                         if ip != "0":
                             job = enqueue_with_trace(queue, redis_connection, jobs.do_geo, ip, timeout=90, result_ttl=270)
                             _poll_job_and_emit(job, 'location', timeout=90, step_key=step_key)
+                            pending_jobs.append(job)
 
                 # ANALYZE — fire-and-forget with background poll
                 if float(current_cfg['do_analyze']) == 1.0:
@@ -638,6 +694,7 @@ def step():
                         timeout=90, result_ttl=270,
                     )
                     _poll_job_and_emit(job, 'analyzed', timeout=90, step_key=step_key)
+                    pending_jobs.append(job)
 
                 # SCREENSHOT — fire-and-forget with background poll
                 if float(current_cfg['do_screenshot']) == 1.0:
@@ -645,13 +702,13 @@ def step():
                         logger.info(f"step do_screenshot")
                         job = enqueue_with_trace(queue, redis_connection, jobs.do_screenshot, data, timeout=120, result_ttl=270)
                         _poll_job_and_emit(job, 'screenshot', timeout=120, step_key=step_key)
-                        
-                # STORAGE — fire-and-forget with background poll
+                        pending_jobs.append(job)
+
+                # STORAGE — wait for all enrichment jobs, then send full step
                 if float(current_cfg.get('do_storage', 0)) == 1.0:
                     if data.get('url'):
-                        logger.info(f"step do_storage")
-                        job = enqueue_with_trace(queue, redis_connection, jobs.do_storage, data, timeout=120, result_ttl=270)
-                        _poll_job_and_emit(job, 'storage', timeout=120, step_key=step_key)
+                        logger.info(f"step do_storage (deferred, waiting for {len(pending_jobs)} jobs)")
+                        _wait_all_then_store(pending_jobs, step_key, data)
         else:
             logger.info(f"skip step actions")
 
@@ -759,17 +816,9 @@ def all_steps():
 @cross_origin()
 def api_step_detail(step_num):
     """Return the aggregated Redis hash for a single step."""
-    raw = redis.hgetall(f"step:{step_num}")
-    if not raw:
+    result = _read_step_hash(f"step:{step_num}")
+    if not result:
         return jsonify({"error": "step not found"}), 404
-    result = {}
-    for k, v in raw.items():
-        key = k.decode() if isinstance(k, bytes) else k
-        val = v.decode() if isinstance(v, bytes) else v
-        try:
-            result[key] = json.loads(val)
-        except (json.JSONDecodeError, TypeError):
-            result[key] = val
     return jsonify(result)
 
 
