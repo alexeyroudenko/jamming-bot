@@ -608,6 +608,13 @@ def step():
                         logger.info(f"step do_screenshot")
                         job = enqueue_with_trace(queue, redis_connection, jobs.do_screenshot, data, timeout=120, result_ttl=270)
                         _poll_job_and_emit(job, 'screenshot', timeout=120)
+                        
+                # STORAGE — fire-and-forget with background poll
+                if float(current_cfg['do_storage']) == 1.0:
+                    if data.get('url'):
+                        logger.info(f"step do_storage")
+                        job = enqueue_with_trace(queue, redis_connection, jobs.do_storage, data, timeout=120, result_ttl=270)
+                        _poll_job_and_emit(job, 'storage', timeout=120)
         else:
             logger.info(f"skip step actions")
 
