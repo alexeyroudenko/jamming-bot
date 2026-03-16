@@ -620,6 +620,30 @@ def do_screenshot(data):
     }
 
 
+STEP_FIELDS = [
+    'number', 'url', 'src', 'ip', 'status_code', 'timestamp', 'text',
+    'city', 'latitude', 'longitude', 'error',
+    'tags', 'words', 'hrases', 'entities', 'text_length',
+    'semantic', 'semantic_words', 'semantic_hrases',
+    'screenshot_url', 's3_key',
+]
+
+
+def _ordered_step(data):
+    """Return an OrderedDict with canonical STEP_FIELDS order, skipping internal keys."""
+    from collections import OrderedDict
+    skip = {'headers', 'src_url', 'current_url', 'pod', 'step',
+            'id', 'status_string', 'struct_text', 'html'}
+    out = OrderedDict()
+    for key in STEP_FIELDS:
+        if key in data:
+            out[key] = data[key]
+    for key in data:
+        if key not in out and key not in skip:
+            out[key] = data[key]
+    return out
+
+
 @job('default', connection=redis_connection, timeout=120, result_ttl=270)
 @with_trace_context
 def do_storage(data):
@@ -636,15 +660,14 @@ def do_storage(data):
     current_url = data.get('current_url', data.get('url', ''))
     set_step_span_attributes(step_number=step_number, step_url=current_url)
 
-    payload = dict(data)
-    for key in ('headers', 'src_url', 'current_url'):
-        payload.pop(key, None)
+    payload = _ordered_step(data)
 
     url = f"{STORAGE_SERVICE_URL}/store"
     headers = {'content-type': 'application/json'}
     try:
         with sentry_sdk.start_span(op="http.client", description="storage_service /store"):
-            response = requests.post(url, data=json.dumps(payload), headers=headers, timeout=30)
+            response = requests.post(url, data=json.dumps(payload, default=str),
+                                     headers=headers, timeout=30)
             response.raise_for_status()
         r = response.json() if response.content else {}
     except Exception as e:

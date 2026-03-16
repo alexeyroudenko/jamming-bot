@@ -32,6 +32,7 @@ SVC_NAME = "app-service"
 SENTRY_DSN = os.getenv('SENTRY_DSN', '')
 TAGS_SERVICE_URL = os.getenv('TAGS_SERVICE_URL', 'http://tags_service:8000')
 SEMANTIC_SERVICE_URL = os.getenv('SEMANTIC_SERVICE_URL', 'http://semantic_service:8005')
+STORAGE_SERVICE_URL = os.getenv('STORAGE_SERVICE_URL', 'http://storage_service:7781')
 
 cfg = getConfig()
 redis = getRedis()
@@ -144,7 +145,7 @@ AUTH_PASS = os.getenv("AUTH_PASS", "x")
 
 PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
                    "/tags/", "/screenshots/", "/api/tags/get/", "/api/tags/combine/",
-                   "/api/step/")
+                   "/api/step/", "/api/storage_step/", "/api/storage_latest/")
 
 
 def login_required(f):
@@ -820,6 +821,36 @@ def api_step_detail(step_num):
     if not result:
         return jsonify({"error": "step not found"}), 404
     return jsonify(result)
+
+
+@app.route("/api/storage_step/<step_num>/", methods=["GET"])
+@cross_origin()
+def api_storage_step(step_num):
+    """Proxy to storage-service GET /get/step/{number}."""
+    try:
+        resp = requests.get(
+            f"{STORAGE_SERVICE_URL}/get/step/{step_num}", timeout=10)
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except requests.exceptions.HTTPError:
+        status = resp.status_code if resp is not None else 502
+        return jsonify({"error": "step not found"}), status
+    except Exception as e:
+        logger.warning(f"api_storage_step: {e}")
+        return jsonify({"error": str(e)}), 502
+
+
+@app.route("/api/storage_latest/", methods=["GET"])
+@cross_origin()
+def api_storage_latest():
+    """Proxy to storage-service GET /get/latest."""
+    try:
+        resp = requests.get(f"{STORAGE_SERVICE_URL}/get/latest", timeout=15)
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except Exception as e:
+        logger.warning(f"api_storage_latest: {e}")
+        return jsonify({"error": str(e)}), 502
 
 
 @app.route('/api/graph/')
