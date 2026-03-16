@@ -143,7 +143,8 @@ AUTH_USER = os.getenv("AUTH_USER", "x")
 AUTH_PASS = os.getenv("AUTH_PASS", "x")
 
 PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
-                   "/tags/", "/screenshots/", "/api/tags/get/", "/api/tags/combine/")
+                   "/tags/", "/screenshots/", "/api/tags/get/", "/api/tags/combine/",
+                   "/api/step/")
 
 
 def login_required(f):
@@ -182,7 +183,30 @@ def _ensure_redis_defaults():
     return {k: float(redis.get(k)) for k in defaults}
 
 
-def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5):
+STEP_HASH_TTL = int(os.getenv('STEP_HASH_TTL', '3600'))
+
+
+def _save_to_step_hash(step_key, data):
+    """Merge *data* dict into the Redis hash at *step_key*."""
+    if not step_key or not isinstance(data, dict):
+        return
+    mapping = {}
+    for k, v in data.items():
+        if isinstance(v, (dict, list, tuple)):
+            mapping[k] = json.dumps(v, default=str)
+        elif v is None:
+            mapping[k] = ""
+        else:
+            mapping[k] = str(v)
+    try:
+        redis.hset(step_key, mapping=mapping)
+        redis.expire(step_key, STEP_HASH_TTL)
+    except Exception as exc:
+        logger.warning(f"_save_to_step_hash({step_key}): {exc}")
+
+
+def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
+                       step_key=None):
     """Poll an RQ job in a background thread and emit result via SocketIO."""
     def _poll():
         elapsed = 0.0
@@ -196,9 +220,11 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5):
                 return
             if job.is_finished:
                 socketio.emit(event_name, job.result)
+                _save_to_step_hash(step_key, job.result)
                 return
             if job.is_failed:
                 logger.warning(f"Job {job.id} failed for event {event_name}")
+                _save_to_step_hash(step_key, {"_error_" + event_name: "job failed"})
                 return
         logger.warning(f"Job {job.id} timed out after {timeout}s for event {event_name}")
     threading.Thread(target=_poll, daemon=True).start()
@@ -567,6 +593,17 @@ def step():
         data['semantic_words'] = ""
         logger.info(f"step status {data['status_string']}")
 
+        step_key = f"step:{data['number']}"
+        _save_to_step_hash(step_key, {
+            'number': data['number'],
+            'url': data.get('url', ''),
+            'src': data.get('src', ''),
+            'ip': data.get('ip', ''),
+            'status_code': data.get('status_code', ''),
+            'timestamp': data.get('timestamp', ''),
+            'text': (data.get('text') or '')[:2048],
+        })
+
         if data['status_string'] == "ok":
             with step_span(step_number=data.get('number'), step_url=data.get('url')):
                 set_step_span_attributes(
@@ -578,7 +615,7 @@ def step():
                     socketio.emit('step', data)
                     if len(data['text']) > 0:
                         job = enqueue_with_trace(queue, redis_connection, jobs.dostep, data, timeout=90, result_ttl=270)
-                        _poll_job_and_emit(job, 'tags_updated', timeout=90)
+                        _poll_job_and_emit(job, 'tags_updated', timeout=90, step_key=step_key)
                 else:
                     socketio.emit('step', data)
 
@@ -589,7 +626,7 @@ def step():
                         ip = data['ip']
                         if ip != "0":
                             job = enqueue_with_trace(queue, redis_connection, jobs.do_geo, ip, timeout=90, result_ttl=270)
-                            _poll_job_and_emit(job, 'location', timeout=90)
+                            _poll_job_and_emit(job, 'location', timeout=90, step_key=step_key)
 
                 # ANALYZE — fire-and-forget with background poll
                 if float(current_cfg['do_analyze']) == 1.0:
@@ -600,21 +637,21 @@ def step():
                         step_number=data.get('number'), step_url=data.get('url'),
                         timeout=90, result_ttl=270,
                     )
-                    _poll_job_and_emit(job, 'analyzed', timeout=90)
+                    _poll_job_and_emit(job, 'analyzed', timeout=90, step_key=step_key)
 
                 # SCREENSHOT — fire-and-forget with background poll
                 if float(current_cfg['do_screenshot']) == 1.0:
                     if data.get('url'):
                         logger.info(f"step do_screenshot")
                         job = enqueue_with_trace(queue, redis_connection, jobs.do_screenshot, data, timeout=120, result_ttl=270)
-                        _poll_job_and_emit(job, 'screenshot', timeout=120)
+                        _poll_job_and_emit(job, 'screenshot', timeout=120, step_key=step_key)
                         
                 # STORAGE — fire-and-forget with background poll
                 if float(current_cfg.get('do_storage', 0)) == 1.0:
                     if data.get('url'):
                         logger.info(f"step do_storage")
                         job = enqueue_with_trace(queue, redis_connection, jobs.do_storage, data, timeout=120, result_ttl=270)
-                        _poll_job_and_emit(job, 'storage', timeout=120)
+                        _poll_job_and_emit(job, 'storage', timeout=120, step_key=step_key)
         else:
             logger.info(f"skip step actions")
 
@@ -716,6 +753,24 @@ def all_steps():
                         'type': job_type,
                     })
     return jsonify(l)
+
+
+@app.route("/api/step/<step_num>/", methods=["GET"])
+@cross_origin()
+def api_step_detail(step_num):
+    """Return the aggregated Redis hash for a single step."""
+    raw = redis.hgetall(f"step:{step_num}")
+    if not raw:
+        return jsonify({"error": "step not found"}), 404
+    result = {}
+    for k, v in raw.items():
+        key = k.decode() if isinstance(k, bytes) else k
+        val = v.decode() if isinstance(v, bytes) else v
+        try:
+            result[key] = json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            result[key] = val
+    return jsonify(result)
 
 
 @app.route('/api/graph/')
