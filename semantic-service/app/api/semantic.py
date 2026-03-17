@@ -53,6 +53,8 @@ def preprocess_text(text):
     
     return " ".join(tokens)
 
+
+
 def analyze_text(texts):
     words = []
     hrases = []
@@ -123,6 +125,44 @@ async def get_geo(text_data: SemanticCalculate):
     out.hrases = hrases
     out.sim = sim
     return out
+
+
+@semantic.get('/analyze_all/')
+async def analyze_all_get(text: str = ""):
+    if not text:
+        raise HTTPException(status_code=400, detail="text parameter is required")
+    return _analyze_all(text)
+
+
+@semantic.post('/analyze_all/')
+async def analyze_all_post(text_data: SemanticCalculate):
+    if not text_data or not text_data.text:
+        raise HTTPException(status_code=400, detail="text is required")
+    return _analyze_all(text_data.text)
+
+
+def _analyze_all(text: str):
+    if nlp_lg is None:
+        raise HTTPException(status_code=503, detail="SpaCy model not loaded")
+
+    doc = nlp_lg(text)
+    noun_phrases = [chunk.text for chunk in doc.noun_chunks]
+    verbs = [token.lemma_ for token in doc if token.pos_ == "VERB"]
+    entities = [{"text": ent.text, "label": ent.label_} for ent in doc.ents]
+    keywords = [token.text.lower() for token in doc if token.pos_ in ["NOUN", "ADJ"] and not token.is_stop]
+    subjects = [token.text for token in doc if token.dep_ == "nsubj"]
+    objects = [token.text for token in doc if token.dep_ == "dobj"]
+    dependency = [{"token": token.text, "dep": token.dep_, "head": token.head.text} for token in doc]
+
+    return {
+        "noun_phrases": noun_phrases,
+        "verbs": verbs,
+        "entities": entities,
+        "keywords": keywords,
+        "subjects": subjects,
+        "objects": objects,
+        "dependency": dependency,
+    }
 
 
 class CombineIn(BaseModel):

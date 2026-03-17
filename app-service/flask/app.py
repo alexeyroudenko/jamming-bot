@@ -621,6 +621,26 @@ def step():
     return "done"
 
 
+@app.route("/api/analyze_all/", methods=['GET', 'POST'])
+@cross_origin()
+def analyze_all_proxy():
+    if request.method == 'GET':
+        text = request.args.get('text', '')
+    else:
+        data = request.get_json(silent=True) or {}
+        text = data.get('text', '') or request.form.get('text', '')
+    if not text:
+        return jsonify({"error": "text parameter is required"}), 400
+    try:
+        url = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/analyze_all/"
+        headers = {'content-type': 'application/json'}
+        resp = requests.post(url, data=json.dumps({"text": text}), headers=headers, timeout=30)
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": "Semantic service unavailable", "detail": str(e)}), 503
+
+
 @app.route("/spacy/", methods=['GET', 'POST'])
 def spacy_test():
     message_text = "Jammingbot is a fantasy about a post-apocalyptic future."
