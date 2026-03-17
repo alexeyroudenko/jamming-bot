@@ -46,7 +46,8 @@ def getConfig():
         'do_geo': 0,
         'do_save': 0,
         'do_analyze': 0,
-        'do_screenshot': 0
+        'do_screenshot': 0,
+        'do_storage': 0,
     }
     
     # Try to initialize default values if they don't exist
@@ -64,6 +65,8 @@ def getConfig():
             redis.set('do_analyze', defaults['do_analyze'])
         if not redis.get('do_screenshot'):
             redis.set('do_screenshot', defaults['do_screenshot'])
+        if not redis.get('do_storage'):
+            redis.set('do_storage', defaults['do_storage'])
     except Exception as e:
         # If Redis is read-only or any other error occurs, use defaults
         # This allows the app to start even if Redis is read-only

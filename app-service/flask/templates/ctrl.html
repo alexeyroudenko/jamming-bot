@@ -57,6 +57,10 @@
             <label for="do_screenshot">do_screenshot</label>
         </span>
         <span>
+            <input type="checkbox" id="do_storage" name="do_storage" {% if cfg.do_storage == 1 %}checked{% endif %} />
+            <label for="do_storage">do_storage</label>
+        </span>
+        <span>
         <form action="set_tick" method="get">                
             <input  style="width:300px"  type="range" class="form-range" min="0" max="1" id="pi_input" name="tick" id="tick" step="any" value={{ cfg.value }}><br>                   
             <label for="pi_input"><output id="value"></output></label>                
@@ -121,6 +125,11 @@
     const do_screenshot = document.querySelector("#do_screenshot");
     do_screenshot.addEventListener("input", (event) => {
         socket.emit('do_screenshot', (event.target.checked)?1.:0.);
+    });
+
+    const do_storage = document.querySelector("#do_storage");
+    do_storage.addEventListener("input", (event) => {
+        socket.emit('do_storage', (event.target.checked)?1.:0.);
     });
 
     const value = document.querySelector("#value");

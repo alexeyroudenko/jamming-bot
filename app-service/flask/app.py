@@ -32,6 +32,7 @@ SVC_NAME = "app-service"
 SENTRY_DSN = os.getenv('SENTRY_DSN', '')
 TAGS_SERVICE_URL = os.getenv('TAGS_SERVICE_URL', 'http://tags_service:8000')
 SEMANTIC_SERVICE_URL = os.getenv('SEMANTIC_SERVICE_URL', 'http://semantic_service:8005')
+STORAGE_SERVICE_URL = os.getenv('STORAGE_SERVICE_URL', 'http://storage_service:7781')
 
 cfg = getConfig()
 redis = getRedis()
@@ -143,7 +144,8 @@ AUTH_USER = os.getenv("AUTH_USER", "x")
 AUTH_PASS = os.getenv("AUTH_PASS", "x")
 
 PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
-                   "/tags/", "/screenshots/", "/api/tags/get/", "/api/tags/combine/")
+                   "/tags/", "/screenshots/", "/api/tags/get/", "/api/tags/combine/",
+                   "/api/step/", "/api/storage_step/", "/api/storage_latest/")
 
 
 def login_required(f):
@@ -175,14 +177,37 @@ def _ctrl_log(action: str, source: str):
 def _ensure_redis_defaults():
     defaults = {'value': 0.5, 'do_pass': 0.5, 'do_geo': 0.5,
                 'do_save': 0.5, 'do_analyze': 0.5, 'do_screenshot': 0.5,
-                'sleep_time': 2.0}
+                'do_storage': 0.5, 'sleep_time': 2.0}
     for key, default in defaults.items():
         if not redis.get(key):
             redis.set(key, default)
     return {k: float(redis.get(k)) for k in defaults}
 
 
-def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5):
+STEP_HASH_TTL = int(os.getenv('STEP_HASH_TTL', '3600'))
+
+
+def _save_to_step_hash(step_key, data):
+    """Merge *data* dict into the Redis hash at *step_key*."""
+    if not step_key or not isinstance(data, dict):
+        return
+    mapping = {}
+    for k, v in data.items():
+        if isinstance(v, (dict, list, tuple)):
+            mapping[k] = json.dumps(v, default=str)
+        elif v is None:
+            mapping[k] = ""
+        else:
+            mapping[k] = str(v)
+    try:
+        redis.hset(step_key, mapping=mapping)
+        redis.expire(step_key, STEP_HASH_TTL)
+    except Exception as exc:
+        logger.warning(f"_save_to_step_hash({step_key}): {exc}")
+
+
+def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
+                       step_key=None):
     """Poll an RQ job in a background thread and emit result via SocketIO."""
     def _poll():
         elapsed = 0.0
@@ -196,12 +221,66 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5):
                 return
             if job.is_finished:
                 socketio.emit(event_name, job.result)
+                _save_to_step_hash(step_key, job.result)
                 return
             if job.is_failed:
                 logger.warning(f"Job {job.id} failed for event {event_name}")
+                _save_to_step_hash(step_key, {"_error_" + event_name: "job failed"})
                 return
         logger.warning(f"Job {job.id} timed out after {timeout}s for event {event_name}")
     threading.Thread(target=_poll, daemon=True).start()
+
+
+def _read_step_hash(step_key):
+    """Read the full aggregated step from the Redis hash, deserialising JSON values."""
+    raw = redis.hgetall(step_key)
+    if not raw:
+        return {}
+    result = {}
+    for k, v in raw.items():
+        key = k.decode() if isinstance(k, bytes) else k
+        val = v.decode() if isinstance(v, bytes) else v
+        try:
+            result[key] = json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            result[key] = val
+    return result
+
+
+def _wait_all_then_store(pending_jobs, step_key, original_data,
+                         timeout=120, poll_interval=0.5):
+    """Wait for all enrichment jobs to finish, then enqueue do_storage with the full step."""
+    def _collect():
+        remaining = set(range(len(pending_jobs)))
+        elapsed = 0.0
+        while remaining and elapsed < timeout:
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+            done = set()
+            for idx in remaining:
+                try:
+                    pending_jobs[idx].refresh()
+                except Exception:
+                    done.add(idx)
+                    continue
+                if pending_jobs[idx].is_finished or pending_jobs[idx].is_failed:
+                    done.add(idx)
+            remaining -= done
+
+        if remaining:
+            logger.warning(f"_wait_all_then_store({step_key}): "
+                           f"{len(remaining)} jobs still pending after {timeout}s")
+
+        full_step = _read_step_hash(step_key) or dict(original_data)
+        logger.info(f"do_storage: sending full step {step_key} with {len(full_step)} fields")
+
+        job = enqueue_with_trace(
+            queue, redis_connection, jobs.do_storage, full_step,
+            timeout=120, result_ttl=270,
+        )
+        _poll_job_and_emit(job, 'storage', timeout=120, step_key=step_key)
+
+    threading.Thread(target=_collect, daemon=True).start()
 
 
 def _tags_response_json(r):
@@ -567,18 +646,32 @@ def step():
         data['semantic_words'] = ""
         logger.info(f"step status {data['status_string']}")
 
+        step_key = f"step:{data['number']}"
+        _save_to_step_hash(step_key, {
+            'number': data['number'],
+            'url': data.get('url', ''),
+            'src': data.get('src', ''),
+            'ip': data.get('ip', ''),
+            'status_code': data.get('status_code', ''),
+            'timestamp': data.get('timestamp', ''),
+            'text': (data.get('text') or '')[:2048],
+        })
+
         if data['status_string'] == "ok":
             with step_span(step_number=data.get('number'), step_url=data.get('url')):
                 set_step_span_attributes(
                     step_number=data.get('number'),
                     step_url=data.get('url'),
                 )
+                pending_jobs = []
+
                 # PASS — semantic analysis via worker
                 if float(current_cfg['do_pass']) == 1.0:
                     socketio.emit('step', data)
                     if len(data['text']) > 0:
                         job = enqueue_with_trace(queue, redis_connection, jobs.dostep, data, timeout=90, result_ttl=270)
-                        _poll_job_and_emit(job, 'tags_updated', timeout=90)
+                        _poll_job_and_emit(job, 'tags_updated', timeout=90, step_key=step_key)
+                        pending_jobs.append(job)
                 else:
                     socketio.emit('step', data)
 
@@ -589,7 +682,8 @@ def step():
                         ip = data['ip']
                         if ip != "0":
                             job = enqueue_with_trace(queue, redis_connection, jobs.do_geo, ip, timeout=90, result_ttl=270)
-                            _poll_job_and_emit(job, 'location', timeout=90)
+                            _poll_job_and_emit(job, 'location', timeout=90, step_key=step_key)
+                            pending_jobs.append(job)
 
                 # ANALYZE — fire-and-forget with background poll
                 if float(current_cfg['do_analyze']) == 1.0:
@@ -600,21 +694,22 @@ def step():
                         step_number=data.get('number'), step_url=data.get('url'),
                         timeout=90, result_ttl=270,
                     )
-                    _poll_job_and_emit(job, 'analyzed', timeout=90)
+                    _poll_job_and_emit(job, 'analyzed', timeout=90, step_key=step_key)
+                    pending_jobs.append(job)
 
                 # SCREENSHOT — fire-and-forget with background poll
                 if float(current_cfg['do_screenshot']) == 1.0:
                     if data.get('url'):
                         logger.info(f"step do_screenshot")
                         job = enqueue_with_trace(queue, redis_connection, jobs.do_screenshot, data, timeout=120, result_ttl=270)
-                        _poll_job_and_emit(job, 'screenshot', timeout=120)
-                        
-                # STORAGE — fire-and-forget with background poll
-                if float(current_cfg['do_storage']) == 1.0:
+                        _poll_job_and_emit(job, 'screenshot', timeout=120, step_key=step_key)
+                        pending_jobs.append(job)
+
+                # STORAGE — wait for all enrichment jobs, then send full step
+                if float(current_cfg.get('do_storage', 0)) == 1.0:
                     if data.get('url'):
-                        logger.info(f"step do_storage")
-                        job = enqueue_with_trace(queue, redis_connection, jobs.do_storage, data, timeout=120, result_ttl=270)
-                        _poll_job_and_emit(job, 'storage', timeout=120)
+                        logger.info(f"step do_storage (deferred, waiting for {len(pending_jobs)} jobs)")
+                        _wait_all_then_store(pending_jobs, step_key, data)
         else:
             logger.info(f"skip step actions")
 
@@ -736,6 +831,46 @@ def all_steps():
                         'type': job_type,
                     })
     return jsonify(l)
+
+
+@app.route("/api/step/<step_num>/", methods=["GET"])
+@cross_origin()
+def api_step_detail(step_num):
+    """Return the aggregated Redis hash for a single step."""
+    result = _read_step_hash(f"step:{step_num}")
+    if not result:
+        return jsonify({"error": "step not found"}), 404
+    return jsonify(result)
+
+
+@app.route("/api/storage_step/<step_num>/", methods=["GET"])
+@cross_origin()
+def api_storage_step(step_num):
+    """Proxy to storage-service GET /get/step/{number}."""
+    try:
+        resp = requests.get(
+            f"{STORAGE_SERVICE_URL}/get/step/{step_num}", timeout=10)
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except requests.exceptions.HTTPError:
+        status = resp.status_code if resp is not None else 502
+        return jsonify({"error": "step not found"}), status
+    except Exception as e:
+        logger.warning(f"api_storage_step: {e}")
+        return jsonify({"error": str(e)}), 502
+
+
+@app.route("/api/storage_latest/", methods=["GET"])
+@cross_origin()
+def api_storage_latest():
+    """Proxy to storage-service GET /get/latest."""
+    try:
+        resp = requests.get(f"{STORAGE_SERVICE_URL}/get/latest", timeout=15)
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except Exception as e:
+        logger.warning(f"api_storage_latest: {e}")
+        return jsonify({"error": str(e)}), 502
 
 
 @app.route('/api/graph/')
@@ -925,6 +1060,10 @@ def handle_do_analyze(value):
 @socketio.on('do_screenshot')
 def handle_do_screenshot(value):
     redis.set('do_screenshot', float(value))
+
+@socketio.on('do_storage')
+def handle_do_storage(value):
+    redis.set('do_storage', float(value))
 
 @socketio.on('sleep_time')
 def handle_sleep_time(value):
