@@ -97,6 +97,14 @@ k3s-data-service:
 	docker save data-service:latest | k3s ctr images import -
 	kubectl rollout restart deployment data-service -n jamming-bot
 
+.PHONY: k3s-backfill-worker
+k3s-backfill-worker:
+	docker build -t backfill-worker:latest ./backfill-worker
+	docker save backfill-worker:latest | k3s ctr images import -
+	-kubectl delete job backfill-worker -n jamming-bot 2>/dev/null; true
+	kubectl apply -f deployment.yaml
+	@echo "backfill-worker job started. Monitor: kubectl logs -n jamming-bot job/backfill-worker -f"
+
 .PHONY: k3s-all
 k3s-all: k3s-html-renderer k3s-keywords-service k3s-semantic-service k3s-storage-service k3s-tags-service k3s-bot-service k3s-ip-service k3s-app-service k3s-data-service
 

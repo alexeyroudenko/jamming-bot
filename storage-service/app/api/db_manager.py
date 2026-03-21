@@ -37,6 +37,12 @@ async def get_step_by_number(number: str):
     return _record_to_dict(row)
 
 
+async def exists_batch(numbers: list[str]):
+    query = select(steps.c.number).where(steps.c.number.in_(numbers))
+    rows = await database.fetch_all(query=query)
+    return {str(r["number"]) for r in rows}
+
+
 async def get_latest(limit: int = 3000):
     total = await database.fetch_val(
         query=select(func.count()).select_from(steps)

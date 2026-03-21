@@ -1,5 +1,7 @@
+from typing import List
 from fastapi import FastAPI, Request, HTTPException
 from starlette.status import HTTP_400_BAD_REQUEST
+from pydantic import BaseModel
 from app.api.db import metadata, database, engine
 from app.api import db_manager
 import asyncio
@@ -73,6 +75,17 @@ async def update_step(number: str, request: Request):
         raise HTTPException(status_code=404, detail="Step not found")
     updated = await db_manager.update_step(number, data)
     return updated
+
+
+class ExistsBatchRequest(BaseModel):
+    numbers: List[str]
+
+
+@app.post("/exists/batch")
+async def exists_batch(payload: ExistsBatchRequest):
+    existing = await db_manager.exists_batch(payload.numbers)
+    missing = [n for n in payload.numbers if n not in existing]
+    return {"existing": list(existing), "missing": missing}
 
 
 @app.get("/get/step/{number}")

@@ -1481,3 +1481,44 @@ spec:
   - port: metrics
     interval: 15s
     path: /
+---
+# ===================== backfill-worker (one-shot Job) =====================
+# Run: make k3s-backfill-worker
+# Monitor: kubectl logs -n jamming-bot job/backfill-worker -f
+# Re-run: kubectl delete job backfill-worker -n jamming-bot && make k3s-backfill-worker
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: backfill-worker
+  namespace: jamming-bot
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 604800
+  template:
+    metadata:
+      labels:
+        app: backfill-worker
+    spec:
+      containers:
+      - name: backfill-worker
+        image: backfill-worker:latest
+        imagePullPolicy: Never
+        env:
+        - name: DATA_SERVICE_URL
+          value: "http://data-service"
+        - name: STORAGE_SERVICE_URL
+          value: "http://storage-service"
+        - name: APP_SERVICE_URL
+          value: "http://app-service"
+        - name: BATCH_SIZE
+          value: "100"
+        - name: SLEEP_BETWEEN
+          value: "2.0"
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "250m"
+            memory: "256Mi"
+      restartPolicy: OnFailure

@@ -207,7 +207,7 @@ def _save_to_step_hash(step_key, data):
 
 
 def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
-                       step_key=None):
+                       step_key=None, silent=False):
     """Poll an RQ job in a background thread and emit result via SocketIO."""
     def _poll():
         elapsed = 0.0
@@ -220,7 +220,8 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                 logger.debug(f"Job {job.id} no longer exists for event {event_name}")
                 return
             if job.is_finished:
-                socketio.emit(event_name, job.result)
+                if not silent:
+                    socketio.emit(event_name, job.result)
                 _save_to_step_hash(step_key, job.result)
                 _patch_storage(step_key, job.result)
                 return
@@ -624,7 +625,8 @@ def step():
         data['struct_text'] = data['text']
         data['semantic'] = ""
         data['semantic_words'] = ""
-        logger.info(f"step status {data['status_string']}")
+        is_silent = data.get('silent') == '1'
+        logger.info(f"step status {data['status_string']}{' (silent)' if is_silent else ''}")
 
         step_key = f"step:{data['number']}"
         partial_data = {
@@ -658,22 +660,25 @@ def step():
 
                 # PASS — semantic analysis via worker
                 if float(current_cfg['do_pass']) == 1.0:
-                    socketio.emit('step', data)
+                    if not is_silent:
+                        socketio.emit('step', data)
                     if len(data['text']) > 0:
                         job = enqueue_with_trace(queue, redis_connection, jobs.dostep, data, timeout=90, result_ttl=270)
-                        _poll_job_and_emit(job, 'tags_updated', timeout=90, step_key=step_key)
+                        _poll_job_and_emit(job, 'tags_updated', timeout=90, step_key=step_key, silent=is_silent)
                         pending_jobs.append(job)
                 else:
-                    socketio.emit('step', data)
+                    if not is_silent:
+                        socketio.emit('step', data)
 
                 # GEO — fire-and-forget with background poll
                 if float(current_cfg['do_geo']) == 1.0:
-                    send_node_red_event(f"try {data.keys()}")
+                    if not is_silent:
+                        send_node_red_event(f"try {data.keys()}")
                     if "ip" in data.keys():
                         ip = data['ip']
                         if ip != "0":
                             job = enqueue_with_trace(queue, redis_connection, jobs.do_geo, ip, timeout=90, result_ttl=270)
-                            _poll_job_and_emit(job, 'location', timeout=90, step_key=step_key)
+                            _poll_job_and_emit(job, 'location', timeout=90, step_key=step_key, silent=is_silent)
                             pending_jobs.append(job)
 
                 # ANALYZE — fire-and-forget with background poll
@@ -685,7 +690,7 @@ def step():
                         step_number=data.get('number'), step_url=data.get('url'),
                         timeout=90, result_ttl=270,
                     )
-                    _poll_job_and_emit(job, 'analyzed', timeout=90, step_key=step_key)
+                    _poll_job_and_emit(job, 'analyzed', timeout=90, step_key=step_key, silent=is_silent)
                     pending_jobs.append(job)
 
                 # SCREENSHOT — fire-and-forget with background poll
@@ -693,7 +698,7 @@ def step():
                     if data.get('url'):
                         logger.info(f"step do_screenshot")
                         job = enqueue_with_trace(queue, redis_connection, jobs.do_screenshot, data, timeout=120, result_ttl=270)
-                        _poll_job_and_emit(job, 'screenshot', timeout=120, step_key=step_key)
+                        _poll_job_and_emit(job, 'screenshot', timeout=120, step_key=step_key, silent=is_silent)
                         pending_jobs.append(job)
 
                 # STORAGE updates happen incrementally via _poll_job_and_emit → _patch_storage
