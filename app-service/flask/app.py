@@ -222,6 +222,7 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
             if job.is_finished:
                 socketio.emit(event_name, job.result)
                 _save_to_step_hash(step_key, job.result)
+                _patch_storage(step_key, job.result)
                 return
             if job.is_failed:
                 logger.warning(f"Job {job.id} failed for event {event_name}")
@@ -247,40 +248,19 @@ def _read_step_hash(step_key):
     return result
 
 
-def _wait_all_then_store(pending_jobs, step_key, original_data,
-                         timeout=120, poll_interval=0.5):
-    """Wait for all enrichment jobs to finish, then enqueue do_storage with the full step."""
-    def _collect():
-        remaining = set(range(len(pending_jobs)))
-        elapsed = 0.0
-        while remaining and elapsed < timeout:
-            time.sleep(poll_interval)
-            elapsed += poll_interval
-            done = set()
-            for idx in remaining:
-                try:
-                    pending_jobs[idx].refresh()
-                except Exception:
-                    done.add(idx)
-                    continue
-                if pending_jobs[idx].is_finished or pending_jobs[idx].is_failed:
-                    done.add(idx)
-            remaining -= done
-
-        if remaining:
-            logger.warning(f"_wait_all_then_store({step_key}): "
-                           f"{len(remaining)} jobs still pending after {timeout}s")
-
-        full_step = _read_step_hash(step_key) or dict(original_data)
-        logger.info(f"do_storage: sending full step {step_key} with {len(full_step)} fields")
-
-        job = enqueue_with_trace(
-            queue, redis_connection, jobs.do_storage, full_step,
-            timeout=120, result_ttl=270,
+def _patch_storage(step_key, data):
+    """Send incremental update to storage-service via PATCH."""
+    number = step_key.split(":")[-1] if step_key else None
+    if not number or not data:
+        return
+    try:
+        requests.patch(
+            f"{STORAGE_SERVICE_URL}/update/step/{number}",
+            json={k: v for k, v in data.items() if not k.startswith('_')},
+            timeout=5,
         )
-        _poll_job_and_emit(job, 'storage', timeout=120, step_key=step_key)
-
-    threading.Thread(target=_collect, daemon=True).start()
+    except Exception as e:
+        logger.warning(f"_patch_storage({number}): {e}")
 
 
 def _tags_response_json(r):
@@ -647,7 +627,7 @@ def step():
         logger.info(f"step status {data['status_string']}")
 
         step_key = f"step:{data['number']}"
-        _save_to_step_hash(step_key, {
+        partial_data = {
             'number': data['number'],
             'url': data.get('url', ''),
             'src': data.get('src', ''),
@@ -655,7 +635,18 @@ def step():
             'status_code': data.get('status_code', ''),
             'timestamp': data.get('timestamp', ''),
             'text': (data.get('text') or '')[:2048],
-        })
+        }
+        _save_to_step_hash(step_key, partial_data)
+
+        if float(current_cfg.get('do_storage', 0)) == 1.0 and data.get('url'):
+            try:
+                requests.post(
+                    f"{STORAGE_SERVICE_URL}/store",
+                    json=partial_data, timeout=5,
+                )
+                logger.info(f"step: early storage OK for step {data['number']}")
+            except Exception as e:
+                logger.warning(f"step: early storage failed: {e}")
 
         if data['status_string'] == "ok":
             with step_span(step_number=data.get('number'), step_url=data.get('url')):
@@ -705,11 +696,7 @@ def step():
                         _poll_job_and_emit(job, 'screenshot', timeout=120, step_key=step_key)
                         pending_jobs.append(job)
 
-                # STORAGE — wait for all enrichment jobs, then send full step
-                if float(current_cfg.get('do_storage', 0)) == 1.0:
-                    if data.get('url'):
-                        logger.info(f"step do_storage (deferred, waiting for {len(pending_jobs)} jobs)")
-                        _wait_all_then_store(pending_jobs, step_key, data)
+                # STORAGE updates happen incrementally via _poll_job_and_emit → _patch_storage
         else:
             logger.info(f"skip step actions")
 

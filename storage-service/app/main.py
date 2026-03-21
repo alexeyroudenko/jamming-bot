@@ -59,6 +59,22 @@ async def store(request: Request):
     return {"msg": "ok"}
 
 
+@app.patch("/update/step/{number}")
+async def update_step(number: str, request: Request):
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(
+            status_code=HTTP_400_BAD_REQUEST,
+            detail="Invalid or empty JSON body"
+        )
+    existing = await db_manager.get_step_by_number(number)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Step not found")
+    updated = await db_manager.update_step(number, data)
+    return updated
+
+
 @app.get("/get/step/{number}")
 async def get_step(number: str):
     step = await db_manager.get_step_by_number(number)

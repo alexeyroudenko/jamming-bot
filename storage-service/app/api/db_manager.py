@@ -22,6 +22,15 @@ async def add_step(data: dict):
     return await database.execute(query=query)
 
 
+async def update_step(number: str, data: dict):
+    values = {f: str(data[f]) for f in STEP_FIELDS if f in data and f != 'number'}
+    if not values:
+        return None
+    query = steps.update().where(steps.c.number == number).values(**values)
+    await database.execute(query=query)
+    return await get_step_by_number(number)
+
+
 async def get_step_by_number(number: str):
     query = steps.select().where(steps.c.number == number)
     row = await database.fetch_one(query=query)
