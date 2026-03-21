@@ -74,6 +74,7 @@ jobs:
             build_and_import bot-service           bot-service:latest
             build_and_import ip-service            ip-service:latest
             build_and_import app-service           app-service:latest
+            build_and_import data-service          data-service:latest
 
             echo ">>> Applying Kubernetes manifests..."
             kubectl apply -f deployment.yaml
@@ -99,6 +100,7 @@ jobs:
             restart_if_built ip-service             ip-service         && WAIT="$WAIT ip-service"
             restart_if_built app-service            app-service        && WAIT="$WAIT app-service"
             restart_if_built app-service            worker-service     && WAIT="$WAIT worker-service"
+            restart_if_built data-service           data-service       && WAIT="$WAIT data-service"
 
             if [ -z "$WAIT" ]; then
               echo ">>> No services rebuilt — nothing to restart."

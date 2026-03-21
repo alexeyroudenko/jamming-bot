@@ -91,8 +91,14 @@ k3s-app-service:
 	kubectl rollout restart deployment app-service -n jamming-bot
 	kubectl rollout restart deployment worker-service -n jamming-bot
 
+.PHONY: k3s-data-service
+k3s-data-service:
+	docker build -t data-service:latest ./data-service
+	docker save data-service:latest | k3s ctr images import -
+	kubectl rollout restart deployment data-service -n jamming-bot
+
 .PHONY: k3s-all
-k3s-all: k3s-html-renderer k3s-keywords-service k3s-semantic-service k3s-storage-service k3s-tags-service k3s-bot-service k3s-ip-service k3s-app-service
+k3s-all: k3s-html-renderer k3s-keywords-service k3s-semantic-service k3s-storage-service k3s-tags-service k3s-bot-service k3s-ip-service k3s-app-service k3s-data-service
 
 .PHONY: k3s-cert-manager
 k3s-cert-manager:

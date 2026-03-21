@@ -243,6 +243,25 @@ services:
       - app_network          
 
 
+  data_service:
+    build: ./data-service
+    container_name: data_service
+    restart: unless-stopped
+    ports:
+      - "8010:8010"
+    volumes:
+      - type: bind
+        source: ./data
+        target: /app/data
+        read_only: true
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
   tags_db:
     image: postgres:12-alpine
     restart: unless-stopped

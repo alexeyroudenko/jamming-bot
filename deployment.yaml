@@ -766,6 +766,80 @@ spec:
         persistentVolumeClaim:
           claimName: bot-db-pvc
 ---
+# ===================== data-service =====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-service
+  namespace: jamming-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: data-service
+  template:
+    metadata:
+      labels:
+        app: data-service
+    spec:
+      containers:
+      - name: data-service
+        image: data-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8010
+        command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8010", "--workers", "2"]
+        volumeMounts:
+        - name: bot-db
+          mountPath: /app/data
+          readOnly: true
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "250m"
+            memory: "256Mi"
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 8010
+          failureThreshold: 10
+          periodSeconds: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8010
+          timeoutSeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8010
+          timeoutSeconds: 5
+          initialDelaySeconds: 10
+          periodSeconds: 20
+          failureThreshold: 5
+      volumes:
+      - name: bot-db
+        persistentVolumeClaim:
+          claimName: bot-db-pvc
+          readOnly: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: data-service
+  namespace: jamming-bot
+spec:
+  type: ClusterIP
+  selector:
+    app: data-service
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8010
+---
 # ===================== ip-service =====================
 # GeoIP DB (dbip-city-lite) is downloaded at image build; override with IP_MMDB_PATH + volume if needed.
 apiVersion: apps/v1
@@ -1042,6 +1116,16 @@ spec:
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
+  name: strip-data
+  namespace: jamming-bot
+spec:
+  stripPrefix:
+    prefixes:
+      - /data
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
   name: strip-app
   namespace: jamming-bot
 spec:
@@ -1056,7 +1140,7 @@ metadata:
   name: html-renderer-ingress
   namespace: jamming-bot
   annotations:
-    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-semantic@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-tags@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-app@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-semantic@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-tags@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-data@kubernetescrd,jamming-bot-strip-app@kubernetescrd
 spec:
   rules:
     - http:
@@ -1103,6 +1187,13 @@ spec:
               name: ip-service
               port:
                 number: 80
+        - path: /data
+          pathType: Prefix
+          backend:
+            service:
+              name: data-service
+              port:
+                number: 80
         - path: /app
           pathType: Prefix
           backend:
@@ -1136,6 +1227,7 @@ metadata:
   namespace: jamming-bot
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-semantic@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-tags@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-data@kubernetescrd,jamming-bot-strip-app@kubernetescrd
 spec:
   tls:
   - hosts:
@@ -1179,6 +1271,55 @@ spec:
     - host: jamming-bot.arthew0.online
       http:
         paths:
+        - path: /data
+          pathType: Prefix
+          backend:
+            service:
+              name: data-service
+              port:
+                number: 80
+        - path: /storage
+          pathType: Prefix
+          backend:
+            service:
+              name: storage-service
+              port:
+                number: 80
+        - path: /tags
+          pathType: Prefix
+          backend:
+            service:
+              name: tags-service
+              port:
+                number: 80
+        - path: /keywords
+          pathType: Prefix
+          backend:
+            service:
+              name: keywords-service
+              port:
+                number: 80
+        - path: /semantic
+          pathType: Prefix
+          backend:
+            service:
+              name: semantic-service
+              port:
+                number: 80
+        - path: /ip
+          pathType: Prefix
+          backend:
+            service:
+              name: ip-service
+              port:
+                number: 80
+        - path: /render
+          pathType: Prefix
+          backend:
+            service:
+              name: html-renderer-service
+              port:
+                number: 80
         - path: /
           pathType: Prefix
           backend:
