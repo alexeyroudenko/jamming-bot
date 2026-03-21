@@ -1,5 +1,8 @@
+import csv
+import io
 from typing import List
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import StreamingResponse
 from starlette.status import HTTP_400_BAD_REQUEST
 from pydantic import BaseModel
 from app.api.db import metadata, database, engine
@@ -99,3 +102,27 @@ async def get_step(number: str):
 @app.get("/get/latest")
 async def get_latest():
     return await db_manager.get_latest()
+
+
+@app.get("/export/csv")
+async def export_csv():
+    async def _generate():
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        fields = ['id'] + db_manager.STEP_FIELDS
+        writer.writerow(fields)
+        yield buf.getvalue()
+        buf.seek(0)
+        buf.truncate(0)
+
+        async for row in db_manager.iter_all_steps():
+            writer.writerow([row.get(f, '') for f in fields])
+            yield buf.getvalue()
+            buf.seek(0)
+            buf.truncate(0)
+
+    return StreamingResponse(
+        _generate(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="steps_export.csv"'},
+    )
