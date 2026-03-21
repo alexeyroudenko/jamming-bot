@@ -215,23 +215,32 @@ spec:
         imagePullPolicy: Never
         ports:
         - containerPort: 7781
-        command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7781"]
+        command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7781"]
+        env:
+        - name: DATABASE_URI
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: DATABASE_URI
         resources:
           requests:
-            cpu: "25m"
-            memory: "64Mi"
+            cpu: "50m"
+            memory: "128Mi"
           limits:
-            cpu: "25m"
-            memory: "64Mi"
+            cpu: "125m"
+            memory: "256Mi"
+        startupProbe:
+          tcpSocket:
+            port: 7781
+          failureThreshold: 15
+          periodSeconds: 5
         readinessProbe:
           tcpSocket:
             port: 7781
-          initialDelaySeconds: 10
           periodSeconds: 10
         livenessProbe:
           tcpSocket:
             port: 7781
-          initialDelaySeconds: 20
           periodSeconds: 20
 ---
 apiVersion: v1

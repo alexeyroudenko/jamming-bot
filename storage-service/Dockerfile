@@ -1,13 +1,16 @@
-FROM python:3.11
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Копируем файлы
-COPY requirements.txt .
-COPY app /app
+COPY ./requirements.txt /app/requirements.txt
 
-# Устанавливаем зависимости
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update \
+    && apt-get install gcc -y \
+    && apt-get clean
 
-# Запускаем приложение
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7781"]
+RUN pip install -r /app/requirements.txt \
+    && rm -rf /root/.cache/pip
+
+COPY . /app/
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7781"]
