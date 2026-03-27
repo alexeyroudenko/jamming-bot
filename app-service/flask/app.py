@@ -340,6 +340,12 @@ def tags_cloud():
     return render_template('tags.html')
 
 
+@app.route('/tags/3d/')
+@cross_origin()
+def tags_cloud_3d():
+    return render_template('tags3d.html')
+
+
 @app.route('/tags/phrases/')
 @cross_origin()
 def tags_phrases():

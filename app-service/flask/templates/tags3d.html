@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jamming bot — Tag Cloud 3D</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      color: #fff;
+      font-family: monospace;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      padding: 12px 20px;
+      font-size: 11px;
+      color: #666;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+    }
+    nav a { color: #555; text-decoration: none; margin-right: 12px; }
+    nav a:hover { color: #fff; }
+    #status { color: #333; font-size: 10px; }
+
+    #canvas3d { display: block; width: 100vw; height: 100vh; cursor: grab; }
+    #canvas3d:active { cursor: grabbing; }
+
+    #console {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 120px;
+      background: rgba(0, 0, 0, 0.85);
+      border-top: 1px solid #222;
+      overflow-y: auto;
+      padding: 6px 10px;
+      font-family: monospace;
+      font-size: 10px;
+      color: #555;
+      z-index: 20;
+      pointer-events: auto;
+    }
+    #console .line { white-space: pre; margin: 0; }
+    #console .ts { color: #333; }
+    #console .ws { color: #4a8; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div>
+    <a href="/">← home</a>
+    <a href="/tags/">2d</a>
+    <a href="/tags/phrases/">phrases</a>
+  </div>
+  <span id="status"></span>
+</nav>
+
+<div id="canvas3d"></div>
+<div id="console"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+(function () {
+  var API = '/api/tags/get/';
+  var REFRESH_INTERVAL = 30000;
+  var FONT = 'monospace';
+  var HIGHLIGHT_COLOR = 0x00ffa0;
+  var HIGHLIGHT_DECAY = 0.012;
+  var SPHERE_RADIUS = 12;
+
+  var statusEl = document.getElementById('status');
+  var container = document.getElementById('canvas3d');
+  var consoleEl = document.getElementById('console');
+  var MAX_LINES = 200;
+
+  var scene, camera, renderer, controls;
+  var tagGroup = new THREE.Group();
+  var meshMap = {};
+  var W = window.innerWidth;
+  var H = window.innerHeight - 120;
+
+  function wsLog(msg) {
+    var now = new Date();
+    var ts = [now.getHours(), now.getMinutes(), now.getSeconds()]
+      .map(function (n) { return n < 10 ? '0' + n : n; }).join(':');
+    var line = document.createElement('p');
+    line.className = 'line';
+    line.innerHTML = '<span class="ts">' + ts + '</span> <span class="ws">' + msg + '</span>';
+    consoleEl.appendChild(line);
+    while (consoleEl.children.length > MAX_LINES) {
+      consoleEl.removeChild(consoleEl.firstChild);
+    }
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+    console.log('[ws] ' + msg);
+  }
+
+  function calcSize(count, maxCount, minS, maxS) {
+    var ratio = Math.sqrt(count / maxCount);
+    return minS + ratio * (maxS - minS);
+  }
+
+  function calcColorHex(count, maxCount) {
+    var ratio = Math.sqrt(count / maxCount);
+    var bright = Math.round(35 + ratio * 190);
+    return (bright << 16) | (bright << 8) | bright;
+  }
+
+  function fibonacciPoint(i, n, radius) {
+    if (n <= 0) return new THREE.Vector3();
+    if (n === 1) return new THREE.Vector3(0, radius, 0);
+    var inc = Math.PI * (3 - Math.sqrt(5));
+    var off = 2 / n;
+    var y = i * off - 1 + off / 2;
+    var r = Math.sqrt(Math.max(0, 1 - y * y));
+    var phi = i * inc;
+    return new THREE.Vector3(
+      radius * Math.cos(phi) * r,
+      radius * y,
+      radius * Math.sin(phi) * r
+    );
+  }
+
+  function makeTextSprite(text, fontPx, colorHex) {
+    var pad = 8;
+    var canvas = document.createElement('canvas');
+    var ctx = canvas.getContext('2d');
+    ctx.font = 'bold ' + fontPx + 'px ' + FONT;
+    var w = Math.ceil(ctx.measureText(text).width) + pad * 2;
+    var h = fontPx + pad * 2;
+    canvas.width = w;
+    canvas.height = h;
+    ctx.font = 'bold ' + fontPx + 'px ' + FONT;
+    ctx.fillStyle = '#' + colorHex.toString(16).padStart(6, '0');
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, w / 2, h / 2);
+    var tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    var mat = new THREE.SpriteMaterial({
+      map: tex,
+      transparent: true,
+      depthTest: true,
+      depthWrite: false,
+      color: 0xffffff
+    });
+    var sprite = new THREE.Sprite(mat);
+    var scale = 0.02 * fontPx;
+    sprite.scale.set(scale * (w / h), scale, 1);
+    sprite.userData.text = text;
+    var gray = new THREE.Color(colorHex);
+    mat.color.copy(gray);
+    sprite.userData.baseMaterialColor = gray.clone();
+    sprite.userData.baseScale = sprite.scale.clone();
+    return sprite;
+  }
+
+  function initThree() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+
+    camera = new THREE.PerspectiveCamera(55, W / Math.max(H, 1), 0.1, 500);
+    camera.position.set(0, 0, 32);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(W, H);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.35;
+    controls.minDistance = 18;
+    controls.maxDistance = 80;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 1));
+    scene.add(tagGroup);
+
+    window.addEventListener('resize', onResize);
+  }
+
+  function onResize() {
+    W = window.innerWidth;
+    H = window.innerHeight - 120;
+    camera.aspect = W / Math.max(H, 1);
+    camera.updateProjectionMatrix();
+    renderer.setSize(W, H);
+  }
+
+  function clearTags() {
+    while (tagGroup.children.length) {
+      var o = tagGroup.children[0];
+      tagGroup.remove(o);
+      if (o.material && o.material.map) o.material.map.dispose();
+      if (o.material) o.material.dispose();
+    }
+    meshMap = {};
+  }
+
+  function buildTags(tags) {
+    clearTags();
+    if (!tags || !tags.length) return;
+
+    var maxCount = 1;
+    for (var i = 0; i < tags.length; i++) {
+      if (tags[i].count > maxCount) maxCount = tags[i].count;
+    }
+
+    var n = tags.length;
+    for (var i = 0; i < n; i++) {
+      var t = tags[i];
+      var name = t.name;
+      var fontPx = Math.round(calcSize(t.count, maxCount, 10, 42));
+      var colorHex = calcColorHex(t.count, maxCount);
+      var sprite = makeTextSprite(name, fontPx, colorHex);
+      sprite.position.copy(fibonacciPoint(i, n, SPHERE_RADIUS));
+      sprite.userData.count = t.count;
+      sprite.userData.highlightT = 0;
+      sprite.userData.baseScale = sprite.scale.clone();
+      tagGroup.add(sprite);
+      meshMap[name] = sprite;
+    }
+  }
+
+  function highlightTags(names) {
+    if (!names || !names.length) return;
+    for (var i = 0; i < names.length; i++) {
+      var s = meshMap[names[i]];
+      if (s) s.userData.highlightT = 1;
+    }
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+
+    var hi = new THREE.Color(HIGHLIGHT_COLOR);
+    tagGroup.children.forEach(function (s) {
+      if (s.userData.highlightT > 0) {
+        var ht = s.userData.highlightT;
+        s.userData.highlightT = Math.max(0, ht - HIGHLIGHT_DECAY);
+        var pulse = 1 + 0.35 * ht;
+        if (s.userData.baseScale) {
+          s.scale.copy(s.userData.baseScale).multiplyScalar(pulse);
+        }
+        if (s.material && s.userData.baseMaterialColor) {
+          s.material.color.copy(s.userData.baseMaterialColor).lerp(hi, ht);
+        }
+      } else if (s.material && s.userData.baseMaterialColor) {
+        s.material.color.copy(s.userData.baseMaterialColor);
+        if (s.userData.baseScale) s.scale.copy(s.userData.baseScale);
+      }
+    });
+
+    renderer.render(scene, camera);
+  }
+
+  function fetchAndDraw() {
+    statusEl.textContent = 'updating…';
+    fetch(API)
+      .then(function (r) { return r.json(); })
+      .then(function (tags) {
+        if (tags && tags.error) {
+          statusEl.textContent = tags.error || 'error';
+          return;
+        }
+        if (!tags || !tags.length) {
+          statusEl.textContent = 'no tags';
+          clearTags();
+          return;
+        }
+        buildTags(tags);
+        statusEl.textContent = tags.length + ' tags';
+      })
+      .catch(function (err) {
+        console.error(err);
+        statusEl.textContent = 'error';
+      });
+  }
+
+  initThree();
+  animate();
+  fetchAndDraw();
+  setInterval(fetchAndDraw, REFRESH_INTERVAL);
+
+  var socket = io({ transports: ['websocket', 'polling'] });
+  socket.on('connect', function () {
+    statusEl.textContent = 'live';
+    wsLog('connected');
+  });
+  socket.on('tags_updated', function (data) {
+    wsLog('tags_updated' + (data ? ' ' + JSON.stringify(data) : ''));
+    fetchAndDraw();
+  });
+  socket.on('step', function (data) {
+    wsLog('step ' + (data && data.url ? data.url : JSON.stringify(data)));
+  });
+  socket.on('screenshot', function (data) {
+    wsLog('screenshot ' + (data && data.screenshot_url ? data.screenshot_url : JSON.stringify(data)));
+  });
+  socket.on('location', function (data) {
+    wsLog('location ' + JSON.stringify(data));
+  });
+  socket.on('analyzed', function (data) {
+    if (data && data.tags) {
+      highlightTags(data.tags);
+      fetchAndDraw();
+    }
+    wsLog('analyzed ' + JSON.stringify(data));
+  });
+  socket.on('disconnect', function () {
+    statusEl.textContent = 'disconnected';
+    wsLog('disconnected');
+  });
+})();
+</script>
+
+</body>
+</html>
