@@ -1,11 +1,10 @@
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse, RedirectResponse
 from app.api.tags import tags
 from app.api.db import metadata, database, engine
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import logging
-import os
-
 import os
 import sentry_sdk
 from sentry_sdk.integrations.starlette import StarletteIntegration
@@ -90,6 +89,52 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     await database.disconnect()
+
+
+# After ingress stripPrefix /tags, browser UI paths become /, /3d/, /phrases/ here — redirect to app-service if configured.
+_TAGS_UI_ORIGIN = os.getenv("TAGS_UI_REDIRECT_ORIGIN", "").rstrip("/")
+
+
+@app.get("/healthz", include_in_schema=False)
+async def healthz():
+    return {"status": "ok"}
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    if _TAGS_UI_ORIGIN:
+        return RedirectResponse(url=f"{_TAGS_UI_ORIGIN}/tags/", status_code=307)
+    return JSONResponse(
+        {
+            "service": "tags-service",
+            "api": "/api/v1/tags/",
+            "docs": "/api/v1/tags/docs",
+        }
+    )
+
+
+@app.api_route("/3d/", methods=["GET", "HEAD"], include_in_schema=False)
+async def legacy_tags_3d():
+    if _TAGS_UI_ORIGIN:
+        return RedirectResponse(url=f"{_TAGS_UI_ORIGIN}/tags/3d/", status_code=307)
+    return JSONResponse(
+        status_code=404,
+        content={
+            "detail": "3D tag cloud is served by app-service (path /tags/3d/), not tags-service.",
+        },
+    )
+
+
+@app.api_route("/phrases/", methods=["GET", "HEAD"], include_in_schema=False)
+async def legacy_tags_phrases():
+    if _TAGS_UI_ORIGIN:
+        return RedirectResponse(url=f"{_TAGS_UI_ORIGIN}/tags/phrases/", status_code=307)
+    return JSONResponse(
+        status_code=404,
+        content={
+            "detail": "Phrases UI is served by app-service (path /tags/phrases/).",
+        },
+    )
 
 
 app.include_router(tags, prefix='/api/v1/tags', tags=['tags'])

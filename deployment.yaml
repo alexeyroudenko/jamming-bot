@@ -291,6 +291,8 @@ spec:
             secretKeyRef:
               name: jamming-bot-secrets
               key: SHHH_SENTRY_URL
+        - name: TAGS_UI_REDIRECT_ORIGIN
+          value: "https://jamming-bot.arthew0.online"
         resources:
           requests:
             cpu: "125m"
@@ -304,11 +306,13 @@ spec:
           failureThreshold: 15
           periodSeconds: 5
         readinessProbe:
-          tcpSocket:
+          httpGet:
+            path: /healthz
             port: 8000
           periodSeconds: 10
         livenessProbe:
-          tcpSocket:
+          httpGet:
+            path: /healthz
             port: 8000
           periodSeconds: 20
 ---
@@ -1145,6 +1149,14 @@ spec:
   rules:
     - http:
         paths:
+        # Only /tags/api/* goes to tags-service (strip /tags -> /api/v1/...). UI routes /tags/, /tags/3d/, etc. stay on app-service.
+        - path: /tags/api
+          pathType: Prefix
+          backend:
+            service:
+              name: tags-service
+              port:
+                number: 80
         - path: /render
           pathType: Prefix
           backend:
@@ -1173,13 +1185,6 @@ spec:
               name: storage-service
               port:
                 number: 80
-        - path: /tags
-          pathType: Prefix
-          backend:
-            service:
-              name: tags-service
-              port:
-                number: 80
         - path: /ip
           pathType: Prefix
           backend:
@@ -1201,6 +1206,33 @@ spec:
               name: app-service
               port:
                 number: 80
+---
+# Tags REST API on main host: strip /tags so backend receives /api/v1/tags/...
+# (UI pages /tags/, /tags/3d/ are served by app-service via app-subdomain-ingress / without strip-tags.)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jamming-bot-tags-api-ingress
+  namespace: jamming-bot
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-tags@kubernetescrd
+spec:
+  tls:
+  - hosts:
+    - jamming-bot.arthew0.online
+    secretName: jamming-bot-tls
+  rules:
+  - host: jamming-bot.arthew0.online
+    http:
+      paths:
+      - path: /tags/api
+        pathType: Prefix
+        backend:
+          service:
+            name: tags-service
+            port:
+              number: 80
 ---
 # ===================== cert-manager ClusterIssuer =====================
 apiVersion: cert-manager.io/v1
@@ -1227,7 +1259,8 @@ metadata:
   namespace: jamming-bot
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
-    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-semantic@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-tags@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-data@kubernetescrd,jamming-bot-strip-app@kubernetescrd
+    # strip-tags is not applied here: /tags/* UI paths must reach app-service with full path. Tags REST API uses jamming-bot-tags-api-ingress (strip /tags only for /tags/api/*).
+    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-semantic@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-data@kubernetescrd,jamming-bot-strip-app@kubernetescrd
 spec:
   tls:
   - hosts:
@@ -1283,13 +1316,6 @@ spec:
           backend:
             service:
               name: storage-service
-              port:
-                number: 80
-        - path: /tags
-          pathType: Prefix
-          backend:
-            service:
-              name: tags-service
               port:
                 number: 80
         - path: /keywords

@@ -90,21 +90,39 @@
 <div id="webgl-error" class="banner" role="alert"></div>
 <div id="info" aria-live="polite"></div>
 <canvas id="viewport"></canvas>
-<div id="hint">drag to orbit · wheel to zoom</div>
+<div id="hint">drag to orbit · wheel to zoom · idle 10s focuses last tag</div>
 
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js" crossorigin="anonymous"></script>
 <script>
 (function () {
   var API = '/api/tags/get/';
-  var MAX_TAGS = 200;
+  var MAX_TAGS = 600;
   var SPHERE_RADIUS = 14;
+  var RADIUS_SPREAD = 0.42;
+  var POSITION_JITTER = 3.2;
+  var IDLE_MS = 10000;
+  var FOCUS_DURATION_MS = 1600;
+  var FLASH_MS = 520;
+  var FOCUS_CAM_OFFSET = 10;
+  var FONT_MIN = 72;
+  var SCALE_MIN = 1.65;
 
   var statusEl = document.getElementById('status');
   var apiErr = document.getElementById('api-error');
   var webglErr = document.getElementById('webgl-error');
   var infoEl = document.getElementById('info');
   var canvas = document.getElementById('viewport');
+
+  var lastActivity = performance.now();
+  var lastFocusTagName = '';
+  var spriteByName = {};
+  var focusAnimating = false;
+
+  function bumpActivity() {
+    lastActivity = performance.now();
+  }
 
   function showApiError(msg) {
     apiErr.textContent = msg;
@@ -118,22 +136,33 @@
     statusEl.textContent = 'WebGL unavailable';
   }
 
-  function fibonacciSphere(i, n, radius) {
+  function fibonacciUnit(i, n) {
     var y = 1 - (i / Math.max(1, n - 1)) * 2;
     y = Math.max(-1, Math.min(1, y));
     var r = Math.sqrt(1 - y * y);
     var theta = Math.PI * (3 - Math.sqrt(5)) * i;
     return new THREE.Vector3(
-      Math.cos(theta) * r * radius,
-      y * radius,
-      Math.sin(theta) * r * radius
+      Math.cos(theta) * r,
+      y,
+      Math.sin(theta) * r
     );
   }
 
+  function chaoticPosition(i, n, baseRadius) {
+    var dir = fibonacciUnit(i, n);
+    var jitterR = 1 + (Math.random() - 0.5) * 2 * RADIUS_SPREAD;
+    var r = baseRadius * jitterR;
+    var p = dir.multiplyScalar(r);
+    p.x += (Math.random() - 0.5) * 2 * POSITION_JITTER;
+    p.y += (Math.random() - 0.5) * 2 * POSITION_JITTER;
+    p.z += (Math.random() - 0.5) * 2 * POSITION_JITTER;
+    return p;
+  }
+
   function makeSprite(name, count, maxCount) {
-    var t = maxCount > 0 ? Math.sqrt(count / maxCount) : 0.5;
-    var fontPx = Math.round(14 + t * 22);
-    var pad = 8;
+    var t = maxCount > 0 ? Math.min(1, Math.max(0, count / maxCount)) : 0;
+    var fontPx = Math.round(FONT_MIN * (1 + 3.5 * t));
+    var pad = 10;
     var canvas2d = document.createElement('canvas');
     var ctx = canvas2d.getContext('2d');
     ctx.font = 'bold ' + fontPx + 'px monospace';
@@ -147,11 +176,13 @@
     ctx.fillText(name, pad, fontPx + pad / 2);
     var tex = new THREE.CanvasTexture(canvas2d);
     tex.needsUpdate = true;
-    var mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true });
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    var mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true, color: 0xffffff });
     var sprite = new THREE.Sprite(mat);
-    var scale = 0.04 + t * 0.12;
+    var scale = SCALE_MIN * (1 + 3 * t);
     sprite.scale.set(scale * w / h, scale, 1);
-    sprite.userData = { name: name, count: count };
+    sprite.userData = { name: name, count: count, baseScaleX: scale * w / h, baseScaleY: scale };
     return sprite;
   }
 
@@ -179,9 +210,40 @@
   controls.minDistance = 8;
   controls.maxDistance = 80;
 
+  controls.addEventListener('change', bumpActivity);
+  controls.addEventListener('end', bumpActivity);
+
   var raycaster = new THREE.Raycaster();
   var pointer = new THREE.Vector2();
   var sprites = [];
+  var _depthPos = new THREE.Vector3();
+  var _depthFar = new THREE.Color(0x383838);
+  var _depthNear = new THREE.Color(0xffffff);
+
+  function updateSpriteDepthColors() {
+    var n = sprites.length;
+    if (n === 0) return;
+    var minD = Infinity;
+    var maxD = -Infinity;
+    var i, s, d;
+    for (i = 0; i < n; i++) {
+      s = sprites[i];
+      s.getWorldPosition(_depthPos);
+      d = camera.position.distanceTo(_depthPos);
+      if (d < minD) minD = d;
+      if (d > maxD) maxD = d;
+    }
+    var span = maxD - minD;
+    for (i = 0; i < n; i++) {
+      s = sprites[i];
+      if (s.userData.skipDepthUntil && performance.now() < s.userData.skipDepthUntil) continue;
+      s.getWorldPosition(_depthPos);
+      d = camera.position.distanceTo(_depthPos);
+      var u = span > 1e-5 ? (maxD - d) / span : 1;
+      u = Math.pow(Math.min(1, Math.max(0, u)), 1.35);
+      s.material.color.copy(_depthFar).lerp(_depthNear, u);
+    }
+  }
 
   function onResize() {
     var w = window.innerWidth;
@@ -204,6 +266,7 @@
   }
 
   function onPointerMove(ev) {
+    bumpActivity();
     var rect = renderer.domElement.getBoundingClientRect();
     pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
@@ -218,6 +281,7 @@
   }
 
   function onClick(ev) {
+    bumpActivity();
     var rect = renderer.domElement.getBoundingClientRect();
     pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
@@ -229,19 +293,111 @@
     }
   }
 
+  renderer.domElement.addEventListener('pointerdown', bumpActivity);
+  renderer.domElement.addEventListener('wheel', bumpActivity, { passive: true });
   renderer.domElement.addEventListener('mousemove', onPointerMove);
   renderer.domElement.addEventListener('click', onClick);
+  renderer.domElement.addEventListener('touchstart', bumpActivity, { passive: true });
   renderer.domElement.addEventListener('touchmove', function (e) {
     if (e.touches.length !== 1) return;
     var t = e.touches[0];
     onPointerMove({ clientX: t.clientX, clientY: t.clientY });
   }, { passive: true });
 
+  function easeInOutQuad(x) {
+    return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+  }
+
+  function flashSpriteRed(sprite) {
+    var mat = sprite.material;
+    var white = new THREE.Color(0xffffff);
+    var red = new THREE.Color(0xff3030);
+    var sx0 = sprite.userData.baseScaleX;
+    var sy0 = sprite.userData.baseScaleY;
+    sprite.userData.skipDepthUntil = performance.now() + FLASH_MS + 80;
+    var start = performance.now();
+    function step() {
+      var u = (performance.now() - start) / FLASH_MS;
+      if (u >= 1) {
+        mat.color.copy(white);
+        sprite.scale.set(sx0, sy0, 1);
+        sprite.userData.skipDepthUntil = 0;
+        return;
+      }
+      var wave = u < 0.5 ? u * 2 : (1 - u) * 2;
+      mat.color.copy(white).lerp(red, wave);
+      var bump = 1 + 0.12 * wave;
+      sprite.scale.set(sx0 * bump, sy0 * bump, 1);
+      requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  function runFocusOnSprite(sprite) {
+    if (focusAnimating || !sprite) return;
+    focusAnimating = true;
+    controls.enabled = false;
+    flashSpriteRed(sprite);
+
+    sprite.updateMatrixWorld(true);
+    var p = new THREE.Vector3();
+    sprite.getWorldPosition(p);
+    var dir = p.clone().normalize();
+    if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
+    var endTarget = p.clone();
+    var dist = Math.max(controls.minDistance, Math.min(controls.maxDistance * 0.35, p.length() + FOCUS_CAM_OFFSET));
+    var endCam = dir.clone().multiplyScalar(dist);
+
+    var startTarget = controls.target.clone();
+    var startCam = camera.position.clone();
+    var animStart = performance.now();
+
+    function animStep() {
+      var raw = (performance.now() - animStart) / FOCUS_DURATION_MS;
+      var k = easeInOutQuad(Math.min(1, raw));
+      controls.target.lerpVectors(startTarget, endTarget, k);
+      camera.position.lerpVectors(startCam, endCam, k);
+      camera.lookAt(controls.target);
+      if (raw < 1) {
+        requestAnimationFrame(animStep);
+      } else {
+        controls.target.copy(endTarget);
+        camera.position.copy(endCam);
+        camera.lookAt(controls.target);
+        controls.enabled = true;
+        controls.update();
+        focusAnimating = false;
+        lastActivity = performance.now();
+        setInfo(sprite.userData.name + ' · count ' + sprite.userData.count);
+      }
+    }
+    requestAnimationFrame(animStep);
+  }
+
+  function tryIdleFocus() {
+    if (focusAnimating || !lastFocusTagName) return;
+    var sp = spriteByName[lastFocusTagName];
+    if (sp) {
+      runFocusOnSprite(sp);
+    } else {
+      lastActivity = performance.now();
+    }
+  }
+
+  function setLastTagFromList(arr) {
+    if (!arr || !arr.length) return;
+    var last = arr[arr.length - 1];
+    if (typeof last === 'string' && last.length) {
+      lastFocusTagName = last;
+    }
+  }
+
   function loadTags(data) {
     while (scene.children.length) {
       scene.remove(scene.children[0]);
     }
     sprites = [];
+    spriteByName = {};
 
     if (!Array.isArray(data)) {
       showApiError('Unexpected API response (not a list).');
@@ -271,43 +427,69 @@
 
     for (var j = 0; j < tags.length; j++) {
       var sp = makeSprite(tags[j].name, tags[j].count, maxCount);
-      sp.position.copy(fibonacciSphere(j, tags.length, SPHERE_RADIUS));
+      sp.position.copy(chaoticPosition(j, tags.length, SPHERE_RADIUS));
       scene.add(sp);
       sprites.push(sp);
+      spriteByName[tags[j].name] = sp;
     }
 
     statusEl.textContent = tags.length + ' tags (max ' + MAX_TAGS + ')';
   }
 
+  function fetchTags() {
+    return fetch(API)
+      .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
+      .then(function (res) {
+        var body = res.body;
+        if (!res.ok || (body && body.error)) {
+          var detail = (body && body.detail) ? String(body.detail) : '';
+          var errMsg = (body && body.error) ? String(body.error) : 'request failed';
+          showApiError('Tags API error: ' + errMsg + (detail ? ' — ' + detail : ''));
+          return;
+        }
+        if (!Array.isArray(body)) {
+          showApiError('Tags API returned non-array JSON.');
+          return;
+        }
+        apiErr.classList.remove('visible');
+        loadTags(body);
+      })
+      .catch(function (err) {
+        console.error(err);
+        showApiError('Network error loading tags: ' + (err && err.message ? err.message : String(err)));
+      });
+  }
+
   function tick() {
     requestAnimationFrame(tick);
+    if (!focusAnimating && lastFocusTagName && performance.now() - lastActivity >= IDLE_MS) {
+      tryIdleFocus();
+    }
     controls.update();
+    updateSpriteDepthColors();
     renderer.render(scene, camera);
   }
 
   tick();
 
+  var socket = io({ transports: ['websocket', 'polling'] });
+  socket.on('analyzed', function (data) {
+    if (data && data.tags && data.tags.length) {
+      setLastTagFromList(data.tags);
+    }
+    fetchTags();
+  });
+  socket.on('tags_updated', function (data) {
+    if (data && data.semantic_words && data.semantic_words.length) {
+      setLastTagFromList(data.semantic_words);
+    } else if (data && data.tags && data.tags.length) {
+      setLastTagFromList(data.tags);
+    }
+    fetchTags();
+  });
+
   statusEl.textContent = 'loading…';
-  fetch(API)
-    .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
-    .then(function (res) {
-      var body = res.body;
-      if (!res.ok || (body && body.error)) {
-        var detail = (body && body.detail) ? String(body.detail) : '';
-        var errMsg = (body && body.error) ? String(body.error) : 'request failed';
-        showApiError('Tags API error: ' + errMsg + (detail ? ' — ' + detail : ''));
-        return;
-      }
-      if (!Array.isArray(body)) {
-        showApiError('Tags API returned non-array JSON.');
-        return;
-      }
-      loadTags(body);
-    })
-    .catch(function (err) {
-      console.error(err);
-      showApiError('Network error loading tags: ' + (err && err.message ? err.message : String(err)));
-    });
+  fetchTags();
 })();
 </script>
 </body>
