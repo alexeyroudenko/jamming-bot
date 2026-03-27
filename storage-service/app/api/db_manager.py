@@ -43,6 +43,18 @@ async def exists_batch(numbers: list[str]):
     return {str(r["number"]) for r in rows}
 
 
+async def iter_all_steps(batch_size: int = 500):
+    query = steps.select().order_by(steps.c.id)
+    offset = 0
+    while True:
+        batch = await database.fetch_all(query=query.limit(batch_size).offset(offset))
+        if not batch:
+            break
+        for r in batch:
+            yield _record_to_dict(r)
+        offset += batch_size
+
+
 async def get_latest(limit: int = 3000):
     total = await database.fetch_val(
         query=select(func.count()).select_from(steps)
