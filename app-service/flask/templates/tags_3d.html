@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jamming bot — Tag cloud 3D</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #000;
+      color: #ccc;
+      font-family: monospace;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      padding: 12px 20px;
+      font-size: 11px;
+      color: #666;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+    }
+    nav a { color: #555; text-decoration: none; margin-right: 12px; pointer-events: auto; }
+    nav a:hover { color: #fff; }
+    #status { color: #333; font-size: 10px; }
+    #viewport { display: block; width: 100vw; height: 100vh; cursor: grab; }
+    #viewport:active { cursor: grabbing; }
+    #info {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 8px 14px;
+      background: rgba(0, 0, 0, 0.85);
+      border: 1px solid #333;
+      font-size: 12px;
+      color: #8f8;
+      z-index: 12;
+      max-width: 90vw;
+      text-align: center;
+      display: none;
+    }
+    #info.visible { display: block; }
+    .banner {
+      position: fixed;
+      top: 48px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 16px;
+      background: #311;
+      border: 1px solid #633;
+      color: #f88;
+      font-size: 11px;
+      z-index: 15;
+      max-width: 90%;
+      text-align: center;
+      display: none;
+    }
+    .banner.visible { display: block; }
+    #hint {
+      position: fixed;
+      bottom: 12px;
+      left: 12px;
+      font-size: 10px;
+      color: #444;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div>
+    <a href="/">← home</a>
+    <a href="/tags/">2D cloud</a>
+    <a href="/tags/phrases/">phrases</a>
+  </div>
+  <span id="status"></span>
+</nav>
+
+<div id="api-error" class="banner" role="alert"></div>
+<div id="webgl-error" class="banner" role="alert"></div>
+<div id="info" aria-live="polite"></div>
+<canvas id="viewport"></canvas>
+<div id="hint">drag to orbit · wheel to zoom</div>
+
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js" crossorigin="anonymous"></script>
+<script>
+(function () {
+  var API = '/api/tags/get/';
+  var MAX_TAGS = 200;
+  var SPHERE_RADIUS = 14;
+
+  var statusEl = document.getElementById('status');
+  var apiErr = document.getElementById('api-error');
+  var webglErr = document.getElementById('webgl-error');
+  var infoEl = document.getElementById('info');
+  var canvas = document.getElementById('viewport');
+
+  function showApiError(msg) {
+    apiErr.textContent = msg;
+    apiErr.classList.add('visible');
+    statusEl.textContent = 'API error';
+  }
+
+  function showWebGLError(msg) {
+    webglErr.textContent = msg;
+    webglErr.classList.add('visible');
+    statusEl.textContent = 'WebGL unavailable';
+  }
+
+  function fibonacciSphere(i, n, radius) {
+    var y = 1 - (i / Math.max(1, n - 1)) * 2;
+    y = Math.max(-1, Math.min(1, y));
+    var r = Math.sqrt(1 - y * y);
+    var theta = Math.PI * (3 - Math.sqrt(5)) * i;
+    return new THREE.Vector3(
+      Math.cos(theta) * r * radius,
+      y * radius,
+      Math.sin(theta) * r * radius
+    );
+  }
+
+  function makeSprite(name, count, maxCount) {
+    var t = maxCount > 0 ? Math.sqrt(count / maxCount) : 0.5;
+    var fontPx = Math.round(14 + t * 22);
+    var pad = 8;
+    var canvas2d = document.createElement('canvas');
+    var ctx = canvas2d.getContext('2d');
+    ctx.font = 'bold ' + fontPx + 'px monospace';
+    var w = Math.ceil(ctx.measureText(name).width) + pad * 2;
+    var h = fontPx + pad * 2;
+    canvas2d.width = w;
+    canvas2d.height = h;
+    ctx.font = 'bold ' + fontPx + 'px monospace';
+    var bright = Math.round(80 + t * 175);
+    ctx.fillStyle = 'rgb(' + bright + ',' + bright + ',' + bright + ')';
+    ctx.fillText(name, pad, fontPx + pad / 2);
+    var tex = new THREE.CanvasTexture(canvas2d);
+    tex.needsUpdate = true;
+    var mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true });
+    var sprite = new THREE.Sprite(mat);
+    var scale = 0.04 + t * 0.12;
+    sprite.scale.set(scale * w / h, scale, 1);
+    sprite.userData = { name: name, count: count };
+    return sprite;
+  }
+
+  var renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
+  } catch (e) {
+    showWebGLError('WebGL failed to initialize. Try another browser or GPU drivers.');
+    return;
+  }
+  if (!renderer.getContext()) {
+    showWebGLError('WebGL is not available in this browser.');
+    return;
+  }
+
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x000000);
+
+  var camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 500);
+  camera.position.set(0, 0, 32);
+
+  var controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.06;
+  controls.minDistance = 8;
+  controls.maxDistance = 80;
+
+  var raycaster = new THREE.Raycaster();
+  var pointer = new THREE.Vector2();
+  var sprites = [];
+
+  function onResize() {
+    var w = window.innerWidth;
+    var h = window.innerHeight;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  }
+  onResize();
+  window.addEventListener('resize', onResize);
+
+  function setInfo(text) {
+    if (text) {
+      infoEl.textContent = text;
+      infoEl.classList.add('visible');
+    } else {
+      infoEl.classList.remove('visible');
+    }
+  }
+
+  function onPointerMove(ev) {
+    var rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    var hits = raycaster.intersectObjects(sprites, false);
+    if (hits.length > 0) {
+      var u = hits[0].object.userData;
+      setInfo(u.name + ' · count ' + u.count);
+    } else {
+      setInfo('');
+    }
+  }
+
+  function onClick(ev) {
+    var rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    var hits = raycaster.intersectObjects(sprites, false);
+    if (hits.length > 0) {
+      var u = hits[0].object.userData;
+      setInfo(u.name + ' · count ' + u.count);
+    }
+  }
+
+  renderer.domElement.addEventListener('mousemove', onPointerMove);
+  renderer.domElement.addEventListener('click', onClick);
+  renderer.domElement.addEventListener('touchmove', function (e) {
+    if (e.touches.length !== 1) return;
+    var t = e.touches[0];
+    onPointerMove({ clientX: t.clientX, clientY: t.clientY });
+  }, { passive: true });
+
+  function loadTags(data) {
+    while (scene.children.length) {
+      scene.remove(scene.children[0]);
+    }
+    sprites = [];
+
+    if (!Array.isArray(data)) {
+      showApiError('Unexpected API response (not a list).');
+      return;
+    }
+    if (data.length === 0) {
+      statusEl.textContent = 'no tags';
+      return;
+    }
+
+    var tags = data.map(function (row) {
+      return { name: String(row.name || ''), count: Number(row.count) || 0 };
+    }).filter(function (t) { return t.name.length > 0; });
+
+    tags.sort(function (a, b) { return b.count - a.count; });
+    tags = tags.slice(0, MAX_TAGS);
+
+    if (tags.length === 0) {
+      statusEl.textContent = 'no valid tag names';
+      return;
+    }
+
+    var maxCount = 1;
+    for (var i = 0; i < tags.length; i++) {
+      if (tags[i].count > maxCount) maxCount = tags[i].count;
+    }
+
+    for (var j = 0; j < tags.length; j++) {
+      var sp = makeSprite(tags[j].name, tags[j].count, maxCount);
+      sp.position.copy(fibonacciSphere(j, tags.length, SPHERE_RADIUS));
+      scene.add(sp);
+      sprites.push(sp);
+    }
+
+    statusEl.textContent = tags.length + ' tags (max ' + MAX_TAGS + ')';
+  }
+
+  function tick() {
+    requestAnimationFrame(tick);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+
+  tick();
+
+  statusEl.textContent = 'loading…';
+  fetch(API)
+    .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
+    .then(function (res) {
+      var body = res.body;
+      if (!res.ok || (body && body.error)) {
+        var detail = (body && body.detail) ? String(body.detail) : '';
+        showApiError('Tags API error: ' + (body && body.error ? body.error : res.ok ? 'unknown') + (detail ? ' — ' + detail : ''));
+        return;
+      }
+      if (!Array.isArray(body)) {
+        showApiError('Tags API returned non-array JSON.');
+        return;
+      }
+      loadTags(body);
+    })
+    .catch(function (err) {
+      console.error(err);
+      showApiError('Network error loading tags: ' + (err && err.message ? err.message : String(err)));
+    });
+})();
+</script>
+</body>
+</html>
