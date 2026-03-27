@@ -294,7 +294,8 @@
       var body = res.body;
       if (!res.ok || (body && body.error)) {
         var detail = (body && body.detail) ? String(body.detail) : '';
-        showApiError('Tags API error: ' + (body && body.error ? body.error : res.ok ? 'unknown') + (detail ? ' — ' + detail : ''));
+        var errMsg = (body && body.error) ? String(body.error) : 'request failed';
+        showApiError('Tags API error: ' + errMsg + (detail ? ' — ' + detail : ''));
         return;
       }
       if (!Array.isArray(body)) {
