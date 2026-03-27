@@ -113,16 +113,36 @@ steps_forwards = Gauge('steps_forwards', 'Steps remaining')
 # CORS & SocketIO
 # ---------------------------------------------------------------------------
 
-cors = CORS(app, resources={
-    r"/api/*": {
-        "origins": [
-            "http://jamming-bot.arthew0.online:3000",
-            "http://localhost:3000",
-            "https://jamming-bot.arthew0.online",
-            "http://jamming-bot.arthew0.online",
-        ]
-    }
+CORS_ALLOWED_ORIGINS = frozenset({
+    "http://jamming-bot.arthew0.online:3000",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://jamming-bot.arthew0.online",
+    "http://jamming-bot.arthew0.online",
 })
+_extra_origins = os.getenv("CORS_EXTRA_ORIGINS", "")
+if _extra_origins.strip():
+    CORS_ALLOWED_ORIGINS = frozenset(
+        CORS_ALLOWED_ORIGINS
+        | {o.strip() for o in _extra_origins.split(",") if o.strip()}
+    )
+
+cors = CORS(
+    app,
+    # All paths: fetch() following 302 to /login must still see ACAO (not only /api/*).
+    resources={r"/*": {"origins": list(CORS_ALLOWED_ORIGINS)}},
+    supports_credentials=True,
+)
+
+
+@app.after_request
+def _cors_headers_on_all_responses(response):
+    """Ensure ACAO on edge responses (e.g. redirects) if not already set."""
+    origin = request.headers.get("Origin")
+    if origin in CORS_ALLOWED_ORIGINS:
+        response.headers.setdefault("Access-Control-Allow-Origin", origin)
+        response.headers.setdefault("Access-Control-Allow-Credentials", "true")
+    return response
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet", manage_session=False)
 
@@ -145,7 +165,7 @@ AUTH_PASS = os.getenv("AUTH_PASS", "x")
 
 PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
                    "/tags/", "/screenshots/", "/api/tags/get/", "/api/tags/combine/",
-                   "/api/step/", "/api/storage_step/", "/api/storage_latest/")
+                   "/api/step/", "/api/steps", "/api/storage_step/", "/api/storage_latest/")
 
 
 def login_required(f):
@@ -162,6 +182,8 @@ PUBLIC_PATHS = ("/", "/login")
 
 @app.before_request
 def _check_auth():
+    if request.method == "OPTIONS":
+        return
     if request.path in PUBLIC_PATHS or any(request.path.startswith(p) for p in PUBLIC_PREFIXES):
         return
     if not session.get("logged_in"):
