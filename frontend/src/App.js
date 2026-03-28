@@ -77,7 +77,7 @@ import {
 } from "react-router-dom";
 
 
-import Logs from "./pages/logs";
+import Tags from "./pages/tags";
 import Blank from "./pages/graph";
 import Semantic from "./pages/semantic";
 import Steps from './components/Steps';
@@ -101,7 +101,7 @@ function App() {
       >
         <Navbar/>
         <Routes className="Nav">
-          <Route path="/" element={<Logs/>} />
+          <Route path="/" element={<Tags/>} />
           <Route path="/semantic" element={<Semantic/>} />
           <Route path="/steps" element={<Steps/>} />
           <Route path="/words" element={<Navigate to="/semantic" replace />} />

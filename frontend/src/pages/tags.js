@@ -15,7 +15,7 @@ const PLACEHOLDER_TAGS = [
 ]
 
 /** react-tagcloud v2: chip style (dark blue tile + white text), like the legacy UI. */
-function logsTagRenderer(tag, size, _color) {
+function tagsTagRenderer(tag, size, _color) {
   const { className, style, ...rest } = tag.props || {}
   const key = tag.key || tag.value
   const tagStyle = {
@@ -34,7 +34,7 @@ function logsTagRenderer(tag, size, _color) {
     boxSizing: 'border-box',
     ...style,
   }
-  let tagClassName = 'tag-cloud-tag logs-tag-chip'
+  let tagClassName = 'tag-cloud-tag tags-tag-chip'
   if (className) tagClassName += ` ${className}`
   return (
     <span className={tagClassName} style={tagStyle} key={key} {...rest}>
@@ -56,9 +56,9 @@ async function fetchJson(url) {
 }
 
 /**
- * Component that show logs
+ * Home route: step logs + tag cloud
  */
-export default class Logs extends React.Component {
+export default class Tags extends React.Component {
 
   constructor(props) {
     super(props);
@@ -191,14 +191,14 @@ export default class Logs extends React.Component {
 
     if (!this.state.loaded)
     {
-      return <p className="logs-page-muted">Loading...</p>
+      return <p className="tags-page-muted">Loading...</p>
     } else if (this.state.error) {
       console.log("error")
-      return <p className="logs-page-muted">Error loading logs</p>
+      return <p className="tags-page-muted">Error loading logs</p>
     }
     else return (
       <div className="Graph3d">
-        <h1 className="logs-page-title">logs</h1>
+        <h1 className="tags-page-title">logs</h1>
         <div className="logs">
           {!this.state.logs ? null : this.state.logs.slice().reverse().map((step, index) => (
             <div key={index} className="item">
@@ -238,11 +238,11 @@ export default class Logs extends React.Component {
 
         <div className="semantic_cloud">
         <TagCloud
-          className="logs-tag-cloud"
+          className="tags-tag-cloud"
           minSize={6}
           maxSize={128}
           tags={this.state.tags}
-          renderer={logsTagRenderer}
+          renderer={tagsTagRenderer}
           disableRandomColor={true}
           onClick={tag => alert(`'${tag.value}' was selected!`)}
         />
