@@ -23,7 +23,7 @@ function tagsTagRenderer(tag, size, _color, highlightSet) {
     display: 'inline-block',
     margin: '5px 4px',
     verticalAlign: 'middle',
-    backgroundColor: highlighted ? '#c41e1e' : '#003399',
+    backgroundColor: highlighted ? '#c41e1e' : '#111111',
     color: '#f5f5f5',
     fontSize: `${size}px`,
     fontFamily: 'Verdana',
