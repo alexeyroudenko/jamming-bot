@@ -108,10 +108,97 @@ body.tags-vis-body {
   text-align: right;
 }
 
+.tags-vis-density-label {
+  font-size: 11px;
+  color: var(--tags-vis-muted);
+  font-family: ui-monospace, monospace;
+}
+
+.tags-vis-select {
+  appearance: none;
+  border: 1px solid var(--tags-vis-border);
+  background: var(--tags-vis-surface);
+  color: var(--tags-vis-accent);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.tags-vis-select:hover {
+  border-color: var(--tags-vis-accent);
+}
+
 .tags-vis-canvas-host {
   position: fixed;
   inset: 0;
   z-index: 0;
+}
+
+/* Vector field: anchor handles at field influence centers + labels */
+.vf-anchors-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.vf-anchors-layer.is-hidden {
+  visibility: hidden;
+}
+
+.vf-anchor-item {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.vf-anchor-handle {
+  pointer-events: auto;
+  width: 12px;
+  height: 12px;
+  min-width: 12px;
+  min-height: 12px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--tags-vis-accent);
+  background: rgba(34, 211, 238, 0.45);
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.35);
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.vf-anchor-handle:hover {
+  background: rgba(34, 211, 238, 0.65);
+}
+
+.vf-anchor-handle:active {
+  cursor: grabbing;
+}
+
+.vf-anchor-label {
+  position: relative;
+  font-size: 10px;
+  line-height: 1.25;
+  color: var(--tags-vis-accent);
+  opacity: 0.92;
+  text-shadow:
+    0 0 8px var(--tags-vis-bg),
+    0 0 2px var(--tags-vis-bg),
+    0 1px 2px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+  max-width: min(200px, 32vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  text-align: center;
 }
 
 .tags-vis-canvas-host canvas {
