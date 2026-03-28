@@ -1137,6 +1137,98 @@ spec:
     prefixes:
       - /app
 ---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-static-app
+  namespace: jamming-bot
+spec:
+  stripPrefix:
+    prefixes:
+      - /static-app
+---
+# ===================== frontend-static-app (CRA build behind /static-app/) =====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-static-app
+  namespace: jamming-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend-static-app
+  template:
+    metadata:
+      labels:
+        app: frontend-static-app
+    spec:
+      containers:
+      - name: nginx
+        image: frontend-static-app:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "16Mi"
+          limits:
+            cpu: "100m"
+            memory: "64Mi"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-static-app
+  namespace: jamming-bot
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend-static-app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+---
+# React SPA at /static-app/; strip prefix so nginx serves CRA build at document root.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend-static-app-ingress
+  namespace: jamming-bot
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-static-app@kubernetescrd
+spec:
+  tls:
+  - hosts:
+    - jamming-bot.arthew0.online
+    secretName: jamming-bot-tls
+  rules:
+  - host: jamming-bot.arthew0.online
+    http:
+      paths:
+      - path: /static-app
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-static-app
+            port:
+              number: 80
+---
 # ===================== Ingress =====================
 apiVersion: networking.k8s.io/v1
 kind: Ingress

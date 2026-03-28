@@ -1,8 +1,27 @@
 import { render, screen } from '@testing-library/react';
-import App from './App';
+import { MemoryRouter } from 'react-router-dom';
+import { AppContent } from './App';
 
-test('renders learn react link', () => {
-  render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+// react-force-graph ships ESM; Jest does not transform it without extra config.
+jest.mock('./pages/semantic', () => ({
+  __esModule: true,
+  default: function SemanticPlaceholder() {
+    return null;
+  },
+}));
+
+jest.mock('./components/Steps', () => ({
+  __esModule: true,
+  default: function StepsPlaceholder() {
+    return null;
+  },
+}));
+
+test('renders main nav', () => {
+  render(
+    <MemoryRouter basename="/static-app" initialEntries={['/static-app/']}>
+      <AppContent />
+    </MemoryRouter>
+  );
+  expect(screen.getByText(/Semantic cloud/i)).toBeInTheDocument();
 });

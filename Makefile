@@ -97,6 +97,12 @@ k3s-data-service:
 	docker save data-service:latest | k3s ctr images import -
 	kubectl rollout restart deployment data-service -n jamming-bot
 
+.PHONY: k3s-frontend-static-app
+k3s-frontend-static-app:
+	docker build -f ./frontend/Dockerfile.prod -t frontend-static-app:latest ./frontend
+	docker save frontend-static-app:latest | k3s ctr images import -
+	kubectl rollout restart deployment frontend-static-app -n jamming-bot
+
 .PHONY: k3s-backfill-worker
 k3s-backfill-worker:
 	docker build -t backfill-worker:latest ./backfill-worker
@@ -106,7 +112,7 @@ k3s-backfill-worker:
 	@echo "backfill-worker job started. Monitor: kubectl logs -n jamming-bot job/backfill-worker -f"
 
 .PHONY: k3s-all
-k3s-all: k3s-html-renderer k3s-keywords-service k3s-semantic-service k3s-storage-service k3s-tags-service k3s-bot-service k3s-ip-service k3s-app-service k3s-data-service
+k3s-all: k3s-html-renderer k3s-keywords-service k3s-semantic-service k3s-storage-service k3s-tags-service k3s-bot-service k3s-ip-service k3s-app-service k3s-data-service k3s-frontend-static-app
 
 .PHONY: k3s-cert-manager
 k3s-cert-manager:

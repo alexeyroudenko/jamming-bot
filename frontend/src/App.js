@@ -82,6 +82,21 @@ import Blank from "./pages/graph";
 import Semantic from "./pages/semantic";
 import Steps from './components/Steps';
 
+/** Routes + nav; wrapped by `Router` in `App` (and by `MemoryRouter` in tests). */
+export function AppContent() {
+  return (
+    <>
+      <Navbar />
+      <Routes className="Nav">
+        <Route path="/" element={<Tags />} />
+        <Route path="/semantic" element={<Semantic />} />
+        <Route path="/steps" element={<Steps />} />
+        <Route path="/words" element={<Navigate to="/semantic" replace />} />
+        <Route path="/graph" element={<Blank />} />
+      </Routes>
+    </>
+  );
+}
 
 function App() {
   const [bg, setBg] = useState([]);
@@ -93,20 +108,13 @@ function App() {
     <div className="App">
       
       <Router
+          basename="/static-app"
           future={{
             v7_startTransition: true,
             v7_relativeSplatPath: true,
           }}
-          
       >
-        <Navbar/>
-        <Routes className="Nav">
-          <Route path="/" element={<Tags/>} />
-          <Route path="/semantic" element={<Semantic/>} />
-          <Route path="/steps" element={<Steps/>} />
-          <Route path="/words" element={<Navigate to="/semantic" replace />} />
-          <Route path="/graph" element={<Blank/>} />
-        </Routes>
+        <AppContent />
       </Router>
 
     </div>
