@@ -106,8 +106,10 @@
   var FOCUS_DURATION_MS = 1600;
   var FLASH_MS = 520;
   var FOCUS_CAM_OFFSET = 10;
-  var FONT_MIN = 72;
+  var FONT_MIN = 36;
   var SCALE_MIN = 1.65;
+  /** Плавный автоповорот камеры вокруг target (рад/с). ~0.055 ≈ полный оборот за ~114 с. */
+  var AUTO_ORBIT_RAD_PER_SEC = 0.055;
 
   var statusEl = document.getElementById('status');
   var apiErr = document.getElementById('api-error');
@@ -119,6 +121,7 @@
   var lastFocusTagName = '';
   var spriteByName = {};
   var focusAnimating = false;
+  var lastOrbitTick = performance.now();
 
   function bumpActivity() {
     lastActivity = performance.now();
@@ -462,7 +465,13 @@
 
   function tick() {
     requestAnimationFrame(tick);
-    if (!focusAnimating && lastFocusTagName && performance.now() - lastActivity >= IDLE_MS) {
+    var now = performance.now();
+    var dt = Math.min(0.05, (now - lastOrbitTick) / 1000);
+    lastOrbitTick = now;
+    if (!focusAnimating && typeof controls.rotateLeft === 'function') {
+      controls.rotateLeft(AUTO_ORBIT_RAD_PER_SEC * dt);
+    }
+    if (!focusAnimating && lastFocusTagName && now - lastActivity >= IDLE_MS) {
       tryIdleFocus();
     }
     controls.update();
