@@ -164,8 +164,9 @@ AUTH_USER = os.getenv("AUTH_USER", "x")
 AUTH_PASS = os.getenv("AUTH_PASS", "x")
 
 PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
-                   "/tags/", "/screenshots/", "/api/tags/get/", "/api/tags/combine/",
-                   "/api/step/", "/api/steps", "/api/storage_step/", "/api/storage_latest/")
+                   "/tags/", "/geo/", "/screenshots/", "/api/tags/get/", "/api/tags/combine/",
+                   "/api/step/", "/api/steps", "/api/storage_step/", "/api/storage_latest/",
+                   "/api/storage_geo/")
 
 
 def login_required(f):
@@ -366,6 +367,12 @@ def tags_cloud():
 @cross_origin()
 def tags_cloud_3d():
     return render_template('tags_3d.html')
+
+
+@app.route('/geo/')
+@cross_origin()
+def geo_globe():
+    return render_template('geo_globe.html')
 
 
 @app.route('/tags/phrases/')
@@ -891,6 +898,70 @@ def api_storage_latest():
     except Exception as e:
         logger.warning(f"api_storage_latest: {e}")
         return jsonify({"error": str(e)}), 502
+
+
+def _parse_geo_float(val):
+    if val is None or val == "":
+        return None
+    try:
+        return float(str(val).strip())
+    except (ValueError, TypeError):
+        return None
+
+
+def _step_sort_key_storage_row(row):
+    for key in ("id", "number"):
+        v = row.get(key)
+        if v is not None and str(v).strip() != "":
+            try:
+                return int(float(str(v)))
+            except (ValueError, TypeError):
+                pass
+    return 0
+
+
+@app.route("/api/storage_geo/", methods=["GET"])
+@cross_origin()
+def api_storage_geo():
+    """
+    Slim geo JSON for /geo/ globe.
+
+    Response: { "data": [ { "number", "ip", "latitude", "longitude", "city" }, ... ] }
+    Only rows with valid lat/lon (finite, in range, not both 0). Newest-first by id/number.
+    Query: ?limit= (default 2000, max 5000).
+    """
+    limit = request.args.get("limit", default=2000, type=int)
+    limit = max(1, min(limit, 5000))
+    try:
+        resp = requests.get(f"{STORAGE_SERVICE_URL}/get/latest", timeout=15)
+        resp.raise_for_status()
+        payload = resp.json()
+        rows = payload.get("data") or []
+    except Exception as e:
+        logger.warning(f"api_storage_geo: {e}")
+        return jsonify({"error": str(e)}), 502
+
+    enriched = []
+    for row in rows:
+        lat = _parse_geo_float(row.get("latitude"))
+        lon = _parse_geo_float(row.get("longitude"))
+        if lat is None or lon is None:
+            continue
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+            continue
+        if lat == 0.0 and lon == 0.0:
+            continue
+        enriched.append({
+            "_k": _step_sort_key_storage_row(row),
+            "number": str(row.get("number") or ""),
+            "ip": str(row.get("ip") or ""),
+            "latitude": lat,
+            "longitude": lon,
+            "city": str(row.get("city") or ""),
+        })
+    enriched.sort(key=lambda r: r["_k"], reverse=True)
+    slim = [{k: v for k, v in r.items() if k != "_k"} for r in enriched[:limit]]
+    return jsonify({"data": slim})
 
 
 @app.route('/api/graph/')

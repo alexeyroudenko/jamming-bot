@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jamming bot — Geo globe</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #000;
+      color: #ccc;
+      font-family: monospace;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      padding: 12px 20px;
+      font-size: 11px;
+      color: #666;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+    }
+    nav a { color: #555; text-decoration: none; margin-right: 12px; pointer-events: auto; }
+    nav a:hover { color: #fff; }
+    #status { color: #333; font-size: 10px; max-width: 50%; text-align: right; }
+    /* globe.gl mounts canvas inside */
+    #globeViz {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      cursor: grab;
+    }
+    #globeViz:active { cursor: grabbing; }
+    #info {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 8px 14px;
+      background: rgba(0, 0, 0, 0.85);
+      border: 1px solid #333;
+      font-size: 11px;
+      color: #8cf;
+      z-index: 12;
+      max-width: 90vw;
+      text-align: center;
+      display: none;
+      word-break: break-all;
+    }
+    #info.visible { display: block; }
+    .banner {
+      position: fixed;
+      top: 48px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 16px;
+      background: #311;
+      border: 1px solid #633;
+      color: #f88;
+      font-size: 11px;
+      z-index: 15;
+      max-width: 90%;
+      text-align: center;
+      display: none;
+    }
+    .banner.visible { display: block; }
+    .banner.info-only { background: #222; border-color: #555; color: #aa8; }
+    #hint {
+      position: fixed;
+      bottom: 12px;
+      left: 12px;
+      font-size: 10px;
+      color: #444;
+      z-index: 10;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div>
+    <a href="/">← home</a>
+    <a href="/tags/">tags</a>
+    <a href="/tags/3d/">3D cloud</a>
+    <a href="/screenshots/">screenshots</a>
+  </div>
+  <span id="status"></span>
+</nav>
+
+<div id="api-error" class="banner" role="alert"></div>
+<div id="geo-empty" class="banner info-only" role="status"></div>
+<div id="webgl-error" class="banner" role="alert"></div>
+<div id="info" aria-live="polite"></div>
+<div id="globeViz"></div>
+<div id="hint">drag to orbit · wheel to zoom · orange = steps · dashed arcs = crawl order · data refreshes every 5s</div>
+
+<script type="module">
+/**
+ * Geo globe: globe.gl + night texture (see airline-routes example).
+ * Data: GET /api/storage_geo/?limit=2000 → { data: [{ number, ip, latitude, longitude, city }] }
+ * Polls API every POLL_MS; points and arcs apply immediately (no crawl animation).
+ * Arcs: consecutive steps by ascending `number` (previous → next), styled like airline-routes example.
+ */
+(async function () {
+  var MAX_QUERY = 2000;
+  var API = '/api/storage_geo/?limit=' + MAX_QUERY;
+  /** Refetch interval (ms) */
+  var POLL_MS = 5000;
+  /** Arc stroke opacity (matches spirit of OPACITY in us-international-outbound example) */
+  var ARC_OPACITY = 0.22;
+  /** Night Earth — same asset family as https://github.com/vasturiano/globe.gl/blob/master/example/airline-routes/us-international-outbound.html */
+  var EARTH_NIGHT = 'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-night.jpg';
+  /** Initial pointOfView: lat, lng, altitude — matches example’s aim at US interior */
+  var POV = { lat: 39.6, lng: -98.5, altitude: 2 };
+
+  var statusEl = document.getElementById('status');
+  var apiErr = document.getElementById('api-error');
+  var geoEmpty = document.getElementById('geo-empty');
+  var webglErr = document.getElementById('webgl-error');
+  var infoEl = document.getElementById('info');
+  var globeEl = document.getElementById('globeViz');
+
+  function showApiError(msg) {
+    apiErr.textContent = msg;
+    apiErr.classList.add('visible');
+    statusEl.textContent = 'API error';
+  }
+
+  function showGeoEmpty(msg) {
+    geoEmpty.textContent = msg;
+    geoEmpty.classList.add('visible');
+  }
+
+  function hideGeoEmpty() {
+    geoEmpty.classList.remove('visible');
+    geoEmpty.textContent = '';
+  }
+
+  function showWebGLError(msg) {
+    webglErr.textContent = msg;
+    webglErr.classList.add('visible');
+    statusEl.textContent = 'WebGL unavailable';
+  }
+
+  function setInfo(html) {
+    if (html) {
+      infoEl.innerHTML = html;
+      infoEl.classList.add('visible');
+    } else {
+      infoEl.classList.remove('visible');
+      infoEl.textContent = '';
+    }
+  }
+
+  var GlobeCtor;
+  try {
+    var mod = await import('https://esm.sh/globe.gl@2.45.1');
+    GlobeCtor = mod.default || mod;
+    if (typeof GlobeCtor !== 'function') {
+      throw new Error('globe.gl: no default export');
+    }
+  } catch (e) {
+    console.error(e);
+    showWebGLError('Could not load globe.gl (' + (e && e.message ? e.message : e) + ').');
+    return;
+  }
+
+  var myGlobe;
+  try {
+    myGlobe = new GlobeCtor(globeEl)
+      .globeImageUrl(EARTH_NIGHT)
+      .backgroundColor('#000000')
+      .pointOfView(POV)
+      .pointLat('lat')
+      .pointLng('lng')
+      .pointColor(function () { return 'orange'; })
+      .pointAltitude(0.01)
+      .pointRadius(0.35)
+      .pointsMerge(true)
+      .pointLabel(function (d) {
+        return '#' + String(d.number) + ' ' + (d.city || '').trim();
+      })
+      .arcStartLat(function (d) { return d.startLat; })
+      .arcStartLng(function (d) { return d.startLng; })
+      .arcEndLat(function (d) { return d.endLat; })
+      .arcEndLng(function (d) { return d.endLng; })
+      .arcLabel(function (d) {
+        return '#' + String(d.fromNumber) + ' &#8594; #' + String(d.toNumber);
+      })
+      .arcDashLength(0.25)
+      .arcDashGap(1)
+      .arcDashInitialGap(function () { return Math.random(); })
+      .arcDashAnimateTime(0)
+      .arcColor(function () {
+        return [
+          'rgba(0, 255, 0, ' + ARC_OPACITY + ')',
+          'rgba(255, 0, 0, ' + ARC_OPACITY + ')',
+        ];
+      })
+      .arcsTransitionDuration(0)
+      .arcsData([]);
+  } catch (e) {
+    console.error(e);
+    showWebGLError('Globe init failed: ' + (e && e.message ? e.message : String(e)));
+    return;
+  }
+
+  if (typeof myGlobe.onPointHover === 'function') {
+    myGlobe.onPointHover(function (p) {
+      if (p) {
+        setInfo(
+          '<strong>#' + String(p.number) + '</strong> · ' + (p.city || '—') +
+          '<br><span style="color:#888">' + (p.ip || '') + '</span>' +
+          '<br><span style="color:#666">(' + Number(p.lat).toFixed(2) + ', ' + Number(p.lng).toFixed(2) + ')</span>'
+        );
+      } else {
+        setInfo('');
+      }
+    });
+  }
+
+  function resizeGlobe() {
+    myGlobe.width(window.innerWidth).height(window.innerHeight);
+  }
+  resizeGlobe();
+  window.addEventListener('resize', resizeGlobe);
+
+  var pollTimer = 0;
+
+  function armPoll() {
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = setTimeout(loadGeo, POLL_MS);
+  }
+
+  function stepNum(p) {
+    var n = parseFloat(String(p.number).trim());
+    return isFinite(n) ? n : Number.POSITIVE_INFINITY;
+  }
+
+  function sortPoints(points) {
+    points.sort(function (a, b) {
+      var cmp = stepNum(a) - stepNum(b);
+      if (cmp !== 0) return cmp;
+      return String(a.number).localeCompare(String(b.number));
+    });
+    return points;
+  }
+
+  function buildArcs(points) {
+    var arcs = [];
+    for (var i = 0; i < points.length - 1; i++) {
+      var A = points[i];
+      var B = points[i + 1];
+      arcs.push({
+        startLat: A.lat,
+        startLng: A.lng,
+        endLat: B.lat,
+        endLng: B.lng,
+        fromNumber: A.number,
+        toNumber: B.number,
+      });
+    }
+    return arcs;
+  }
+
+  function applyResponse(res) {
+    var body = res.body;
+    apiErr.classList.remove('visible');
+    if (!res.ok || (body && body.error)) {
+      var detail = (body && body.detail) ? String(body.detail) : '';
+      var errMsg = (body && body.error) ? String(body.error) : 'request failed';
+      showApiError('Geo API error: ' + errMsg + (detail ? ' — ' + detail : ''));
+      return;
+    }
+    var rows = body && body.data;
+    if (!Array.isArray(rows)) {
+      showApiError('Unexpected API shape (missing data array).');
+      return;
+    }
+    var points = rows.map(function (d) {
+      return {
+        lat: d.latitude,
+        lng: d.longitude,
+        number: d.number,
+        ip: d.ip,
+        city: d.city,
+      };
+    });
+    if (points.length === 0) {
+      showGeoEmpty('No steps with valid coordinates (non-zero lat/lon). Geo lookup may be off or data empty.');
+      statusEl.textContent = '0 points';
+      myGlobe.pointsData([]);
+      myGlobe.arcsData([]);
+      return;
+    }
+    hideGeoEmpty();
+
+    sortPoints(points);
+    var arcsAll = buildArcs(points);
+    myGlobe.pointsData(points);
+    myGlobe.arcsData(arcsAll);
+    statusEl.textContent =
+      points.length + ' points · ' + arcsAll.length + ' arcs (by step #) · refresh 5s';
+  }
+
+  function loadGeo() {
+    statusEl.textContent = 'loading…';
+    fetch(API, { cache: 'no-store' })
+      .then(function (r) {
+        return r.json().then(function (body) {
+          return { ok: r.ok, body: body };
+        });
+      })
+      .then(applyResponse)
+      .catch(function (err) {
+        console.error(err);
+        showApiError('Network error: ' + (err && err.message ? err.message : String(err)));
+      })
+      .finally(function () {
+        armPoll();
+      });
+  }
+
+  loadGeo();
+})();
+</script>
+</body>
+</html>
