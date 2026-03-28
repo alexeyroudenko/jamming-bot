@@ -8,18 +8,18 @@ const Navbar = () => {
             <Nav className="Nav">
                 <NavMenu>
                     <NavLink to="/">
-                    semantic cloud
+                    Semantic cloud
                     </NavLink>
 
-                    <NavLink to="/words">
-                    semantic
+                    <NavLink to="/semantic">
+                    Semantic
                     </NavLink>
 
                     <NavLink to="/steps">
-                    steps
-                    </NavLink>                     
+                    Steps
+                    </NavLink>
                     <NavLink to="/graph">
-                    graph
+                    Graph
                     </NavLink>
                 </NavMenu>
             </Nav>

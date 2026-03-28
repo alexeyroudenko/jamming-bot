@@ -73,13 +73,13 @@ import {
   BrowserRouter as Router,
   Routes,
   Route,
+  Navigate,
 } from "react-router-dom";
 
-// import Contacts from "./pages/contacts";
+
 import Logs from "./pages/logs";
 import Blank from "./pages/graph";
-// import Home from "./pages/home";
-import Words from "./pages/words";
+import Semantic from "./pages/semantic";
 import Steps from './components/Steps';
 
 
@@ -101,11 +101,11 @@ function App() {
       >
         <Navbar/>
         <Routes className="Nav">
-          <Route exact path="/" element={<Logs/>} />
-          {/* <Route path="/steps" element={<Steps/>} /> */}
-          {/* <Route path="/words" element={<Words/>} /> */}
+          <Route path="/" element={<Logs/>} />
+          <Route path="/semantic" element={<Semantic/>} />
+          <Route path="/steps" element={<Steps/>} />
+          <Route path="/words" element={<Navigate to="/semantic" replace />} />
           <Route path="/graph" element={<Blank/>} />
-          {/* <Route path="/contact" element={<Сontact />} /> */}
         </Routes>
       </Router>
 

@@ -15,7 +15,7 @@ let rotationSpeed = .6; // Скорость вращения камеры
 let count = 0;
 let angle = 0;
 
-const Words = () => {
+const Semantic = () => {
 
   const [data, setData] = useState({ nodes: [{ id: 0 }], links: [] });
   const graphRef = useRef();
@@ -276,4 +276,4 @@ const Words = () => {
   );
 };
 
-export default Words;
+export default Semantic;
