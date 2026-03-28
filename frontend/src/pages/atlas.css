@@ -1,0 +1,234 @@
+/* Data Atlas — aligns with .cursor/STYLE_GUIDE.md */
+.atlas-page {
+  --atlas-bg: #09090b;
+  --atlas-surface: #18181b;
+  --atlas-border: #27272a;
+  --atlas-text: #fafafa;
+  --atlas-muted: #a1a1aa;
+  --atlas-accent: #22d3ee;
+
+  min-height: 100%;
+  background: var(--atlas-bg);
+  color: var(--atlas-text);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  text-align: left;
+  padding: 0 0 3rem;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.atlas-page h1 {
+  font-size: 2.25rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin: 0 0 0.35rem;
+  color: var(--atlas-text);
+}
+
+.atlas-page .atlas-lead {
+  color: var(--atlas-muted);
+  margin: 0 0 1.5rem;
+  max-width: 52ch;
+}
+
+.atlas-banner {
+  border: 1px solid var(--atlas-border);
+  background: var(--atlas-surface);
+  border-radius: 12px;
+  padding: 0.65rem 1rem;
+  margin-bottom: 1.5rem;
+  color: var(--atlas-muted);
+  font-size: 0.875rem;
+}
+
+.atlas-banner--warn {
+  border-color: #78350f;
+  color: #fdba74;
+}
+
+.atlas-banner--err {
+  border-color: #7f1d1d;
+  color: #fca5a5;
+}
+
+.atlas-section {
+  border: 1px solid var(--atlas-border);
+  background: var(--atlas-surface);
+  border-radius: 12px;
+  padding: 1.25rem 1.35rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.atlas-section h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.25rem;
+  color: var(--atlas-text);
+}
+
+.atlas-section .atlas-desc {
+  font-size: 0.875rem;
+  color: var(--atlas-muted);
+  margin: 0 0 1rem;
+}
+
+.atlas-viz-host {
+  width: 100%;
+  min-height: 80px;
+}
+
+.atlas-semantic-split {
+  display: grid;
+  grid-template-columns: 1fr minmax(200px, 280px);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+@media (max-width: 800px) {
+  .atlas-semantic-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.atlas-semantic-force {
+  min-height: 320px;
+}
+
+.atlas-ticker {
+  border: 1px solid var(--atlas-border);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  background: var(--atlas-bg);
+  overflow: hidden;
+}
+
+.atlas-ticker-line {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--atlas-muted);
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', monospace;
+  line-height: 1.5;
+}
+
+.atlas-ticker-line:last-child {
+  margin-bottom: 0;
+}
+
+.atlas-sunburst-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.atlas-sunburst-toolbar {
+  min-height: 1.5rem;
+}
+
+.atlas-sunburst-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--atlas-muted);
+}
+
+.atlas-sunburst-host {
+  display: flex;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.atlas-btn-ghost {
+  appearance: none;
+  border: 1px solid var(--atlas-border);
+  background: transparent;
+  color: var(--atlas-accent);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.atlas-btn-ghost:hover {
+  border-color: var(--atlas-accent);
+  color: #a5f4ff;
+}
+
+.atlas-status-grid-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.atlas-status-canvas {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  border-radius: 8px;
+  border: 1px solid var(--atlas-border);
+}
+
+.atlas-legend {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--atlas-muted);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.atlas-legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.atlas-legend-note {
+  color: var(--atlas-muted);
+  opacity: 0.85;
+}
+
+.atlas-aggregates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.atlas-aggregate-card {
+  border: 1px solid var(--atlas-border);
+  border-radius: 10px;
+  padding: 0.75rem 0.85rem;
+  background: var(--atlas-bg);
+}
+
+.atlas-card-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--atlas-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.atlas-mini-chart {
+  min-height: 140px;
+  width: 100%;
+}
+
+.atlas-mini-chart--tall {
+  min-height: 168px;
+}
+
+.atlas-meta {
+  font-size: 0.75rem;
+  color: var(--atlas-muted);
+  margin-top: 1rem;
+}

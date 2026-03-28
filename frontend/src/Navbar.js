@@ -18,6 +18,9 @@ const Navbar = () => {
                     <NavLink to="/steps">
                     Steps
                     </NavLink>
+                    <NavLink to="/atlas">
+                    Data Atlas
+                    </NavLink>
                     <NavLink to="/graph">
                     Graph
                     </NavLink>

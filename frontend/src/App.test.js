@@ -17,6 +17,13 @@ jest.mock('./components/Steps', () => ({
   },
 }));
 
+jest.mock('./pages/atlas', () => ({
+  __esModule: true,
+  default: function AtlasPlaceholder() {
+    return null;
+  },
+}));
+
 test('renders main nav', () => {
   render(
     <MemoryRouter basename="/static-app" initialEntries={['/static-app/']}>
@@ -24,4 +31,5 @@ test('renders main nav', () => {
     </MemoryRouter>
   );
   expect(screen.getByText(/Semantic cloud/i)).toBeInTheDocument();
+  expect(screen.getByText(/Data Atlas/i)).toBeInTheDocument();
 });
