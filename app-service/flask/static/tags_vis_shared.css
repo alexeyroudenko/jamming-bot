@@ -1,0 +1,167 @@
+/* Shared chrome for /tags/constellation, /tags/vectorfield, /tags/chaos-attractor
+   Tokens from STYLE_GUIDE.md; glitch/scanlines stay on canvas only. */
+:root {
+  --tags-vis-bg: #09090b;
+  --tags-vis-surface: #18181b;
+  --tags-vis-border: #27272a;
+  --tags-vis-text: #fafafa;
+  --tags-vis-muted: #a1a1aa;
+  --tags-vis-accent: #22d3ee;
+  --tags-vis-accent-hover: #67e8f9;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body.tags-vis-body {
+  background: var(--tags-vis-bg);
+  color: var(--tags-vis-text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+}
+
+.tags-vis-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding: 10px 16px;
+  font-size: 12px;
+  color: var(--tags-vis-muted);
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(9, 9, 11, 0.92), transparent);
+}
+
+.tags-vis-nav a {
+  color: var(--tags-vis-muted);
+  text-decoration: none;
+  margin-right: 10px;
+  pointer-events: auto;
+  border-bottom: 1px solid transparent;
+}
+
+.tags-vis-nav a:hover {
+  color: var(--tags-vis-accent-hover);
+  border-bottom-color: var(--tags-vis-accent);
+}
+
+.tags-vis-nav .tags-vis-title {
+  color: var(--tags-vis-text);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-right: 12px;
+}
+
+.tags-vis-toolbar {
+  position: fixed;
+  top: 44px;
+  right: 12px;
+  z-index: 21;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  pointer-events: none;
+}
+
+.tags-vis-toolbar > * {
+  pointer-events: auto;
+}
+
+.tags-vis-btn {
+  appearance: none;
+  border: 1px solid var(--tags-vis-border);
+  background: transparent;
+  color: var(--tags-vis-accent);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.tags-vis-btn:hover {
+  border-color: var(--tags-vis-accent);
+  color: var(--tags-vis-accent-hover);
+}
+
+.tags-vis-status {
+  font-size: 11px;
+  color: var(--tags-vis-muted);
+  font-family: ui-monospace, monospace;
+  max-width: 42vw;
+  text-align: right;
+}
+
+.tags-vis-canvas-host {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+.tags-vis-canvas-host canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.tags-vis-scanlines {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.12) 2px,
+    rgba(0, 0, 0, 0.12) 3px
+  );
+  opacity: 0.35;
+}
+
+.tags-vis-hint {
+  position: fixed;
+  bottom: 10px;
+  left: 12px;
+  font-size: 10px;
+  color: var(--tags-vis-muted);
+  z-index: 10;
+  opacity: 0.75;
+  max-width: 90vw;
+}
+
+.tags-vis-banner {
+  position: fixed;
+  top: 88px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 16px;
+  background: var(--tags-vis-surface);
+  border: 1px solid #7f1d1d;
+  color: #fca5a5;
+  font-size: 12px;
+  z-index: 30;
+  max-width: 90%;
+  text-align: center;
+  display: none;
+}
+
+.tags-vis-banner.visible {
+  display: block;
+}

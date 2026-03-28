@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jamming bot — Vector field</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='tags_vis_shared.css') }}">
+</head>
+<body class="tags-vis-body">
+
+<nav class="tags-vis-nav" aria-label="Subpages">
+  <div>
+    <span class="tags-vis-title">Vector field</span>
+    <a href="/">← home</a>
+    <a href="/tags/">2D cloud</a>
+    <a href="/tags/3d/">3D cloud</a>
+    <a href="/tags/constellation/">constellation</a>
+    <a href="/tags/chaos-attractor/">chaos</a>
+    <a href="/tags/phrases/">phrases</a>
+  </div>
+</nav>
+
+<div class="tags-vis-toolbar">
+  <button type="button" class="tags-vis-btn" id="btn-freeze">Freeze</button>
+  <button type="button" class="tags-vis-btn" id="btn-export">Export PNG</button>
+  <span class="tags-vis-status" id="tags-vis-status"></span>
+</div>
+
+<div id="api-error" class="tags-vis-banner" role="alert"></div>
+<div class="tags-vis-scanlines" aria-hidden="true"></div>
+<div class="tags-vis-canvas-host"><canvas id="vf"></canvas></div>
+<p class="tags-vis-hint">Particle flow from tag embedding directions + simplex-like noise · cyan = fast</p>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js" crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='tags_vis_controls.js') }}"></script>
+<script>
+(function () {
+  var TAGS_API = '/api/tags/get/';
+  var EMB_API = '/api/tags/embeddings/';
+  var MAX_TAGS = 48;
+  var PARTICLES = 3200;
+  var MAX_DPR = 2;
+
+  var statusEl = document.getElementById('tags-vis-status');
+  var banner = document.getElementById('api-error');
+  var canvas = document.getElementById('vf');
+
+  var renderer, scene, camera, points, geom, posAttr, colAttr;
+  var anchors = [];
+  var tAnim = 0;
+  var positions, colors, velocities;
+  var worldW = 1;
+  var worldH = 1;
+
+  function showErr(msg) {
+    banner.textContent = msg;
+    banner.classList.add('visible');
+  }
+  function hideErr() {
+    banner.classList.remove('visible');
+  }
+
+  function normTag(x) {
+    if (typeof x === 'string') return x.trim().toLowerCase();
+    return '';
+  }
+
+  function noise2(x, y, t) {
+    return (
+      Math.sin(x * 0.019 + t * 0.7) * Math.cos(y * 0.017 - t * 0.5) +
+      0.5 * Math.sin(x * 0.041 + y * 0.023 + t * 1.1)
+    );
+  }
+
+  function fieldAt(x, y, t) {
+    var fx = noise2(y, x * 0.5, t) * 0.55;
+    var fy = noise2(x, y + 3, t + 1) * 0.55;
+    var sx = 0;
+    var sy = 0;
+    var sw = 0;
+    for (var i = 0; i < anchors.length; i++) {
+      var a = anchors[i];
+      var dx = x - a.x;
+      var dy = y - a.y;
+      var d = Math.sqrt(dx * dx + dy * dy) + 28;
+      var w = 1 / (d * d);
+      sx += a.dx * w;
+      sy += a.dy * w;
+      sw += w;
+    }
+    if (sw > 1e-8) {
+      fx += sx / sw;
+      fy += sy / sw;
+    }
+    return { x: fx, y: fy };
+  }
+
+  function initThree() {
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
+    renderer.setClearColor(0x09090b, 1);
+    scene = new THREE.Scene();
+    camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+    camera.position.z = 10;
+
+    geom = new THREE.BufferGeometry();
+    positions = new Float32Array(PARTICLES * 3);
+    colors = new Float32Array(PARTICLES * 3);
+    velocities = new Float32Array(PARTICLES * 2);
+    for (var i = 0; i < PARTICLES; i++) {
+      positions[i * 3 + 2] = 0;
+      colors[i * 3 + 0] = 0.13;
+      colors[i * 3 + 1] = 0.83;
+      colors[i * 3 + 2] = 0.93;
+    }
+    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    posAttr = geom.getAttribute('position');
+    colAttr = geom.getAttribute('color');
+
+    var mat = new THREE.PointsMaterial({
+      size: 1.35,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.78,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    points = new THREE.Points(geom, mat);
+    scene.add(points);
+  }
+
+  function layoutParticles() {
+    for (var i = 0; i < PARTICLES; i++) {
+      positions[i * 3 + 0] = (Math.random() - 0.5) * worldW * 1.9;
+      positions[i * 3 + 1] = (Math.random() - 0.5) * worldH * 1.9;
+      velocities[i * 2 + 0] = 0;
+      velocities[i * 2 + 1] = 0;
+    }
+    posAttr.needsUpdate = true;
+  }
+
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+    var w = window.innerWidth;
+    var h = window.innerHeight;
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(w, h, false);
+    var aspect = w / h;
+    worldH = 520;
+    worldW = worldH * aspect;
+    camera.left = -worldW / 2;
+    camera.right = worldW / 2;
+    camera.top = worldH / 2;
+    camera.bottom = -worldH / 2;
+    camera.updateProjectionMatrix();
+  }
+
+  function buildAnchorsFromEmb(tagRows, emb) {
+    anchors = [];
+    var sorted = tagRows
+      .map(function (r) {
+        return { name: String(r.name || ''), count: Number(r.count) || 0 };
+      })
+      .filter(function (t) {
+        return t.name.length > 0;
+      });
+    sorted.sort(function (a, b) {
+      return b.count - a.count;
+    });
+    sorted = sorted.slice(0, MAX_TAGS);
+
+    if (!emb || !emb.ok || !emb.words || !emb.vectors2d) {
+      statusEl.textContent = 'fallback field (no embeddings)';
+      return;
+    }
+
+    var map = Object.create(null);
+    for (var e = 0; e < emb.words.length; e++) {
+      map[normTag(emb.words[e])] = emb.vectors2d[e];
+    }
+
+    var scale = worldW * 0.42;
+    for (var i = 0; i < sorted.length; i++) {
+      var nm = normTag(sorted[i].name);
+      var v = map[nm];
+      if (!v || v.length < 2) continue;
+      var px = v[0] * scale;
+      var py = v[1] * scale;
+      var dx = v[0];
+      var dy = v[1];
+      var len = Math.sqrt(dx * dx + dy * dy) + 1e-6;
+      anchors.push({
+        x: px,
+        y: py,
+        dx: dx / len,
+        dy: dy / len,
+      });
+    }
+    statusEl.textContent = PARTICLES + ' pts · ' + anchors.length + ' anchors · embeddings';
+  }
+
+  function fetchEmb(names) {
+    return fetch(EMB_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ words: names, max_words: MAX_TAGS, min_sim: 0.35, max_links: 100 }),
+    })
+      .then(function (r) {
+        return r.json();
+      })
+      .catch(function () {
+        return { ok: false };
+      });
+  }
+
+  function reloadData() {
+    return fetch(TAGS_API)
+      .then(function (r) {
+        return r.json().then(function (b) {
+          return { ok: r.ok, b: b };
+        });
+      })
+      .then(function (res) {
+        if (!res.ok || (res.b && res.b.error)) {
+          showErr('Tags API: ' + (res.b && res.b.error ? res.b.error : 'failed'));
+          return;
+        }
+        hideErr();
+        if (!Array.isArray(res.b)) {
+          showErr('Tags: expected array');
+          return;
+        }
+        var names = res.b.map(function (row) {
+          return String(row.name || '');
+        }).filter(Boolean);
+        return fetchEmb(names).then(function (emb) {
+          buildAnchorsFromEmb(res.b, emb);
+          layoutParticles();
+        });
+      })
+      .catch(function (e) {
+        console.error(e);
+        showErr('Network: ' + (e.message || String(e)));
+      });
+  }
+
+  initThree();
+  resize();
+  window.addEventListener('resize', resize);
+  layoutParticles();
+
+  TagsVisControls.wire({
+    onExport: function () {
+      renderer.render(scene, camera);
+      try {
+        var data = renderer.domElement.toDataURL('image/png');
+        var a = document.createElement('a');
+        a.href = data;
+        a.download = 'vectorfield-' + Date.now() + '.png';
+        a.click();
+      } catch (e) {
+        console.error(e);
+      }
+    },
+  });
+
+  function tick() {
+    requestAnimationFrame(tick);
+    if (document.visibilityState === 'hidden') {
+      renderer.render(scene, camera);
+      return;
+    }
+    if (!TagsVisControls.frozen) {
+      tAnim += 0.016;
+      var spdMax = 0.01;
+      for (var i = 0; i < PARTICLES; i++) {
+        var x = positions[i * 3 + 0];
+        var y = positions[i * 3 + 1];
+        var f = fieldAt(x, y, tAnim);
+        velocities[i * 2 + 0] = velocities[i * 2 + 0] * 0.92 + f.x * 2.8;
+        velocities[i * 2 + 1] = velocities[i * 2 + 1] * 0.92 + f.y * 2.8;
+        x += velocities[i * 2 + 0];
+        y += velocities[i * 2 + 1];
+        if (x < -worldW * 0.95 || x > worldW * 0.95) x = (Math.random() - 0.5) * worldW * 1.6;
+        if (y < -worldH * 0.95 || y > worldH * 0.95) y = (Math.random() - 0.5) * worldH * 1.6;
+        positions[i * 3 + 0] = x;
+        positions[i * 3 + 1] = y;
+        var vx = velocities[i * 2 + 0];
+        var vy = velocities[i * 2 + 1];
+        var sp = Math.sqrt(vx * vx + vy * vy);
+        spdMax = Math.max(spdMax, sp);
+        var c = Math.min(1, sp * 4);
+        colAttr.array[i * 3 + 0] = 0.08 + c * 0.35;
+        colAttr.array[i * 3 + 1] = 0.55 + c * 0.45;
+        colAttr.array[i * 3 + 2] = 0.75 + c * 0.25;
+      }
+      posAttr.needsUpdate = true;
+      colAttr.needsUpdate = true;
+    }
+    renderer.render(scene, camera);
+  }
+
+  var socket = io({ transports: ['websocket', 'polling'] });
+  socket.on('analyzed', function () {
+    reloadData();
+  });
+  socket.on('tags_updated', function () {
+    reloadData();
+  });
+
+  tick();
+  reloadData();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jamming bot — Chaos attractor</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='tags_vis_shared.css') }}">
+</head>
+<body class="tags-vis-body">
+
+<nav class="tags-vis-nav" aria-label="Subpages">
+  <div>
+    <span class="tags-vis-title">Chaos attractor</span>
+    <a href="/">← home</a>
+    <a href="/tags/">2D cloud</a>
+    <a href="/tags/3d/">3D cloud</a>
+    <a href="/tags/constellation/">constellation</a>
+    <a href="/tags/vectorfield/">vector field</a>
+    <a href="/tags/phrases/">phrases</a>
+  </div>
+</nav>
+
+<div class="tags-vis-toolbar">
+  <button type="button" class="tags-vis-btn" id="btn-freeze">Freeze</button>
+  <button type="button" class="tags-vis-btn" id="btn-export">Export PNG</button>
+  <span class="tags-vis-status" id="tags-vis-status"></span>
+</div>
+
+<div id="api-error" class="tags-vis-banner" role="alert"></div>
+<div class="tags-vis-scanlines" aria-hidden="true"></div>
+<div class="tags-vis-canvas-host"><canvas id="chaos"></canvas></div>
+<p class="tags-vis-hint">Lorenz ODE · σ,ρ from tag entropy / count variance · shake on tags_updated</p>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js" crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='tags_vis_controls.js') }}"></script>
+<script>
+(function () {
+  var TAGS_API = '/api/tags/get/';
+  var TRAIL = 5500;
+  var DT = 0.0045;
+  var MAX_DPR = 2;
+
+  var statusEl = document.getElementById('tags-vis-status');
+  var banner = document.getElementById('api-error');
+  var canvas = document.getElementById('chaos');
+
+  var renderer, scene, camera, controls, line, geom, posAttr;
+  var trail = new Float32Array(TRAIL * 3);
+  var head = 0;
+  var filled = 0;
+  var x = 0.1;
+  var y = 1;
+  var z = 1.05;
+  var sigma = 10;
+  var rho = 28;
+  var beta = 2.667;
+  var rhoKick = 0;
+  var entropyNorm = 0.5;
+  var countVarNorm = 0.5;
+
+  function showErr(msg) {
+    banner.textContent = msg;
+    banner.classList.add('visible');
+  }
+  function hideErr() {
+    banner.classList.remove('visible');
+  }
+
+  function statsFromTags(rows) {
+    var counts = rows
+      .map(function (r) {
+        return Number(r.count) || 0;
+      })
+      .filter(function (c) {
+        return c > 0;
+      });
+    var n = counts.length;
+    if (n === 0) return { H: 0.5, V: 0.5 };
+    var S = 0;
+    for (var i = 0; i < n; i++) S += counts[i];
+    var H = 0;
+    for (var j = 0; j < n; j++) {
+      var p = counts[j] / S;
+      H -= p * Math.log(p + 1e-12);
+    }
+    var Hmax = Math.log(n + 1);
+    var Hn = Hmax > 1e-6 ? H / Hmax : 0.5;
+    var mean = S / n;
+    var vsum = 0;
+    for (var k = 0; k < n; k++) {
+      var d = counts[k] - mean;
+      vsum += d * d;
+    }
+    var variance = vsum / n;
+    var Vn = 1 - Math.exp(-variance / (mean * mean + 1));
+    return { H: Math.min(1, Math.max(0, Hn)), V: Math.min(1, Math.max(0, Vn)) };
+  }
+
+  function applyParams() {
+    sigma = 8 + entropyNorm * 6;
+    rho = 24 + countVarNorm * 14 + rhoKick;
+    beta = 2.2 + (1 - entropyNorm) * 1.4;
+    statusEl.textContent =
+      'σ=' +
+      sigma.toFixed(2) +
+      ' ρ=' +
+      rho.toFixed(2) +
+      ' β=' +
+      beta.toFixed(2) +
+      ' · H̃=' +
+      entropyNorm.toFixed(2) +
+      ' Ṽ=' +
+      countVarNorm.toFixed(2);
+  }
+
+  function lorenzStep() {
+    var dx = sigma * (y - x);
+    var dy = x * (rho - z) - y;
+    var dz = x * y - beta * z;
+    x += dx * DT;
+    y += dy * DT;
+    z += dz * DT;
+  }
+
+  function initThree() {
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
+    renderer.setClearColor(0x09090b, 1);
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
+    camera.position.set(0, 0, 85);
+
+    controls = new THREE.OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+
+    geom = new THREE.BufferGeometry();
+    var colors = new Float32Array(TRAIL * 3);
+    for (var i = 0; i < TRAIL; i++) {
+      var t = i / TRAIL;
+      colors[i * 3 + 0] = 0.1 + t * 0.4;
+      colors[i * 3 + 1] = 0.5 + t * 0.45;
+      colors[i * 3 + 2] = 0.75 + t * 0.25;
+    }
+    geom.setAttribute('position', new THREE.BufferAttribute(trail, 3));
+    geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geom.setDrawRange(0, 0);
+    posAttr = geom.getAttribute('position');
+
+    var mat = new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.85,
+    });
+    line = new THREE.Line(geom, mat);
+    scene.add(line);
+
+    var amb = new THREE.AmbientLight(0xffffff, 0.9);
+    scene.add(amb);
+  }
+
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+    var w = window.innerWidth;
+    var h = window.innerHeight;
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+
+  function pushPoint() {
+    var ix = head * 3;
+    trail[ix + 0] = x * 1.35;
+    trail[ix + 1] = y * 1.35;
+    trail[ix + 2] = z * 1.15 - 25;
+    head = (head + 1) % TRAIL;
+    filled = Math.min(TRAIL, filled + 1);
+    syncLinePositions();
+  }
+
+  function syncLinePositions() {
+    var arr = posAttr.array;
+    var n;
+    if (filled < TRAIL) {
+      n = filled;
+      for (var i = 0; i < n; i++) {
+        arr[i * 3 + 0] = trail[i * 3 + 0];
+        arr[i * 3 + 1] = trail[i * 3 + 1];
+        arr[i * 3 + 2] = trail[i * 3 + 2];
+      }
+    } else {
+      n = TRAIL;
+      for (var j = 0; j < TRAIL; j++) {
+        var src = (head + j) % TRAIL;
+        arr[j * 3 + 0] = trail[src * 3 + 0];
+        arr[j * 3 + 1] = trail[src * 3 + 1];
+        arr[j * 3 + 2] = trail[src * 3 + 2];
+      }
+    }
+    geom.setDrawRange(0, n >= 2 ? n : 0);
+    posAttr.needsUpdate = true;
+  }
+
+  function reloadTags() {
+    fetch(TAGS_API)
+      .then(function (r) {
+        return r.json().then(function (b) {
+          return { ok: r.ok, b: b };
+        });
+      })
+      .then(function (res) {
+        if (!res.ok || (res.b && res.b.error)) {
+          showErr('Tags API: ' + (res.b && res.b.error ? res.b.error : 'failed'));
+          return;
+        }
+        hideErr();
+        if (!Array.isArray(res.b)) return;
+        var st = statsFromTags(res.b);
+        entropyNorm = st.H;
+        countVarNorm = st.V;
+        rhoKick *= 0.92;
+        applyParams();
+      })
+      .catch(function (e) {
+        console.error(e);
+        showErr('Network: ' + (e.message || String(e)));
+      });
+  }
+
+  initThree();
+  resize();
+  window.addEventListener('resize', resize);
+  applyParams();
+
+  TagsVisControls.wire({
+    onExport: function () {
+      controls.update();
+      renderer.render(scene, camera);
+      try {
+        var data = renderer.domElement.toDataURL('image/png');
+        var a = document.createElement('a');
+        a.href = data;
+        a.download = 'chaos-' + Date.now() + '.png';
+        a.click();
+      } catch (e) {
+        console.error(e);
+      }
+    },
+  });
+
+  function tick() {
+    requestAnimationFrame(tick);
+    if (document.visibilityState === 'hidden') {
+      controls.update();
+      renderer.render(scene, camera);
+      return;
+    }
+    if (!TagsVisControls.frozen) {
+      rhoKick *= 0.985;
+      for (var s = 0; s < 3; s++) {
+        lorenzStep();
+      }
+      pushPoint();
+    }
+    controls.update();
+    renderer.render(scene, camera);
+  }
+
+  var socket = io({ transports: ['websocket', 'polling'] });
+  function shake() {
+    rhoKick = Math.min(12, rhoKick + 5 + Math.random() * 4);
+    z += (Math.random() - 0.5) * 3;
+    reloadTags();
+  }
+  socket.on('analyzed', shake);
+  socket.on('tags_updated', shake);
+
+  tick();
+  reloadTags();
+})();
+</script>
+</body>
+</html>

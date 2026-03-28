@@ -22,6 +22,7 @@ from rq_helpers import queue, get_all_jobs, redis_connection
 from config import Config, getConfig, getRedis
 from telemetry import init_telemetry, inject_trace_context_into_job, set_step_span_attributes, step_span, enqueue_with_trace
 import jobs
+from tag_embeddings import build_embeddings_response
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -165,6 +166,7 @@ AUTH_PASS = os.getenv("AUTH_PASS", "x")
 
 PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
                    "/tags/", "/geo/", "/screenshots/", "/api/tags/get/", "/api/tags/combine/",
+                   "/api/tags/embeddings/",
                    "/api/step/", "/api/steps", "/api/storage_step/", "/api/storage_latest/",
                    "/api/storage_geo/")
 
@@ -379,6 +381,24 @@ def geo_globe():
 @cross_origin()
 def tags_phrases():
     return render_template('phrases.html')
+
+
+@app.route('/tags/constellation/')
+@cross_origin()
+def tags_constellation():
+    return render_template('tags_constellation.html')
+
+
+@app.route('/tags/vectorfield/')
+@cross_origin()
+def tags_vectorfield():
+    return render_template('tags_vectorfield.html')
+
+
+@app.route('/tags/chaos-attractor/')
+@cross_origin()
+def tags_chaos_attractor():
+    return render_template('tags_chaos_attractor.html')
 
 
 @app.route('/api/tags/combine/', methods=['POST'])
@@ -604,6 +624,30 @@ def clean_tags():
     job = jobs.clean_tags.delay()
     inject_trace_context_into_job(job)
     return "ok"
+
+
+@app.route("/api/tags/embeddings/", methods=["POST"])
+@cross_origin()
+def tags_embeddings():
+    """spaCy vectors + similarity links for tag visualizations (en_core_web_md)."""
+    try:
+        body = request.get_json(silent=True) or {}
+        words = body.get("words") or []
+        if not isinstance(words, list):
+            return jsonify({"ok": False, "error": "words must be a list"}), 400
+        max_words = int(body.get("max_words", 48))
+        max_words = max(4, min(max_words, 80))
+        min_sim = float(body.get("min_sim", 0.38))
+        min_sim = max(0.15, min(min_sim, 0.99))
+        max_links = int(body.get("max_links", 160))
+        max_links = max(8, min(max_links, 400))
+        out = build_embeddings_response(
+            words, max_words=max_words, min_sim=min_sim, max_links=max_links
+        )
+        return jsonify(out), 200
+    except Exception as e:
+        logger.exception("tags_embeddings failed")
+        return jsonify({"ok": False, "error": str(e), "words": [], "vectors2d": [], "links": []}), 500
 
 
 @app.route("/api/tags/get/", methods=["GET"])
