@@ -15,7 +15,10 @@ export default function AtlasSemantic({ steps }) {
     const lines = [];
     const slice = (steps || []).slice(-12).reverse();
     for (const row of slice) {
-      const h = (row.hrases && row.hrases[0]) || (row.text && row.text.slice(0, 120));
+      const h =
+        (row.hrases && row.hrases[0]) ||
+        (row.phrases && row.phrases[0]) ||
+        (row.text && row.text.slice(0, 120));
       if (h) lines.push(String(h).replace(/\s+/g, ' ').trim());
     }
     if (!lines.length) return [];
@@ -48,24 +51,24 @@ export default function AtlasSemantic({ steps }) {
       return;
     }
 
-    const idToIndex = new Map(nodes.map((n, i) => [n.id, i]));
+    let simulation;
+    try {
+    const idSet = new Set(nodes.map((n) => n.id));
     const simNodes = nodes.map((n) => ({ ...n }));
     const simLinks = links
       .map((l) => {
-        const s = idToIndex.get(l.source);
-        const t = idToIndex.get(l.target);
-        if (s == null || t == null) return null;
-        return { source: s, target: t, weight: l.weight };
+        if (!idSet.has(l.source) || !idSet.has(l.target)) return null;
+        return { source: l.source, target: l.target, weight: l.weight };
       })
       .filter(Boolean);
 
-    const simulation = d3
+    simulation = d3
       .forceSimulation(simNodes)
       .force(
         'link',
         d3
           .forceLink(simLinks)
-          .id((_, i) => i)
+          .id((d) => d.id)
           .strength((d) => 0.12 + 0.02 * Math.min(d.weight, 20))
       )
       .force('charge', d3.forceManyBody().strength(-120))
@@ -115,22 +118,42 @@ export default function AtlasSemantic({ steps }) {
       .data(simNodes)
       .join('text')
       .attr('class', 'lbl')
-      .text((d) => (d.id.length > 18 ? `${d.id.slice(0, 16)}…` : d.id))
+      .text((d) => {
+        const id = String(d.id ?? '');
+        return id.length > 18 ? `${id.slice(0, 16)}…` : id;
+      })
       .attr('font-size', 9)
       .attr('fill', atlasColors.muted)
       .attr('pointer-events', 'none');
 
     simulation.on('tick', () => {
       link
-        .attr('x1', (d) => d.source.x)
-        .attr('y1', (d) => d.source.y)
-        .attr('x2', (d) => d.target.x)
-        .attr('y2', (d) => d.target.y);
-      node.attr('cx', (d) => d.x).attr('cy', (d) => d.y);
-      label.attr('x', (d) => d.x + 6).attr('y', (d) => d.y + 3);
+        .attr('x1', (d) => (d.source && d.source.x != null ? d.source.x : 0))
+        .attr('y1', (d) => (d.source && d.source.y != null ? d.source.y : 0))
+        .attr('x2', (d) => (d.target && d.target.x != null ? d.target.x : 0))
+        .attr('y2', (d) => (d.target && d.target.y != null ? d.target.y : 0));
+      node.attr('cx', (d) => d.x ?? 0).attr('cy', (d) => d.y ?? 0);
+      label.attr('x', (d) => (d.x ?? 0) + 6).attr('y', (d) => (d.y ?? 0) + 3);
     });
+    } catch (err) {
+      console.error('AtlasSemantic chart error', err);
+      d3.select(el).selectAll('*').remove();
+      d3.select(el)
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height)
+        .append('text')
+        .attr('x', width / 2)
+        .attr('y', height / 2)
+        .attr('text-anchor', 'middle')
+        .attr('fill', atlasColors.destructive)
+        .attr('font-size', 12)
+        .text('Chart error (see console)');
+    }
 
-    return () => simulation.stop();
+    return () => {
+      if (simulation) simulation.stop();
+    };
   }, [graph]);
 
   return (
@@ -138,7 +161,7 @@ export default function AtlasSemantic({ steps }) {
       <div ref={svgRef} className="atlas-viz-host atlas-semantic-force" />
       <div className="atlas-ticker" aria-live="polite">
         {tickerText.map((line, i) => (
-          <p key={`${i}-${line.slice(0, 24)}`} className="atlas-ticker-line">
+          <p key={`${i}-${String(line).slice(0, 24)}`} className="atlas-ticker-line">
             {line}
           </p>
         ))}

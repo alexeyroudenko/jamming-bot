@@ -27,5 +27,8 @@ curl -o ya.ru.png "http://html-renderer.jamming-bot.arthew0.online/render?url=ht
 curl -o ya.ru.png -H "Host: html-renderer.jamming-bot.arthew0.online" "http://$(hostname -I | awk '{print $1}')/render?url=https://ya.ru&width=1920&height=1080&dsf=2"
 ```
 
+## CSP / static app (`/static-app/`)
+
+If Chrome reports **Content Security Policy blocks eval**: the nginx image for `frontend-static-app` sets a `Content-Security-Policy` header that includes `script-src ... 'unsafe-eval'` for the bundled JS. If you **also** set CSP at Cloudflare, Traefik, or another proxy, browsers enforce **all** policies—add `'unsafe-eval'` to **that** policy as well, or remove the duplicate CSP so only one source applies.
 
 

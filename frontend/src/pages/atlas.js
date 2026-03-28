@@ -1,5 +1,6 @@
 import React from 'react';
 import { useStepsDataset } from '../lib/atlas/useStepsDataset';
+import AtlasErrorBoundary from '../components/atlas/AtlasErrorBoundary';
 import AtlasTimeRhythm from '../components/atlas/AtlasTimeRhythm';
 import AtlasSemantic from '../components/atlas/AtlasSemantic';
 import AtlasSankey from '../components/atlas/AtlasSankey';
@@ -26,13 +27,17 @@ export default function AtlasPage() {
       <section className="atlas-section">
         <h2>Time and rhythm</h2>
         <p className="atlas-desc">Bar height = text length; color = HTTP status. X = time when timestamps exist, else step index.</p>
-        <AtlasTimeRhythm steps={steps} />
+        <AtlasErrorBoundary key={`t-${source}-${steps.length}`} label="Time and rhythm">
+          <AtlasTimeRhythm steps={steps} />
+        </AtlasErrorBoundary>
       </section>
 
       <section className="atlas-section">
         <h2>Text and semantics</h2>
         <p className="atlas-desc">2D co-occurrence of tokens from recent steps; ticker shows latest phrases or text snippets.</p>
-        <AtlasSemantic steps={steps} />
+        <AtlasErrorBoundary key={`s-${source}-${steps.length}`} label="Semantics">
+          <AtlasSemantic steps={steps} />
+        </AtlasErrorBoundary>
       </section>
 
       <section className="atlas-section">
@@ -41,23 +46,31 @@ export default function AtlasPage() {
         <h3 className="atlas-card-title" style={{ marginTop: '0.5rem' }}>
           Host flow
         </h3>
-        <AtlasSankey steps={steps} />
+        <AtlasErrorBoundary key={`k-${source}-${steps.length}`} label="Sankey (host flow)">
+          <AtlasSankey steps={steps} />
+        </AtlasErrorBoundary>
         <h3 className="atlas-card-title" style={{ marginTop: '1.25rem' }}>
           URL paths
         </h3>
-        <AtlasSunburst steps={steps} />
+        <AtlasErrorBoundary key={`u-${source}-${steps.length}`} label="Sunburst (URL paths)">
+          <AtlasSunburst steps={steps} />
+        </AtlasErrorBoundary>
       </section>
 
       <section className="atlas-section">
         <h2>Statuses and failures</h2>
         <p className="atlas-desc">One column per step (recent window); outline marks non-empty error field.</p>
-        <AtlasStatusGrid steps={steps} />
+        <AtlasErrorBoundary key={`g-${source}-${steps.length}`} label="Status grid">
+          <AtlasStatusGrid steps={steps} />
+        </AtlasErrorBoundary>
       </section>
 
       <section className="atlas-section">
         <h2>Aggregates</h2>
         <p className="atlas-desc">Histogram of text length, top tokens, status code counts (debounced).</p>
-        <AtlasAggregates steps={steps} />
+        <AtlasErrorBoundary key={`a-${source}-${steps.length}`} label="Aggregates">
+          <AtlasAggregates steps={steps} />
+        </AtlasErrorBoundary>
       </section>
 
       <p className="atlas-meta">

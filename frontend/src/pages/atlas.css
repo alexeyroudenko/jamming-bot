@@ -19,7 +19,9 @@
   margin: 0 auto;
 }
 
+/* App.css sets global h1 { display: none } for legacy pages — re-enable for Atlas */
 .atlas-page h1 {
+  display: block;
   font-size: 2.25rem;
   font-weight: 700;
   letter-spacing: -0.03em;

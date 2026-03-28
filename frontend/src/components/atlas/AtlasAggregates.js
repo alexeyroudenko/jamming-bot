@@ -70,41 +70,51 @@ export default function AtlasAggregates({ steps }) {
       return;
     }
 
-    const ext = d3.extent(lengths);
-    const lo = ext[0] ?? 0;
-    const hi = ext[1] ?? 0;
-    const domain = lo === hi ? [lo - 1, hi + 1] : [lo, hi];
-    const bins = d3.bin().domain(domain).thresholds(12)(lengths);
-    const x = d3
-      .scaleLinear()
-      .domain([bins[0].x0, bins[bins.length - 1].x1])
-      .range([0, iw]);
-    const y = d3
-      .scaleLinear()
-      .domain([0, d3.max(bins, (b) => b.length) || 1])
-      .nice()
-      .range([ih, 0]);
+    try {
+      const ext = d3.extent(lengths);
+      const lo = ext[0] ?? 0;
+      const hi = ext[1] ?? 0;
+      const domain = lo === hi ? [lo - 1, hi + 1] : [lo, hi];
+      const bins = d3.bin().domain(domain).thresholds(12)(lengths);
+      if (!bins.length) {
+        d3.select(el).append('svg').attr('width', W).attr('height', H);
+        return;
+      }
+      const x = d3
+        .scaleLinear()
+        .domain([bins[0].x0, bins[bins.length - 1].x1])
+        .range([0, iw]);
+      const y = d3
+        .scaleLinear()
+        .domain([0, d3.max(bins, (b) => b.length) || 1])
+        .nice()
+        .range([ih, 0]);
 
-    const svg = d3.select(el).append('svg').attr('width', W).attr('height', H);
-    const g = svg.append('g').attr('transform', `translate(${m.l},${m.t})`);
+      const svg = d3.select(el).append('svg').attr('width', W).attr('height', H);
+      const g = svg.append('g').attr('transform', `translate(${m.l},${m.t})`);
 
-    g.selectAll('rect')
-      .data(bins)
-      .join('rect')
-      .attr('x', (d) => x(d.x0) + 1)
-      .attr('width', (d) => Math.max(0, x(d.x1) - x(d.x0) - 2))
-      .attr('y', (d) => y(d.length))
-      .attr('height', (d) => ih - y(d.length))
-      .attr('fill', atlasColors.accent)
-      .attr('opacity', 0.65);
+      g.selectAll('rect')
+        .data(bins)
+        .join('rect')
+        .attr('x', (d) => x(d.x0) + 1)
+        .attr('width', (d) => Math.max(0, x(d.x1) - x(d.x0) - 2))
+        .attr('y', (d) => y(d.length))
+        .attr('height', (d) => ih - y(d.length))
+        .attr('fill', atlasColors.accent)
+        .attr('opacity', 0.65);
 
-    g.append('g')
-      .attr('transform', `translate(0,${ih})`)
-      .call(d3.axisBottom(x).ticks(4))
-      .selectAll('text')
-      .attr('fill', atlasColors.muted)
-      .attr('font-size', 9);
-    g.selectAll('.domain,.tick line').attr('stroke', atlasColors.border);
+      g.append('g')
+        .attr('transform', `translate(0,${ih})`)
+        .call(d3.axisBottom(x).ticks(4))
+        .selectAll('text')
+        .attr('fill', atlasColors.muted)
+        .attr('font-size', 9);
+      g.selectAll('.domain,.tick line').attr('stroke', atlasColors.border);
+    } catch (err) {
+      console.error('AtlasAggregates histogram error', err);
+      d3.select(el).selectAll('*').remove();
+      d3.select(el).append('svg').attr('width', W).attr('height', H);
+    }
   }, [debounced]);
 
   useEffect(() => {
@@ -122,41 +132,50 @@ export default function AtlasAggregates({ steps }) {
       return;
     }
 
-    const x = d3
-      .scaleLinear()
-      .domain([0, d3.max(wordCounts, (d) => d[1]) || 1])
-      .nice()
-      .range([0, iw]);
-    const y = d3
-      .scaleBand()
-      .domain(wordCounts.map((d) => d[0]))
-      .range([0, ih])
-      .padding(0.15);
+    try {
+      const x = d3
+        .scaleLinear()
+        .domain([0, d3.max(wordCounts, (d) => d[1]) || 1])
+        .nice()
+        .range([0, iw]);
+      const y = d3
+        .scaleBand()
+        .domain(wordCounts.map((d) => String(d[0])))
+        .range([0, ih])
+        .padding(0.15);
 
-    const svg = d3.select(el).append('svg').attr('width', W).attr('height', H);
-    const g = svg.append('g').attr('transform', `translate(${m.l},${m.t})`);
+      const svg = d3.select(el).append('svg').attr('width', W).attr('height', H);
+      const g = svg.append('g').attr('transform', `translate(${m.l},${m.t})`);
 
-    g.selectAll('rect')
-      .data(wordCounts)
-      .join('rect')
-      .attr('x', 0)
-      .attr('y', (d) => y(d[0]))
-      .attr('width', (d) => x(d[1]))
-      .attr('height', y.bandwidth())
-      .attr('fill', atlasColors.accentDim)
-      .attr('opacity', 0.8);
+      g.selectAll('rect')
+        .data(wordCounts)
+        .join('rect')
+        .attr('x', 0)
+        .attr('y', (d) => y(String(d[0])))
+        .attr('width', (d) => x(d[1]))
+        .attr('height', y.bandwidth())
+        .attr('fill', atlasColors.accentDim)
+        .attr('opacity', 0.8);
 
-    g.selectAll('text.lbl')
-      .data(wordCounts)
-      .join('text')
-      .attr('class', 'lbl')
-      .attr('x', -6)
-      .attr('y', (d) => (y(d[0]) || 0) + y.bandwidth() / 2)
-      .attr('dy', '0.35em')
-      .attr('text-anchor', 'end')
-      .attr('fill', atlasColors.muted)
-      .attr('font-size', 9)
-      .text((d) => (d[0].length > 18 ? `${d[0].slice(0, 16)}…` : d[0]));
+      g.selectAll('text.lbl')
+        .data(wordCounts)
+        .join('text')
+        .attr('class', 'lbl')
+        .attr('x', -6)
+        .attr('y', (d) => (y(String(d[0])) || 0) + y.bandwidth() / 2)
+        .attr('dy', '0.35em')
+        .attr('text-anchor', 'end')
+        .attr('fill', atlasColors.muted)
+        .attr('font-size', 9)
+        .text((d) => {
+          const label = String(d[0]);
+          return label.length > 18 ? `${label.slice(0, 16)}…` : label;
+        });
+    } catch (err) {
+      console.error('AtlasAggregates words error', err);
+      d3.select(el).selectAll('*').remove();
+      d3.select(el).append('svg').attr('width', W).attr('height', H);
+    }
   }, [wordCounts]);
 
   useEffect(() => {
@@ -174,37 +193,43 @@ export default function AtlasAggregates({ steps }) {
       return;
     }
 
-    const x = d3
-      .scaleBand()
-      .domain(statusCounts.map((d) => String(d[0])))
-      .range([0, iw])
-      .padding(0.2);
-    const y = d3
-      .scaleLinear()
-      .domain([0, d3.max(statusCounts, (d) => d[1]) || 1])
-      .nice()
-      .range([ih, 0]);
+    try {
+      const x = d3
+        .scaleBand()
+        .domain(statusCounts.map((d) => String(d[0])))
+        .range([0, iw])
+        .padding(0.2);
+      const y = d3
+        .scaleLinear()
+        .domain([0, d3.max(statusCounts, (d) => d[1]) || 1])
+        .nice()
+        .range([ih, 0]);
 
-    const svg = d3.select(el).append('svg').attr('width', W).attr('height', H);
-    const g = svg.append('g').attr('transform', `translate(${m.l},${m.t})`);
+      const svg = d3.select(el).append('svg').attr('width', W).attr('height', H);
+      const g = svg.append('g').attr('transform', `translate(${m.l},${m.t})`);
 
-    g.selectAll('rect')
-      .data(statusCounts)
-      .join('rect')
-      .attr('x', (d) => x(String(d[0])))
-      .attr('y', (d) => y(d[1]))
-      .attr('width', x.bandwidth())
-      .attr('height', (d) => ih - y(d[1]))
-      .attr('fill', atlasColors.muted)
-      .attr('opacity', 0.75);
+      g.selectAll('rect')
+        .data(statusCounts)
+        .join('rect')
+        .attr('x', (d) => x(String(d[0])))
+        .attr('y', (d) => y(d[1]))
+        .attr('width', x.bandwidth())
+        .attr('height', (d) => ih - y(d[1]))
+        .attr('fill', atlasColors.muted)
+        .attr('opacity', 0.75);
 
-    g.append('g')
-      .attr('transform', `translate(0,${ih})`)
-      .call(d3.axisBottom(x))
-      .selectAll('text')
-      .attr('fill', atlasColors.muted)
-      .attr('font-size', 9);
-    g.selectAll('.domain,.tick line').attr('stroke', atlasColors.border);
+      g.append('g')
+        .attr('transform', `translate(0,${ih})`)
+        .call(d3.axisBottom(x))
+        .selectAll('text')
+        .attr('fill', atlasColors.muted)
+        .attr('font-size', 9);
+      g.selectAll('.domain,.tick line').attr('stroke', atlasColors.border);
+    } catch (err) {
+      console.error('AtlasAggregates status error', err);
+      d3.select(el).selectAll('*').remove();
+      d3.select(el).append('svg').attr('width', W).attr('height', H);
+    }
   }, [statusCounts]);
 
   return (
