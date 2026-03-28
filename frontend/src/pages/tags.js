@@ -14,15 +14,16 @@ const PLACEHOLDER_TAGS = [
   { value: 'cloud', count: 28 },
 ]
 
-/** react-tagcloud v2: chip style (dark blue tile + white text), like the legacy UI. */
-function tagsTagRenderer(tag, size, _color) {
+/** react-tagcloud v2: chip style; optional highlightSet marks auto-selected phrase words in red. */
+function tagsTagRenderer(tag, size, _color, highlightSet) {
   const { className, style, ...rest } = tag.props || {}
   const key = tag.key || tag.value
+  const highlighted = highlightSet && highlightSet.has(tag.value)
   const tagStyle = {
     display: 'inline-block',
     margin: '5px 4px',
     verticalAlign: 'middle',
-    backgroundColor: '#003399',
+    backgroundColor: highlighted ? '#c41e1e' : '#003399',
     color: '#f5f5f5',
     fontSize: `${size}px`,
     fontFamily: 'Verdana',
@@ -30,12 +31,13 @@ function tagsTagRenderer(tag, size, _color) {
     padding: '11px 12px',
     lineHeight: 1.25,
     borderRadius: '3px',
-    border: '0px solid #243552',
+    border: highlighted ? '2px solid #ff6b6b' : '0px solid #243552',
     boxSizing: 'border-box',
     ...style,
   }
   let tagClassName = 'tag-cloud-tag tags-tag-chip'
   if (className) tagClassName += ` ${className}`
+  if (highlighted) tagClassName += ' tags-tag-chip--highlight'
   return (
     <span className={tagClassName} style={tagStyle} key={key} {...rest}>
       {tag.value}
@@ -72,9 +74,14 @@ export default class Tags extends React.Component {
       semantics_log: [],
       tags: PLACEHOLDER_TAGS,
       step: {},
-      struct_text: "..."
+      struct_text: "...",
+      phraseHighlightValues: [],
+      phraseHistory: [],
     }
     this.socket = io(Url, { transports: ["websocket", "polling"] })
+    this._phraseLoopActive = false
+    this._phraseTimeoutId = null
+    this._phraseFeedRef = React.createRef()
   }
 
   fetchAPI() {
@@ -88,6 +95,7 @@ export default class Tags extends React.Component {
           logs: data
         })
         this.initSockets()
+        this._startPhraseHighlightLoop()
       })
       .catch((error) => {
         console.log(error)
@@ -147,6 +155,44 @@ export default class Tags extends React.Component {
     
   }
 
+  _startPhraseHighlightLoop() {
+    if (this._phraseLoopActive) return
+    this._phraseLoopActive = true
+    this._schedulePhraseTick()
+  }
+
+  _schedulePhraseTick() {
+    if (!this._phraseLoopActive) return
+    const delayMs = 3000 + Math.random() * 2000
+    this._phraseTimeoutId = window.setTimeout(() => this._runPhraseTick(), delayMs)
+  }
+
+  _runPhraseTick() {
+    if (!this._phraseLoopActive) return
+    this.setState(
+      (prev) => {
+        const tags = prev.tags
+        if (!tags || tags.length < 2) {
+          return { phraseHighlightValues: [] }
+        }
+        const phraseLen = 2 + Math.floor(Math.random() * 2)
+        const len = Math.min(phraseLen, tags.length)
+        const maxStart = tags.length - len
+        const start = Math.floor(Math.random() * (maxStart + 1))
+        const slice = tags.slice(start, start + len)
+        const phrase = slice.map((t) => t.value).join(' ')
+        const phraseHighlightValues = slice.map((t) => t.value)
+        const phraseHistory = [...prev.phraseHistory, phrase].slice(-3)
+        return { phraseHighlightValues, phraseHistory }
+      },
+      () => {
+        const el = this._phraseFeedRef.current
+        if (el) el.scrollTop = el.scrollHeight
+        this._schedulePhraseTick()
+      }
+    )
+  }
+
   componentDidMount() {
 
 
@@ -178,6 +224,10 @@ export default class Tags extends React.Component {
   }
 
   componentWillUnmount() {
+    this._phraseLoopActive = false
+    if (this._phraseTimeoutId) {
+      window.clearTimeout(this._phraseTimeoutId)
+    }
     if (this._tagsPollId) {
       clearInterval(this._tagsPollId)
     }
@@ -197,7 +247,7 @@ export default class Tags extends React.Component {
       return <p className="tags-page-muted">Error loading logs</p>
     }
     else return (
-      <div className="Graph3d">
+      <div className="Graph3d tags-page-root">
         <h1 className="tags-page-title">logs</h1>
         <div className="logs">
           {!this.state.logs ? null : this.state.logs.slice().reverse().map((step, index) => (
@@ -242,10 +292,30 @@ export default class Tags extends React.Component {
           minSize={6}
           maxSize={128}
           tags={this.state.tags}
-          renderer={tagsTagRenderer}
+          renderer={(tag, size, color) =>
+            tagsTagRenderer(
+              tag,
+              size,
+              color,
+              new Set(this.state.phraseHighlightValues)
+            )
+          }
           disableRandomColor={true}
-          onClick={tag => alert(`'${tag.value}' was selected!`)}
         />
+        </div>
+
+        <div
+          className="tags-phrase-feed"
+          ref={this._phraseFeedRef}
+          role="log"
+          aria-live="polite"
+          aria-label="Auto-captured word phrases from tag cloud"
+        >
+          {this.state.phraseHistory.map((line, i) => (
+            <div key={i} className="tags-phrase-feed__line">
+              {line}
+            </div>
+          ))}
         </div>
     
       </div>
