@@ -3,34 +3,34 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Jamming bot — Vector field</title>
+  <title>Jamming bot — Vector field 3D</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='tags_vis_shared.css') }}">
 </head>
 <body class="tags-vis-body">
 
 <nav class="tags-vis-nav" aria-label="Subpages">
   <div>
-    <span class="tags-vis-title">Vector field</span>
+    <span class="tags-vis-title">Vector field 3D</span>
     <a href="/">← home</a>
     <a href="/tags/">2D cloud</a>
     <a href="/tags/3d/">3D cloud</a>
+    <a href="/tags/vectorfield/">vector field 2D</a>
     <a href="/tags/constellation/">constellation</a>
     <a href="/tags/chaos-attractor/">chaos</a>
-    <a href="/tags/vectorfield-3d/">vector 3D</a>
     <a href="/tags/phrases/">phrases</a>
   </div>
 </nav>
 
 <div class="tags-vis-toolbar">
-  <label class="tags-vis-density-label" for="vf-density">Density</label>
-  <select id="vf-density" class="tags-vis-select" aria-label="Particle density" title="Overrides auto tier until changed">
+  <label class="tags-vis-density-label" for="vf3-density">Density</label>
+  <select id="vf3-density" class="tags-vis-select" aria-label="Particle density">
     <option value="auto">Auto</option>
     <option value="low">Low</option>
     <option value="med">Med</option>
     <option value="high">High</option>
   </select>
-  <button type="button" class="tags-vis-btn" id="btn-anchor-labels" aria-pressed="false" title="Show anchors at influence centers; drag handles to move and reshape the field">Anchor labels</button>
-  <button type="button" class="tags-vis-btn" id="btn-show-vectors" aria-pressed="false" title="Overlay flow direction on a grid (same field as particles)">Field vectors</button>
+  <button type="button" class="tags-vis-btn" id="btn-anchor-labels" aria-pressed="false" title="Show tag labels (projected; 3D view only — no drag)">Anchor labels</button>
+  <button type="button" class="tags-vis-btn" id="btn-show-vectors" aria-pressed="false" title="Sample field direction on a coarse 3D grid">Field vectors</button>
   <button type="button" class="tags-vis-btn" id="btn-freeze">Freeze</button>
   <button type="button" class="tags-vis-btn" id="btn-export">Export PNG</button>
   <span class="tags-vis-status" id="tags-vis-status"></span>
@@ -39,59 +39,56 @@
 <div id="api-error" class="tags-vis-banner" role="alert"></div>
 <div class="tags-vis-scanlines" aria-hidden="true"></div>
 <div class="tags-vis-canvas-host">
-  <canvas id="vf"></canvas>
-  <div id="vf-anchors-layer" class="vf-anchors-layer is-hidden" aria-hidden="true"></div>
+  <canvas id="vf3"></canvas>
+  <div id="vf3-anchors-layer" class="vf-anchors-layer is-hidden" aria-hidden="true"></div>
 </div>
-<p class="tags-vis-hint">White particles · Field vectors: cyan ticks = local flow direction · Anchor labels: drag handles to move anchors and reshape the field</p>
+<p class="tags-vis-hint">Drag to orbit · wheel zoom · white particles in 3D · Field vectors: cyan segments · labels are projected (read-only)</p>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
-<!-- Three.js r128 via unpkg (same as tags_3d / chaos). If CSP blocks unpkg, copy three.min.js to flask/static/ and point src here. -->
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js" crossorigin="anonymous"></script>
 <script src="{{ url_for('static', filename='tags_vis_controls.js') }}"></script>
 <script>
 (function () {
-  /** TEMP: remote tags list — revert to '/api/tags/get/' for same-origin */
-  var TAGS_API = 'https://jamming-bot.arthew0.online/api/tags/get/';
+  var TAGS_API = '/api/tags/get/';
   var EMB_API = '/api/tags/embeddings/';
-  var MAX_PARTICLES_CAPACITY = 32000;
-  /** Motion speed (lower = slower). 0.05 ≈ 20× slower than original baseline. */
+  var MAX_PARTICLES_CAPACITY = 28000;
   var FLOW_SPEED = 0.05;
   var RELOAD_DEBOUNCE_MS = 550;
+  /** Half-extent of simulation cube (world units). */
+  var WORLD_HALF = 250;
 
   var effectiveParticles = MAX_PARTICLES_CAPACITY;
   var MAX_TAGS = 48;
   var MAX_DPR = 2;
-  /** Time scale for field evolution when not frozen; reduced-motion uses ~0.25 so the field barely drifts unless user unfreezes. */
   var animSlow = 1;
   var reduceMotionPreferred = false;
 
   var statusEl = document.getElementById('tags-vis-status');
   var banner = document.getElementById('api-error');
-  var canvas = document.getElementById('vf');
-  var densitySel = document.getElementById('vf-density');
+  var canvas = document.getElementById('vf3');
+  var densitySel = document.getElementById('vf3-density');
 
-  var renderer, scene, camera, points, geom, posAttr, colAttr;
+  var renderer, scene, camera, controls, points, geom, posAttr;
   var anchors = [];
   var tAnim = 0;
-  var positions, colors, velocities;
-  var worldW = 1;
-  var worldH = 1;
+  var positions, velocities;
   var reloadTimer = null;
-  var anchorLayer = document.getElementById('vf-anchors-layer');
+  var anchorLayer = document.getElementById('vf3-anchors-layer');
   var showAnchorLabels = false;
   var showVectors = false;
-  var dragAnchorIndex = -1;
-  /** Grid for vector overlay (world-space samples of fieldAt). */
-  var GRID_NX = 26;
-  var GRID_NY = 16;
   var vectorGeom = null;
   var vectorLines = null;
   var vectorPosArr = null;
+  var GRID3_X = 6;
+  var GRID3_Y = 5;
+  var GRID3_Z = 5;
+  var _projV = new THREE.Vector3();
 
   function getDensityPref() {
     if (densitySel && densitySel.value) return densitySel.value;
     try {
-      return sessionStorage.getItem('tags-vectorfield-density') || 'auto';
+      return sessionStorage.getItem('tags-vectorfield-3d-density') || 'auto';
     } catch (e) {
       return 'auto';
     }
@@ -105,9 +102,9 @@
     var pref = getDensityPref();
     var cores = typeof navigator.hardwareConcurrency === 'number' ? navigator.hardwareConcurrency : 4;
     var narrow = window.innerWidth < 640;
-    var particlesHi = 32000;
-    var particlesMed = 18000;
-    var particlesLo = 9000;
+    var particlesHi = 28000;
+    var particlesMed = 16000;
+    var particlesLo = 8000;
     var tagsHi = 48;
     var tagsMed = 36;
     var tagsLo = 24;
@@ -157,11 +154,7 @@
     reduceMotionPreferred = t.reduceMotion;
     if (geom) geom.setDrawRange(0, effectiveParticles);
     if (points && points.material) {
-      points.material.size = effectiveParticles > 12000 ? 0.72 : 1.15;
-      points.material.color.setHex(0xffffff);
-      points.material.opacity = 0.8;
-      points.material.vertexColors = false;
-      points.material.blending = THREE.NormalBlending;
+      points.material.size = effectiveParticles > 11000 ? 0.72 : 1.15;
       points.material.needsUpdate = true;
     }
   }
@@ -179,157 +172,101 @@
     return '';
   }
 
-  function noise2(x, y, t) {
+  function noise3(x, y, z, t) {
     return (
-      Math.sin(x * 0.019 + t * 0.7) * Math.cos(y * 0.017 - t * 0.5) +
-      0.5 * Math.sin(x * 0.041 + y * 0.023 + t * 1.1)
+      Math.sin(y * 0.017 + z * 0.011 + t * 0.6) * Math.cos(x * 0.015 - t * 0.45) +
+      0.45 * Math.sin(x * 0.031 + y * 0.019 + z * 0.013 + t * 0.95)
     );
   }
 
-  function fieldAt(x, y, t) {
-    var fx = noise2(y, x * 0.5, t) * 0.55;
-    var fy = noise2(x, y + 3, t + 1) * 0.55;
+  function fieldAt3(x, y, z, t) {
+    var fx = noise3(y, z, x, t) * 0.42;
+    var fy = noise3(z, x, y, t + 0.7) * 0.42;
+    var fz = noise3(x, y, z, t + 1.4) * 0.42;
     var sx = 0;
     var sy = 0;
+    var sz = 0;
     var sw = 0;
     for (var i = 0; i < anchors.length; i++) {
       var a = anchors[i];
       var dx = x - a.x;
       var dy = y - a.y;
-      var d = Math.sqrt(dx * dx + dy * dy) + 28;
+      var dz = z - a.z;
+      var d = Math.sqrt(dx * dx + dy * dy + dz * dz) + 35;
       var baseW = 1 / (d * d);
       var cw = a.countWeight != null ? a.countWeight : 1;
       var ww = baseW * cw;
       sx += a.dx * ww;
       sy += a.dy * ww;
+      sz += a.dz * ww;
       sw += ww;
     }
     if (sw > 1e-8) {
       fx += sx / sw;
       fy += sy / sw;
+      fz += sz / sw;
     }
-    return { x: fx, y: fy };
+    return { x: fx, y: fy, z: fz };
   }
 
   function anchorTooltip(a) {
     return (
       (a.name || '') +
-      ' · norm ∈ [-1,1] (' +
-      (a.nx != null ? Number(a.nx).toFixed(3) : '?') +
+      ' · norm (' +
+      (a.nx != null ? Number(a.nx).toFixed(2) : '?') +
       ', ' +
-      (a.ny != null ? Number(a.ny).toFixed(3) : '?') +
-      ') · raw emb₂D (' +
-      (a.ex != null ? Number(a.ex).toFixed(4) : '?') +
+      (a.ny != null ? Number(a.ny).toFixed(2) : '?') +
       ', ' +
-      (a.ey != null ? Number(a.ey).toFixed(4) : '?') +
-      ') · world (' +
-      (a.x != null ? Number(a.x).toFixed(1) : '?') +
-      ', ' +
-      (a.y != null ? Number(a.y).toFixed(1) : '?') +
-      ') · drag handle to move'
+      (a.nz != null ? Number(a.nz).toFixed(2) : '?') +
+      ')'
     );
   }
 
-  function screenToWorld(clientX, clientY) {
-    var rect = renderer.domElement.getBoundingClientRect();
-    var nx = (clientX - rect.left) / Math.max(1, rect.width);
-    var ny = (clientY - rect.top) / Math.max(1, rect.height);
-    var wx = camera.left + nx * (camera.right - camera.left);
-    var wy = camera.top - ny * (camera.top - camera.bottom);
-    return { x: wx, y: wy };
-  }
-
-  function clampWorld(wx, wy) {
-    var mx = worldW * 0.48;
-    var my = worldH * 0.48;
-    if (wx < -mx) wx = -mx;
-    if (wx > mx) wx = mx;
-    if (wy < -my) wy = -my;
-    if (wy > my) wy = my;
-    return { x: wx, y: wy };
-  }
-
   function syncAnchorLabelPositions() {
-    if (!showAnchorLabels || !anchorLayer || !camera) return;
+    if (!showAnchorLabels || !anchorLayer || !camera || !renderer) return;
     var items = anchorLayer.querySelectorAll('.vf-anchor-item');
+    var rect = renderer.domElement.getBoundingClientRect();
+    var host = renderer.domElement.parentElement
+      ? renderer.domElement.parentElement.getBoundingClientRect()
+      : rect;
+    var w = rect.width;
+    var h = rect.height;
     for (var i = 0; i < items.length && i < anchors.length; i++) {
       var a = anchors[i];
-      var u = (a.x - camera.left) / (camera.right - camera.left);
-      var v = (camera.top - a.y) / (camera.top - camera.bottom);
-      items[i].style.left = u * 100 + '%';
-      items[i].style.top = v * 100 + '%';
-      var h = items[i].querySelector('.vf-anchor-handle');
-      if (h) h.title = anchorTooltip(a);
+      _projV.set(a.x, a.y, a.z);
+      _projV.project(camera);
+      if (Math.abs(_projV.x) > 1.35 || Math.abs(_projV.y) > 1.35 || _projV.z < -1.05 || _projV.z > 1.05) {
+        items[i].style.display = 'none';
+        continue;
+      }
+      items[i].style.display = '';
+      var sx = (_projV.x * 0.5 + 0.5) * w + rect.left - host.left;
+      var sy = (-_projV.y * 0.5 + 0.5) * h + rect.top - host.top;
+      items[i].style.left = sx + 'px';
+      items[i].style.top = sy + 'px';
+      items[i].style.transform = 'translate(-50%, -100%)';
+      var lab = items[i].querySelector('.vf-anchor-label');
+      if (lab) lab.title = anchorTooltip(a);
     }
   }
 
   function rebuildAnchorLabels() {
     if (!anchorLayer) return;
     anchorLayer.innerHTML = '';
-    dragAnchorIndex = -1;
     if (!showAnchorLabels) return;
     for (var i = 0; i < anchors.length; i++) {
       var a = anchors[i];
       var item = document.createElement('div');
       item.className = 'vf-anchor-item';
-
-      var handle = document.createElement('button');
-      handle.type = 'button';
-      handle.className = 'vf-anchor-handle';
-      handle.setAttribute('aria-label', 'Drag field anchor: ' + (a.name || String(i)));
-      handle.title = anchorTooltip(a);
-      (function (idx) {
-        function startDrag(ev) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          dragAnchorIndex = idx;
-        }
-        handle.addEventListener('mousedown', startDrag);
-        handle.addEventListener('touchstart', startDrag, { passive: false });
-      })(i);
-
       var lab = document.createElement('span');
       lab.className = 'vf-anchor-label';
       lab.textContent = a.labelText || a.name || '';
       lab.title = anchorTooltip(a);
-
-      item.appendChild(handle);
       item.appendChild(lab);
       anchorLayer.appendChild(item);
     }
     syncAnchorLabelPositions();
   }
-
-  function onAnchorDragMove(ev) {
-    if (dragAnchorIndex < 0 || dragAnchorIndex >= anchors.length) return;
-    var cx = ev.clientX != null ? ev.clientX : (ev.touches && ev.touches[0] ? ev.touches[0].clientX : 0);
-    var cy = ev.clientY != null ? ev.clientY : (ev.touches && ev.touches[0] ? ev.touches[0].clientY : 0);
-    var w = screenToWorld(cx, cy);
-    var p = clampWorld(w.x, w.y);
-    anchors[dragAnchorIndex].x = p.x;
-    anchors[dragAnchorIndex].y = p.y;
-    syncAnchorLabelPositions();
-    var items = anchorLayer.querySelectorAll('.vf-anchor-item');
-    var row = items[dragAnchorIndex];
-    if (row) {
-      var h = row.querySelector('.vf-anchor-handle');
-      var lab = row.querySelector('.vf-anchor-label');
-      var tip = anchorTooltip(anchors[dragAnchorIndex]);
-      if (h) h.title = tip;
-      if (lab) lab.title = tip;
-    }
-  }
-
-  function onAnchorDragEnd() {
-    dragAnchorIndex = -1;
-  }
-
-  window.addEventListener('mousemove', onAnchorDragMove);
-  window.addEventListener('mouseup', onAnchorDragEnd);
-  window.addEventListener('touchmove', onAnchorDragMove, { passive: false });
-  window.addEventListener('touchend', onAnchorDragEnd);
-  window.addEventListener('touchcancel', onAnchorDragEnd);
-  window.addEventListener('blur', onAnchorDragEnd);
 
   function setAnchorLabelsVisible(on) {
     showAnchorLabels = !!on;
@@ -338,11 +275,9 @@
       anchorLayer.setAttribute('aria-hidden', showAnchorLabels ? 'false' : 'true');
     }
     var btn = document.getElementById('btn-anchor-labels');
-    if (btn) {
-      btn.setAttribute('aria-pressed', showAnchorLabels ? 'true' : 'false');
-    }
+    if (btn) btn.setAttribute('aria-pressed', showAnchorLabels ? 'true' : 'false');
     try {
-      sessionStorage.setItem('tags-vectorfield-anchor-labels', showAnchorLabels ? '1' : '0');
+      sessionStorage.setItem('tags-vectorfield-3d-anchor-labels', showAnchorLabels ? '1' : '0');
     } catch (e) {}
     if (showAnchorLabels) rebuildAnchorLabels();
     else if (anchorLayer) anchorLayer.innerHTML = '';
@@ -352,32 +287,33 @@
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
     renderer.setClearColor(0x09090b, 1);
     scene = new THREE.Scene();
-    camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
-    camera.position.z = 10;
+    camera = new THREE.PerspectiveCamera(55, 1, 0.1, 5000);
+    camera.position.set(0, 0, WORLD_HALF * 2.45);
+
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.target.set(0, 0, 0);
+    controls.update();
 
     geom = new THREE.BufferGeometry();
     var n = MAX_PARTICLES_CAPACITY;
     positions = new Float32Array(n * 3);
-    colors = new Float32Array(n * 3);
-    velocities = new Float32Array(n * 2);
+    velocities = new Float32Array(n * 3);
     for (var i = 0; i < n; i++) {
+      positions[i * 3 + 0] = 0;
+      positions[i * 3 + 1] = 0;
       positions[i * 3 + 2] = 0;
-      colors[i * 3 + 0] = 1;
-      colors[i * 3 + 1] = 1;
-      colors[i * 3 + 2] = 1;
     }
     geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     posAttr = geom.getAttribute('position');
-    colAttr = geom.getAttribute('color');
     geom.setDrawRange(0, effectiveParticles);
 
     var mat = new THREE.PointsMaterial({
-      size: effectiveParticles > 12000 ? 0.72 : 1.15,
+      size: effectiveParticles > 11000 ? 0.72 : 1.15,
       color: 0xffffff,
-      vertexColors: false,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.82,
       depthWrite: false,
       blending: THREE.NormalBlending,
     });
@@ -388,7 +324,7 @@
 
   function ensureVectorOverlay() {
     if (vectorLines) return;
-    var maxSeg = GRID_NX * GRID_NY;
+    var maxSeg = GRID3_X * GRID3_Y * GRID3_Z;
     vectorPosArr = new Float32Array(maxSeg * 6);
     vectorGeom = new THREE.BufferGeometry();
     vectorGeom.setAttribute(
@@ -400,7 +336,7 @@
       new THREE.LineBasicMaterial({
         color: 0x22d3ee,
         transparent: true,
-        opacity: 0.52,
+        opacity: 0.45,
         depthTest: true,
         depthWrite: false,
       })
@@ -413,27 +349,30 @@
 
   function updateVectorFieldOverlay() {
     if (!showVectors || !vectorGeom || !vectorPosArr) return;
-    var halfW = worldW * 0.48;
-    var halfH = worldH * 0.48;
-    var arrowScale = Math.min(worldW, worldH) * 0.042;
+    var lim = WORLD_HALF * 0.48;
+    var arrowScale = WORLD_HALF * 0.055;
     var idx = 0;
-    for (var j = 0; j < GRID_NY; j++) {
-      for (var i = 0; i < GRID_NX; i++) {
-        var x = -halfW + ((i + 0.5) / GRID_NX) * (2 * halfW);
-        var y = -halfH + ((j + 0.5) / GRID_NY) * (2 * halfH);
-        var f = fieldAt(x, y, tAnim);
-        var flen = Math.sqrt(f.x * f.x + f.y * f.y);
-        var inv = flen > 1e-9 ? 1 / flen : 0;
-        var nx = f.x * inv;
-        var ny = f.y * inv;
-        var magNorm = Math.min(1, flen * 1.75);
-        var L = arrowScale * (0.38 + 0.62 * magNorm);
-        vectorPosArr[idx++] = x;
-        vectorPosArr[idx++] = y;
-        vectorPosArr[idx++] = 0;
-        vectorPosArr[idx++] = x + nx * L;
-        vectorPosArr[idx++] = y + ny * L;
-        vectorPosArr[idx++] = 0;
+    for (var gz = 0; gz < GRID3_Z; gz++) {
+      for (var gy = 0; gy < GRID3_Y; gy++) {
+        for (var gx = 0; gx < GRID3_X; gx++) {
+          var x = -lim + ((gx + 0.5) / GRID3_X) * (2 * lim);
+          var y = -lim + ((gy + 0.5) / GRID3_Y) * (2 * lim);
+          var z = -lim + ((gz + 0.5) / GRID3_Z) * (2 * lim);
+          var f = fieldAt3(x, y, z, tAnim);
+          var fl = Math.sqrt(f.x * f.x + f.y * f.y + f.z * f.z);
+          var inv = fl > 1e-9 ? 1 / fl : 0;
+          var mx = f.x * inv;
+          var my = f.y * inv;
+          var mz = f.z * inv;
+          var magNorm = Math.min(1, fl * 1.5);
+          var L = arrowScale * (0.35 + 0.65 * magNorm);
+          vectorPosArr[idx++] = x;
+          vectorPosArr[idx++] = y;
+          vectorPosArr[idx++] = z;
+          vectorPosArr[idx++] = x + mx * L;
+          vectorPosArr[idx++] = y + my * L;
+          vectorPosArr[idx++] = z + mz * L;
+        }
       }
     }
     vectorGeom.attributes.position.needsUpdate = true;
@@ -443,25 +382,24 @@
   function setVectorsVisible(on) {
     showVectors = !!on;
     ensureVectorOverlay();
-    if (vectorLines) {
-      vectorLines.visible = showVectors;
-    }
+    if (vectorLines) vectorLines.visible = showVectors;
     var btn = document.getElementById('btn-show-vectors');
-    if (btn) {
-      btn.setAttribute('aria-pressed', showVectors ? 'true' : 'false');
-    }
+    if (btn) btn.setAttribute('aria-pressed', showVectors ? 'true' : 'false');
     try {
-      sessionStorage.setItem('tags-vectorfield-vectors', showVectors ? '1' : '0');
+      sessionStorage.setItem('tags-vectorfield-3d-vectors', showVectors ? '1' : '0');
     } catch (e) {}
   }
 
   function layoutParticles() {
     var n = effectiveParticles;
+    var span = WORLD_HALF * 0.92;
     for (var i = 0; i < n; i++) {
-      positions[i * 3 + 0] = (Math.random() - 0.5) * worldW * 1.9;
-      positions[i * 3 + 1] = (Math.random() - 0.5) * worldH * 1.9;
-      velocities[i * 2 + 0] = 0;
-      velocities[i * 2 + 1] = 0;
+      positions[i * 3 + 0] = (Math.random() - 0.5) * 2 * span;
+      positions[i * 3 + 1] = (Math.random() - 0.5) * 2 * span;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 2 * span;
+      velocities[i * 3 + 0] = 0;
+      velocities[i * 3 + 1] = 0;
+      velocities[i * 3 + 2] = 0;
     }
     posAttr.needsUpdate = true;
   }
@@ -472,42 +410,46 @@
     var h = window.innerHeight;
     renderer.setPixelRatio(dpr);
     renderer.setSize(w, h, false);
-    var aspect = w / h;
-    worldH = 520;
-    worldW = worldH * aspect;
-    camera.left = -worldW / 2;
-    camera.right = worldW / 2;
-    camera.top = worldH / 2;
-    camera.bottom = -worldH / 2;
+    camera.aspect = w / Math.max(1, h);
     camera.updateProjectionMatrix();
     syncAnchorLabelPositions();
   }
 
-  /**
-   * Min–max per axis: raw (x,y) → roughly [-1, 1]×[-1, 1] using bounds over all given points.
-   */
-  function embeddingMinMaxNormalizer(points) {
+  function fallbackZFrom2D(ex, ey) {
+    return (
+      0.55 * Math.sin(ex * 4.2 + ey * 2.7) * Math.cos(ex * 1.9 - ey * 3.1)
+    );
+  }
+
+  function embeddingMinMaxNormalizer3D(points) {
     var minX = Infinity;
     var maxX = -Infinity;
     var minY = Infinity;
     var maxY = -Infinity;
+    var minZ = Infinity;
+    var maxZ = -Infinity;
     for (var i = 0; i < points.length; i++) {
       var p = points[i];
       var x = Number(p[0]);
       var y = Number(p[1]);
+      var z = Number(p[2]);
       if (x < minX) minX = x;
       if (x > maxX) maxX = x;
       if (y < minY) minY = y;
       if (y > maxY) maxY = y;
+      if (z < minZ) minZ = z;
+      if (z > maxZ) maxZ = z;
     }
     var rx = maxX - minX;
     var ry = maxY - minY;
-    function toNorm(x, y) {
+    var rz = maxZ - minZ;
+    function toNorm(x, y, z) {
       var nx = rx > 1e-12 ? ((Number(x) - minX) / rx) * 2 - 1 : 0;
       var ny = ry > 1e-12 ? ((Number(y) - minY) / ry) * 2 - 1 : 0;
-      return [nx, ny];
+      var nz = rz > 1e-12 ? ((Number(z) - minZ) / rz) * 2 - 1 : 0;
+      return [nx, ny, nz];
     }
-    return { toNorm: toNorm, minX: minX, maxX: maxX, minY: minY, maxY: maxY, rx: rx, ry: ry };
+    return { toNorm: toNorm };
   }
 
   function buildAnchorsFromEmb(tagRows, emb) {
@@ -531,80 +473,121 @@
       return;
     }
 
-    var map = Object.create(null);
+    var map2 = Object.create(null);
+    var map3 = Object.create(null);
+    var has3 =
+      Array.isArray(emb.vectors3d) && emb.vectors3d.length === emb.words.length;
     for (var e = 0; e < emb.words.length; e++) {
-      map[normTag(emb.words[e])] = emb.vectors2d[e];
+      var k = normTag(emb.words[e]);
+      map2[k] = emb.vectors2d[e];
+      if (has3) map3[k] = emb.vectors3d[e];
     }
 
     var allPts = [];
-    for (var j = 0; j < emb.vectors2d.length; j++) {
-      var vv = emb.vectors2d[j];
-      if (vv && vv.length >= 2) allPts.push([vv[0], vv[1]]);
+    for (var j = 0; j < emb.words.length; j++) {
+      var v2 = emb.vectors2d[j];
+      if (!v2 || v2.length < 2) continue;
+      var ex = Number(v2[0]);
+      var ey = Number(v2[1]);
+      var v3 = has3 ? emb.vectors3d[j] : null;
+      if (v3 && v3.length >= 3) {
+        allPts.push([Number(v3[0]), Number(v3[1]), Number(v3[2])]);
+      } else {
+        allPts.push([ex, ey, fallbackZFrom2D(ex, ey)]);
+      }
     }
-    var nrm =
-      allPts.length > 0 ? embeddingMinMaxNormalizer(allPts) : null;
 
-    var scaleX = worldW * 0.48;
-    var scaleY = worldH * 0.48;
-    var legacyScale = worldW * 0.42;
+    var nrm = allPts.length > 0 ? embeddingMinMaxNormalizer3D(allPts) : null;
+    var scale = WORLD_HALF * 0.48;
 
     for (var i = 0; i < sorted.length; i++) {
       var row = sorted[i];
       var nm = normTag(row.name);
-      var v = map[nm];
-      if (!v || v.length < 2) continue;
-      var ex = Number(v[0]);
-      var ey = Number(v[1]);
+      var v2 = map2[nm];
+      if (!v2 || v2.length < 2) continue;
+      var ex = Number(v2[0]);
+      var ey = Number(v2[1]);
+      var raw3;
+      var v3r = map3[nm];
+      if (v3r && v3r.length >= 3) {
+        raw3 = [Number(v3r[0]), Number(v3r[1]), Number(v3r[2])];
+      } else {
+        raw3 = [ex, ey, fallbackZFrom2D(ex, ey)];
+      }
       var nx;
       var ny;
+      var nz;
       var px;
       var py;
+      var pz;
       var dx;
       var dy;
+      var dz;
       if (nrm) {
-        var nn = nrm.toNorm(ex, ey);
+        var nn = nrm.toNorm(raw3[0], raw3[1], raw3[2]);
         nx = nn[0];
         ny = nn[1];
-        px = nx * scaleX;
-        py = ny * scaleY;
-        var lenN = Math.sqrt(nx * nx + ny * ny);
+        nz = nn[2];
+        px = nx * scale;
+        py = ny * scale;
+        pz = nz * scale;
+        var lenN = Math.sqrt(nx * nx + ny * ny + nz * nz);
         if (lenN > 1e-6) {
           dx = nx / lenN;
           dy = ny / lenN;
+          dz = nz / lenN;
         } else {
-          var lenR = Math.sqrt(ex * ex + ey * ey) + 1e-6;
-          dx = ex / lenR;
-          dy = ey / lenR;
+          var lenR =
+            Math.sqrt(raw3[0] * raw3[0] + raw3[1] * raw3[1] + raw3[2] * raw3[2]) +
+            1e-6;
+          dx = raw3[0] / lenR;
+          dy = raw3[1] / lenR;
+          dz = raw3[2] / lenR;
         }
       } else {
-        nx = 0;
-        ny = 0;
-        px = ex * legacyScale;
-        py = ey * legacyScale;
-        var lenL = Math.sqrt(ex * ex + ey * ey) + 1e-6;
+        nx = ny = nz = 0;
+        px = ex * scale;
+        py = ey * scale;
+        pz = raw3[2] * scale;
+        var lenL =
+          Math.sqrt(ex * ex + ey * ey + raw3[2] * raw3[2]) + 1e-6;
         dx = ex / lenL;
         dy = ey / lenL;
+        dz = raw3[2] / lenL;
       }
       var countWeight = Math.sqrt(row.count + 1);
       anchors.push({
         name: row.name,
-        labelText: row.name + ' ' + nx.toFixed(2) + ',' + ny.toFixed(2),
+        labelText:
+          row.name +
+          ' ' +
+          nx.toFixed(2) +
+          ',' +
+          ny.toFixed(2) +
+          ',' +
+          nz.toFixed(2),
         ex: ex,
         ey: ey,
         nx: nx,
         ny: ny,
+        nz: nz,
         x: px,
         y: py,
+        z: pz,
         dx: dx,
         dy: dy,
+        dz: dz,
         countWeight: countWeight,
       });
     }
+    var src = has3 ? 'API vectors3d' : '2D+z fallback';
     statusEl.textContent =
       effectiveParticles +
       ' pts · ' +
       anchors.length +
-      ' anchors · emb₂D → [-1,1] min/max · world';
+      ' anchors · ' +
+      src +
+      ' · [-1,1]³';
     if (showAnchorLabels) rebuildAnchorLabels();
   }
 
@@ -679,12 +662,12 @@
 
   if (densitySel) {
     try {
-      var saved = sessionStorage.getItem('tags-vectorfield-density');
+      var saved = sessionStorage.getItem('tags-vectorfield-3d-density');
       if (saved && ['auto', 'low', 'med', 'high'].indexOf(saved) >= 0) densitySel.value = saved;
     } catch (e) {}
     densitySel.addEventListener('change', function () {
       try {
-        sessionStorage.setItem('tags-vectorfield-density', densitySel.value);
+        sessionStorage.setItem('tags-vectorfield-3d-density', densitySel.value);
       } catch (e) {}
       syncTierToWebGL();
       resize();
@@ -695,11 +678,8 @@
 
   try {
     var mqRm = window.matchMedia('(prefers-reduced-motion: reduce)');
-    if (mqRm.addEventListener) {
-      mqRm.addEventListener('change', onResize);
-    } else if (mqRm.addListener) {
-      mqRm.addListener(onResize);
-    }
+    if (mqRm.addEventListener) mqRm.addEventListener('change', onResize);
+    else if (mqRm.addListener) mqRm.addListener(onResize);
   } catch (e) {}
 
   syncTierToWebGL();
@@ -708,11 +688,11 @@
   window.addEventListener('resize', onResize);
   layoutParticles();
 
-  (function initAnchorLabelToggle() {
+  (function initAnchorToggle() {
     var btn = document.getElementById('btn-anchor-labels');
     if (!btn) return;
     try {
-      if (sessionStorage.getItem('tags-vectorfield-anchor-labels') === '1') {
+      if (sessionStorage.getItem('tags-vectorfield-3d-anchor-labels') === '1') {
         setAnchorLabelsVisible(true);
       }
     } catch (e) {}
@@ -725,7 +705,7 @@
     var btn = document.getElementById('btn-show-vectors');
     if (!btn) return;
     try {
-      if (sessionStorage.getItem('tags-vectorfield-vectors') === '1') {
+      if (sessionStorage.getItem('tags-vectorfield-3d-vectors') === '1') {
         setVectorsVisible(true);
       }
     } catch (e) {}
@@ -736,12 +716,13 @@
 
   TagsVisControls.wire({
     onExport: function () {
+      controls.update();
       renderer.render(scene, camera);
       try {
         var data = renderer.domElement.toDataURL('image/png');
         var a = document.createElement('a');
         a.href = data;
-        a.download = 'vectorfield-' + Date.now() + '.png';
+        a.download = 'vectorfield-3d-' + Date.now() + '.png';
         a.click();
       } catch (e) {
         console.error(e);
@@ -760,26 +741,34 @@
 
   function tick() {
     requestAnimationFrame(tick);
+    controls.update();
     if (document.visibilityState === 'hidden') {
       renderer.render(scene, camera);
       return;
     }
     if (!TagsVisControls.frozen) {
       tAnim += 0.016 * animSlow * FLOW_SPEED;
+      var bound = WORLD_HALF * 0.94;
       for (var i = 0; i < effectiveParticles; i++) {
         var x = positions[i * 3 + 0];
         var y = positions[i * 3 + 1];
-        var f = fieldAt(x, y, tAnim);
-        velocities[i * 2 + 0] =
-          velocities[i * 2 + 0] * 0.92 + f.x * 2.8 * FLOW_SPEED;
-        velocities[i * 2 + 1] =
-          velocities[i * 2 + 1] * 0.92 + f.y * 2.8 * FLOW_SPEED;
-        x += velocities[i * 2 + 0];
-        y += velocities[i * 2 + 1];
-        if (x < -worldW * 0.95 || x > worldW * 0.95) x = (Math.random() - 0.5) * worldW * 1.6;
-        if (y < -worldH * 0.95 || y > worldH * 0.95) y = (Math.random() - 0.5) * worldH * 1.6;
+        var z = positions[i * 3 + 2];
+        var f = fieldAt3(x, y, z, tAnim);
+        velocities[i * 3 + 0] =
+          velocities[i * 3 + 0] * 0.92 + f.x * 2.8 * FLOW_SPEED;
+        velocities[i * 3 + 1] =
+          velocities[i * 3 + 1] * 0.92 + f.y * 2.8 * FLOW_SPEED;
+        velocities[i * 3 + 2] =
+          velocities[i * 3 + 2] * 0.92 + f.z * 2.8 * FLOW_SPEED;
+        x += velocities[i * 3 + 0];
+        y += velocities[i * 3 + 1];
+        z += velocities[i * 3 + 2];
+        if (x < -bound || x > bound) x = (Math.random() - 0.5) * 2 * bound * 0.85;
+        if (y < -bound || y > bound) y = (Math.random() - 0.5) * 2 * bound * 0.85;
+        if (z < -bound || z > bound) z = (Math.random() - 0.5) * 2 * bound * 0.85;
         positions[i * 3 + 0] = x;
         positions[i * 3 + 1] = y;
+        positions[i * 3 + 2] = z;
       }
       posAttr.needsUpdate = true;
     }
@@ -787,6 +776,7 @@
       ensureVectorOverlay();
       updateVectorFieldOverlay();
     }
+    if (showAnchorLabels) syncAnchorLabelPositions();
     renderer.render(scene, camera);
   }
 

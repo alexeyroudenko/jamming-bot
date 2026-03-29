@@ -64,6 +64,7 @@
     <a href="/tags/3d/">3D cloud</a>
     <a href="/tags/constellation/">constellation</a>
     <a href="/tags/vectorfield/">vector field</a>
+    <a href="/tags/vectorfield-3d/">vector 3D</a>
     <a href="/tags/chaos-attractor/">chaos</a>
     <a href="/geo/">geo globe</a>
     <a href="/tags/phrases/">phrases</a>
@@ -77,7 +78,8 @@
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
 <script>
 (function () {
-  var API = '/api/tags/get/';
+  /** TEMP: remote tags list — revert to '/api/tags/get/' for same-origin */
+  var API = 'https://jamming-bot.arthew0.online/api/tags/get/';
   var REFRESH_INTERVAL = 30000;
   var REPEL_RADIUS = 150;
   var REPEL_STRENGTH = 80;

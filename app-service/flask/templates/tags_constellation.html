@@ -15,6 +15,7 @@
     <a href="/tags/">2D cloud</a>
     <a href="/tags/3d/">3D cloud</a>
     <a href="/tags/vectorfield/">vector field</a>
+    <a href="/tags/vectorfield-3d/">vector 3D</a>
     <a href="/tags/chaos-attractor/">chaos</a>
     <a href="/tags/phrases/">phrases</a>
   </div>
@@ -35,7 +36,8 @@
 <script src="{{ url_for('static', filename='tags_vis_controls.js') }}"></script>
 <script>
 (function () {
-  var TAGS_API = '/api/tags/get/';
+  /** TEMP: remote tags list — revert to '/api/tags/get/' for same-origin */
+  var TAGS_API = 'https://jamming-bot.arthew0.online/api/tags/get/';
   var EMB_API = '/api/tags/embeddings/';
   var MAX_TAGS = 56;
   var MAX_DPR = 2;

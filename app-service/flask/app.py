@@ -410,6 +410,12 @@ def tags_vectorfield():
     return render_template('tags_vectorfield.html')
 
 
+@app.route('/tags/vectorfield-3d/')
+@cross_origin()
+def tags_vectorfield_3d():
+    return render_template('tags_vectorfield_3d.html')
+
+
 @app.route('/tags/chaos-attractor/')
 @cross_origin()
 def tags_chaos_attractor():

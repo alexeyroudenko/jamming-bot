@@ -4,6 +4,7 @@ spaCy vectors (en_core_web_md) for tag visualizations: 2D projection + similarit
 from __future__ import annotations
 
 import logging
+import math
 import threading
 from typing import Any, Dict, List, Tuple
 
@@ -35,11 +36,20 @@ def build_embeddings_response(
     max_links: int = 160,
 ) -> Dict[str, Any]:
     """
-    Returns { ok, mode, words, vectors2d, links, error? }
+    Returns { ok, mode, words, vectors2d, vectors3d?, links, error? }
+    vectors2d: first two components of each doc vector divided by vector_norm (unit-norm slice).
+    vectors3d: first three components / vector_norm — same convention, for 3D tag visualizations.
     links: [{ "i", "j", "sim" }] indices into words
     """
     if not isinstance(words, list):
-        return {"ok": False, "error": "words must be a list", "words": [], "vectors2d": [], "links": []}
+        return {
+            "ok": False,
+            "error": "words must be a list",
+            "words": [],
+            "vectors2d": [],
+            "vectors3d": [],
+            "links": [],
+        }
 
     clean: List[str] = []
     seen = set()
@@ -62,6 +72,7 @@ def build_embeddings_response(
             "error": "spaCy en_core_web_md not loaded",
             "words": clean,
             "vectors2d": [],
+            "vectors3d": [],
             "links": [],
         }
 
@@ -74,21 +85,27 @@ def build_embeddings_response(
             valid_words.append(w)
 
     if len(docs) < 2:
+        v2 = _fallback_2d(valid_words)
+        v3 = _fallback_3d_from_2d(v2)
         return {
             "ok": True,
             "mode": "sparse",
             "words": valid_words,
-            "vectors2d": _fallback_2d(valid_words),
+            "vectors2d": v2,
+            "vectors3d": v3,
             "links": [],
         }
 
     vectors2d: List[List[float]] = []
+    vectors3d: List[List[float]] = []
     for d in docs:
         v = d.vector
         norm = float(d.vector_norm)
         x = float(v[0]) / norm if norm else 0.0
         y = float(v[1]) / norm if norm else 0.0
+        z = float(v[2]) / norm if norm else 0.0
         vectors2d.append([x, y])
+        vectors3d.append([x, y, z])
 
     pairs: List[Tuple[int, int, float]] = []
     n = len(docs)
@@ -107,8 +124,22 @@ def build_embeddings_response(
         "mode": "vectors",
         "words": valid_words,
         "vectors2d": vectors2d,
+        "vectors3d": vectors3d,
         "links": links,
     }
+
+
+def _fallback_3d_from_2d(vectors2d: List[List[float]]) -> List[List[float]]:
+    """Synthetic z from 2D fallback coords for sparse mode (deterministic, bounded)."""
+    out: List[List[float]] = []
+    for i, row in enumerate(vectors2d):
+        if len(row) < 2:
+            out.append([0.0, 0.0, 0.0])
+            continue
+        ex, ey = float(row[0]), float(row[1])
+        ez = 0.55 * math.sin(ex * 4.2 + ey * 2.7) * math.cos(ex * 1.9 - ey * 3.1)
+        out.append([ex, ey, ez])
+    return out
 
 
 def _fallback_2d(words: List[str]) -> List[List[float]]:
