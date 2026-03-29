@@ -29,6 +29,7 @@
     <option value="high">High</option>
   </select>
   <button type="button" class="tags-vis-btn" id="btn-anchor-labels" aria-pressed="false" title="Show anchors at influence centers; drag handles to move and reshape the field">Anchor labels</button>
+  <button type="button" class="tags-vis-btn" id="btn-show-vectors" aria-pressed="false" title="Overlay flow direction on a grid (same field as particles)">Field vectors</button>
   <button type="button" class="tags-vis-btn" id="btn-freeze">Freeze</button>
   <button type="button" class="tags-vis-btn" id="btn-export">Export PNG</button>
   <span class="tags-vis-status" id="tags-vis-status"></span>
@@ -40,7 +41,7 @@
   <canvas id="vf"></canvas>
   <div id="vf-anchors-layer" class="vf-anchors-layer is-hidden" aria-hidden="true"></div>
 </div>
-<p class="tags-vis-hint">White particles · turn on Anchor labels to see handles at field influence centers — drag handles to move anchors and reshape the field</p>
+<p class="tags-vis-hint">White particles · Field vectors: cyan ticks = local flow direction · Anchor labels: drag handles to move anchors and reshape the field</p>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
 <!-- Three.js r128 via unpkg (same as tags_3d / chaos). If CSP blocks unpkg, copy three.min.js to flask/static/ and point src here. -->
@@ -76,7 +77,14 @@
   var reloadTimer = null;
   var anchorLayer = document.getElementById('vf-anchors-layer');
   var showAnchorLabels = false;
+  var showVectors = false;
   var dragAnchorIndex = -1;
+  /** Grid for vector overlay (world-space samples of fieldAt). */
+  var GRID_NX = 26;
+  var GRID_NY = 16;
+  var vectorGeom = null;
+  var vectorLines = null;
+  var vectorPosArr = null;
 
   function getDensityPref() {
     if (densitySel && densitySel.value) return densitySel.value;
@@ -204,11 +212,15 @@
   function anchorTooltip(a) {
     return (
       (a.name || '') +
-      ' · emb₂D (' +
+      ' · norm ∈ [-1,1] (' +
+      (a.nx != null ? Number(a.nx).toFixed(3) : '?') +
+      ', ' +
+      (a.ny != null ? Number(a.ny).toFixed(3) : '?') +
+      ') · raw emb₂D (' +
       (a.ex != null ? Number(a.ex).toFixed(4) : '?') +
       ', ' +
       (a.ey != null ? Number(a.ey).toFixed(4) : '?') +
-      ') · influence center world (' +
+      ') · world (' +
       (a.x != null ? Number(a.x).toFixed(1) : '?') +
       ', ' +
       (a.y != null ? Number(a.y).toFixed(1) : '?') +
@@ -369,6 +381,76 @@
     });
     points = new THREE.Points(geom, mat);
     scene.add(points);
+    ensureVectorOverlay();
+  }
+
+  function ensureVectorOverlay() {
+    if (vectorLines) return;
+    var maxSeg = GRID_NX * GRID_NY;
+    vectorPosArr = new Float32Array(maxSeg * 6);
+    vectorGeom = new THREE.BufferGeometry();
+    vectorGeom.setAttribute(
+      'position',
+      new THREE.BufferAttribute(vectorPosArr, 3).setUsage(THREE.DynamicDrawUsage)
+    );
+    vectorLines = new THREE.LineSegments(
+      vectorGeom,
+      new THREE.LineBasicMaterial({
+        color: 0x22d3ee,
+        transparent: true,
+        opacity: 0.52,
+        depthTest: true,
+        depthWrite: false,
+      })
+    );
+    vectorLines.visible = false;
+    vectorLines.frustumCulled = false;
+    vectorLines.renderOrder = 1;
+    scene.add(vectorLines);
+  }
+
+  function updateVectorFieldOverlay() {
+    if (!showVectors || !vectorGeom || !vectorPosArr) return;
+    var halfW = worldW * 0.48;
+    var halfH = worldH * 0.48;
+    var arrowScale = Math.min(worldW, worldH) * 0.042;
+    var idx = 0;
+    for (var j = 0; j < GRID_NY; j++) {
+      for (var i = 0; i < GRID_NX; i++) {
+        var x = -halfW + ((i + 0.5) / GRID_NX) * (2 * halfW);
+        var y = -halfH + ((j + 0.5) / GRID_NY) * (2 * halfH);
+        var f = fieldAt(x, y, tAnim);
+        var flen = Math.sqrt(f.x * f.x + f.y * f.y);
+        var inv = flen > 1e-9 ? 1 / flen : 0;
+        var nx = f.x * inv;
+        var ny = f.y * inv;
+        var magNorm = Math.min(1, flen * 1.75);
+        var L = arrowScale * (0.38 + 0.62 * magNorm);
+        vectorPosArr[idx++] = x;
+        vectorPosArr[idx++] = y;
+        vectorPosArr[idx++] = 0;
+        vectorPosArr[idx++] = x + nx * L;
+        vectorPosArr[idx++] = y + ny * L;
+        vectorPosArr[idx++] = 0;
+      }
+    }
+    vectorGeom.attributes.position.needsUpdate = true;
+    vectorGeom.computeBoundingSphere();
+  }
+
+  function setVectorsVisible(on) {
+    showVectors = !!on;
+    ensureVectorOverlay();
+    if (vectorLines) {
+      vectorLines.visible = showVectors;
+    }
+    var btn = document.getElementById('btn-show-vectors');
+    if (btn) {
+      btn.setAttribute('aria-pressed', showVectors ? 'true' : 'false');
+    }
+    try {
+      sessionStorage.setItem('tags-vectorfield-vectors', showVectors ? '1' : '0');
+    } catch (e) {}
   }
 
   function layoutParticles() {
@@ -399,6 +481,33 @@
     syncAnchorLabelPositions();
   }
 
+  /**
+   * Min–max per axis: raw (x,y) → roughly [-1, 1]×[-1, 1] using bounds over all given points.
+   */
+  function embeddingMinMaxNormalizer(points) {
+    var minX = Infinity;
+    var maxX = -Infinity;
+    var minY = Infinity;
+    var maxY = -Infinity;
+    for (var i = 0; i < points.length; i++) {
+      var p = points[i];
+      var x = Number(p[0]);
+      var y = Number(p[1]);
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+    var rx = maxX - minX;
+    var ry = maxY - minY;
+    function toNorm(x, y) {
+      var nx = rx > 1e-12 ? ((Number(x) - minX) / rx) * 2 - 1 : 0;
+      var ny = ry > 1e-12 ? ((Number(y) - minY) / ry) * 2 - 1 : 0;
+      return [nx, ny];
+    }
+    return { toNorm: toNorm, minX: minX, maxX: maxX, minY: minY, maxY: maxY, rx: rx, ry: ry };
+  }
+
   function buildAnchorsFromEmb(tagRows, emb) {
     anchors = [];
     var sorted = tagRows
@@ -425,39 +534,75 @@
       map[normTag(emb.words[e])] = emb.vectors2d[e];
     }
 
-    var scale = worldW * 0.42;
+    var allPts = [];
+    for (var j = 0; j < emb.vectors2d.length; j++) {
+      var vv = emb.vectors2d[j];
+      if (vv && vv.length >= 2) allPts.push([vv[0], vv[1]]);
+    }
+    var nrm =
+      allPts.length > 0 ? embeddingMinMaxNormalizer(allPts) : null;
+
+    var scaleX = worldW * 0.48;
+    var scaleY = worldH * 0.48;
+    var legacyScale = worldW * 0.42;
+
     for (var i = 0; i < sorted.length; i++) {
       var row = sorted[i];
       var nm = normTag(row.name);
       var v = map[nm];
       if (!v || v.length < 2) continue;
-      var px = v[0] * scale;
-      var py = v[1] * scale;
-      var dx = v[0];
-      var dy = v[1];
-      var len = Math.sqrt(dx * dx + dy * dy) + 1e-6;
+      var ex = Number(v[0]);
+      var ey = Number(v[1]);
+      var nx;
+      var ny;
+      var px;
+      var py;
+      var dx;
+      var dy;
+      if (nrm) {
+        var nn = nrm.toNorm(ex, ey);
+        nx = nn[0];
+        ny = nn[1];
+        px = nx * scaleX;
+        py = ny * scaleY;
+        var lenN = Math.sqrt(nx * nx + ny * ny);
+        if (lenN > 1e-6) {
+          dx = nx / lenN;
+          dy = ny / lenN;
+        } else {
+          var lenR = Math.sqrt(ex * ex + ey * ey) + 1e-6;
+          dx = ex / lenR;
+          dy = ey / lenR;
+        }
+      } else {
+        nx = 0;
+        ny = 0;
+        px = ex * legacyScale;
+        py = ey * legacyScale;
+        var lenL = Math.sqrt(ex * ex + ey * ey) + 1e-6;
+        dx = ex / lenL;
+        dy = ey / lenL;
+      }
       var countWeight = Math.sqrt(row.count + 1);
-      var ex = v[0];
-      var ey = v[1];
       anchors.push({
         name: row.name,
-        labelText:
-          row.name +
-          ' ' +
-          ex.toFixed(2) +
-          ',' +
-          ey.toFixed(2),
+        labelText: row.name + ' ' + nx.toFixed(2) + ',' + ny.toFixed(2),
         ex: ex,
         ey: ey,
+        nx: nx,
+        ny: ny,
         x: px,
         y: py,
-        dx: dx / len,
-        dy: dy / len,
+        dx: dx,
+        dy: dy,
         countWeight: countWeight,
       });
     }
     statusEl.textContent =
-      effectiveParticles + ' pts · ' + anchors.length + ' anchors · embeddings';
+      effectiveParticles +
+      ' pts · ' +
+      anchors.length +
+      ' anchors · emb₂D → [-1,1] min/max · world';
     if (showAnchorLabels) rebuildAnchorLabels();
   }
 
@@ -574,6 +719,19 @@
     });
   })();
 
+  (function initVectorsToggle() {
+    var btn = document.getElementById('btn-show-vectors');
+    if (!btn) return;
+    try {
+      if (sessionStorage.getItem('tags-vectorfield-vectors') === '1') {
+        setVectorsVisible(true);
+      }
+    } catch (e) {}
+    btn.addEventListener('click', function () {
+      setVectorsVisible(!showVectors);
+    });
+  })();
+
   TagsVisControls.wire({
     onExport: function () {
       renderer.render(scene, camera);
@@ -622,6 +780,10 @@
         positions[i * 3 + 1] = y;
       }
       posAttr.needsUpdate = true;
+    }
+    if (showVectors) {
+      ensureVectorOverlay();
+      updateVectorFieldOverlay();
     }
     renderer.render(scene, camera);
   }

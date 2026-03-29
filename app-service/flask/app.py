@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import json
+import random
 import logging
 import threading
 import requests
@@ -71,6 +72,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 logger.info(f"Sentry initialized for environment: {ENVIRONMENT}" if SENTRY_DSN else "Sentry not configured")
+
+# Candidates for GET /api/tags/add/ (one random token per request).
+RANDOM_TAG_WORDS = (
+    "flow", "signal", "noise", "drift", "pulse", "wave", "node", "edge", "mesh", "field",
+    "vector", "orbit", "spark", "shard", "glyph", "trace", "echo", "fog", "haze", "glow",
+    "static", "stream", "buffer", "frame", "pixel", "shader", "vertex", "cluster", "lattice",
+    "cipher", "token", "syntax", "kernel", "thread", "socket", "packet", "route", "bridge",
+    "mirror", "prism", "spectrum", "phase", "amplitude", "resonance", "harmonic", "cadence",
+    "entropy", "chaos", "attractor", "manifold", "tensor", "matrix", "gradient", "flux",
+    "nebula", "comet", "aurora", "tide", "current", "vapor", "crystal", "fossil", "ember",
+    "moth", "raven", "heron", "oak", "lichen", "moss", "root", "branch", "seed", "petal",
+    "amber", "jade", "cobalt", "vermilion", "umber", "slate", "obsidian", "marble", "sand",
+    "rune", "sigil", "mantra", "verse", "stanza", "folio", "archive", "ledger",
+)
 
 # ---------------------------------------------------------------------------
 # OpenTelemetry / Jaeger
@@ -166,7 +181,7 @@ AUTH_PASS = os.getenv("AUTH_PASS", "x")
 
 PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
                    "/tags/", "/geo/", "/screenshots/", "/api/tags/get/", "/api/tags/combine/",
-                   "/api/tags/embeddings/",
+                   "/api/tags/embeddings/", "/api/tags/add/",
                    "/api/step/", "/api/steps", "/api/storage_step/", "/api/storage_latest/",
                    "/api/storage_geo/")
 
@@ -1037,7 +1052,7 @@ def add_tag():
 @cross_origin()
 def add_tags():
     if request.method == 'GET':
-        tag = "hello"
+        tag = random.choice(RANDOM_TAG_WORDS)
         url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
         headers = {'content-type': 'application/json'}
         data = {'name': tag, "count": 0}
@@ -1046,7 +1061,8 @@ def add_tags():
             body = _tags_response_json(r)
             if not r.ok:
                 return jsonify({"error": "Tags service error", "status": r.status_code, "detail": body or r.text[:200]}), 502
-            return jsonify({"ok": True, "tag": tag, "response": body} if body is not None else f"ok from GET (status {r.status_code})")
+            socketio.emit('tags_updated')
+            return jsonify({"ok": True, "tag": tag, "response": body} if body is not None else {"ok": True, "tag": tag})
         except requests.exceptions.RequestException as e:
             return jsonify({"error": "Tags service unreachable", "detail": str(e)}), 503
 

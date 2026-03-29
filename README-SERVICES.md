@@ -47,4 +47,15 @@ Full-screen pages are served by **app-service** (Flask), same host paths as `/ta
 
 **JSON API:** `POST /api/tags/embeddings/` with body `{"words": ["tag1", ...], "max_words": 48, "min_sim": 0.38, "max_links": 160}` — returns `words`, `vectors2d`, `links` (uses `en_core_web_md` in the app-service image). If the model is missing, the client falls back to co-occurrence / procedural fields.
 
+### Minimal Docker for `/tags/vectorfield/`
+
+Only **Redis**, **Postgres**, **tags-service**, and **app-service (Flask)** — no workers, Jaeger, or ingress.
+
+```bash
+cp .env.tags-vectorfield.example .env.tags-vectorfield
+docker compose -f docker-compose.tags-vectorfield.yml --env-file .env.tags-vectorfield up --build
+```
+
+Open **http://localhost:5000/tags/vectorfield/**. Tags API is also on **http://localhost:8003** (mapped from tags-service). With an empty DB the page still runs (fallback field); add tags via your usual flow or `POST` to tags-service `/api/v1/tags/`.
+
 Navigation links are also added from `/tags/`, `/tags/3d/`, and `/tags/phrases/`.
