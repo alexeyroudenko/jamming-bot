@@ -1,4 +1,6 @@
 from typing import List
+
+from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException
 from app.api.models import TagIn, TagOut
 
@@ -108,7 +110,7 @@ def analyze_text(texts):
 
 semantic = APIRouter()
 
-from pydantic import BaseModel
+
 class SemanticCalculate(BaseModel):
     text: str
 
@@ -193,3 +195,59 @@ async def combine_tags(data: CombineIn):
             break
 
     return {"phrases": phrases, "count": len(phrases)}
+
+
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+_vader = SentimentIntensityAnalyzer()
+
+
+class SentimentPhrasesIn(BaseModel):
+    phrases: List[str]
+    limit: int = 256
+
+
+def _sentiment_stats_for_phrases(phrases: List[str], limit: int) -> dict:
+    trimmed = [p.strip() for p in phrases if p and p.strip()][: max(0, min(limit, 512))]
+    items = []
+    for text in trimmed:
+        scores = _vader.polarity_scores(text)
+        compound = float(scores["compound"])
+        neu = float(scores["neu"])
+        subjectivity = max(0.0, min(1.0, 1.0 - neu))
+        items.append(
+            {"text": text, "polarity": compound, "subjectivity": subjectivity}
+        )
+
+    n = len(items)
+    if n == 0:
+        return {
+            "items": [],
+            "stats": {
+                "mean_polarity": 0.0,
+                "pct_positive": 0.0,
+                "pct_negative": 0.0,
+                "pct_neutral": 0.0,
+                "count": 0,
+            },
+        }
+
+    pos = sum(1 for it in items if it["polarity"] > 0.05)
+    neg = sum(1 for it in items if it["polarity"] < -0.05)
+    neu_c = n - pos - neg
+    mean_pol = sum(it["polarity"] for it in items) / n
+    return {
+        "items": items,
+        "stats": {
+            "mean_polarity": mean_pol,
+            "pct_positive": pos / n,
+            "pct_negative": neg / n,
+            "pct_neutral": neu_c / n,
+            "count": n,
+        },
+    }
+
+
+@semantic.post("/sentiment-phrases/")
+async def sentiment_phrases(data: SentimentPhrasesIn):
+    return _sentiment_stats_for_phrases(data.phrases, data.limit)

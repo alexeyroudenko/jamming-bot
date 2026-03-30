@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jamming bot — Sentiment vortex</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='tags_vis_shared.css') }}">
+  <style>
+    body.tags-sentiment-vortex {
+      background: #000;
+    }
+    body.tags-sentiment-vortex .tags-vis-nav {
+      background: rgba(0, 0, 0, 0.92);
+    }
+    .sv-label {
+      color: #a1a1aa;
+      font-size: 10px;
+      line-height: 1.2;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      max-width: min(220px, 36vw);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-shadow: 0 0 6px #000, 0 1px 3px #000;
+      pointer-events: none;
+      margin-top: -14px;
+    }
+    .tags-vis-grain {
+      pointer-events: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      opacity: 0.07;
+      mix-blend-mode: overlay;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+  </style>
+</head>
+<body class="tags-vis-body tags-sentiment-vortex">
+
+<nav class="tags-vis-nav" aria-label="Subpages">
+  <div>
+    <span class="tags-vis-title">Sentiment vortex</span>
+    <a href="/">← home</a>
+    <a href="/tags/">2D cloud</a>
+    <a href="/tags/3d/">3D cloud</a>
+    <a href="/tags/constellation/">constellation</a>
+    <a href="/tags/vectorfield/">vector field</a>
+    <a href="/tags/vectorfield-3d/">vector 3D</a>
+    <a href="/tags/phrases/">phrases</a>
+    <a href="/tags/chaos-attractor/">chaos</a>
+  </div>
+</nav>
+
+<div class="tags-vis-toolbar">
+  <button type="button" class="tags-vis-btn" id="btn-show-text" aria-pressed="false">Show text</button>
+  <button type="button" class="tags-vis-btn" id="btn-auto-camera" aria-pressed="false">Auto camera</button>
+  <button type="button" class="tags-vis-btn" id="btn-freeze">Freeze</button>
+  <button type="button" class="tags-vis-btn" id="btn-export">Export PNG</button>
+  <span class="tags-vis-status" id="tags-vis-status"></span>
+</div>
+
+<div id="api-error" class="tags-vis-banner" role="alert"></div>
+<div class="tags-vis-scanlines" aria-hidden="true"></div>
+<div class="tags-vis-grain" aria-hidden="true"></div>
+<div class="tags-vis-canvas-host"><canvas id="vortex"></canvas></div>
+<p class="tags-vis-hint">VADER compound → radial drift · neutral fraction → subjectivity noise · refresh on tags_updated</p>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/renderers/CSS2DRenderer.js" crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='tags_vis_controls.js') }}"></script>
+<script>
+(function () {
+  var API = '/api/tags/sentiment-vortex/';
+  var MAX_PARTICLES = 360;
+  var MAX_DPR = 2;
+  var REFRESH_MS = 60000;
+  var DT = 0.016;
+  var ROT_SCALE = 1 / 3;
+
+  var warm = new THREE.Vector3(0.95, 0.42, 0.28);
+  var cool = new THREE.Vector3(0.25, 0.55, 0.98);
+  var muted = new THREE.Vector3(0.45, 0.48, 0.52);
+
+  var statusEl = document.getElementById('tags-vis-status');
+  var banner = document.getElementById('api-error');
+  var canvas = document.getElementById('vortex');
+
+  var renderer, labelRenderer, scene, camera, controls;
+  var points, trailPoints;
+  var geom, trailGeom;
+  var labelObjs = [];
+  var showTextLabels = false;
+  var autoCamera = false;
+  var autoT = 0;
+  var autoSphere = new THREE.Spherical();
+  var autoCamPos = new THREE.Vector3();
+  var autoLookTarget = new THREE.Vector3();
+  var nActive = 0;
+  var lastMeanPolarity = null;
+  var glitchUntil = 0;
+  var kickOmega = 0;
+
+  var state = {
+    theta: [],
+    r: [],
+    z: [],
+    polarity: [],
+    subjectivity: [],
+    omega: [],
+  };
+
+  function showErr(msg) {
+    banner.textContent = msg;
+    banner.classList.add('visible');
+  }
+  function hideErr() {
+    banner.classList.remove('visible');
+  }
+
+  function colorForPolarity(p) {
+    var t = (p + 1) * 0.5;
+    t = Math.max(0, Math.min(1, t));
+    var a = muted.clone().lerpVectors(muted, cool, Math.max(0, 1 - t * 2));
+    var b = muted.clone().lerpVectors(muted, warm, Math.max(0, t * 2 - 1));
+    var base = t < 0.5 ? a : b;
+    var sat = Math.min(1, Math.abs(p) * 1.15 + 0.2);
+    return base.multiplyScalar(0.35 + 0.65 * sat);
+  }
+
+  function truncPhrase(s, maxLen) {
+    if (!s) return '';
+    if (s.length <= maxLen) return s;
+    return s.slice(0, maxLen - 1) + '…';
+  }
+
+  function updateLabelVisibility() {
+    for (var i = 0; i < labelObjs.length; i++) {
+      labelObjs[i].visible = showTextLabels && i < nActive;
+    }
+  }
+
+  function syncLabelPositions() {
+    if (nActive === 0) return;
+    var pos = geom.attributes.position.array;
+    for (var i = 0; i < nActive; i++) {
+      var ix = i * 3;
+      labelObjs[i].position.set(pos[ix], pos[ix + 1], pos[ix + 2]);
+    }
+  }
+
+  function stepAutoCamera() {
+    autoT += 0.0105;
+    var r =
+      102 +
+      36 * Math.pow(Math.sin(autoT * 0.052), 2) +
+      20 * Math.sin(autoT * 0.127 + 0.4);
+    r = Math.max(78, Math.min(168, r));
+    autoSphere.radius = r;
+    autoSphere.phi = Math.PI * (0.34 + 0.33 * Math.sin(autoT * 0.046 + 0.9));
+    autoSphere.theta = autoT * 0.088 + 0.72 * Math.sin(autoT * 0.035);
+    autoCamPos.setFromSpherical(autoSphere);
+    camera.position.lerp(autoCamPos, 0.034);
+    autoLookTarget.set(
+      18 * Math.sin(autoT * 0.086),
+      11 * Math.sin(autoT * 0.064 + 0.25),
+      15 * Math.cos(autoT * 0.078)
+    );
+    controls.target.lerp(autoLookTarget, 0.042);
+    camera.lookAt(controls.target);
+  }
+
+  function setAutoCamera(on) {
+    autoCamera = on;
+    controls.enabled = !on;
+    var btn = document.getElementById('btn-auto-camera');
+    if (btn) {
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      btn.textContent = on ? 'Auto camera: on' : 'Auto camera';
+    }
+  }
+
+  function initThree() {
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
+    renderer.setClearColor(0x000000, 1);
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(50, 1, 0.1, 800);
+    camera.position.set(0, 0, 120);
+
+    controls = new THREE.OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.target.set(0, 0, 0);
+
+    var amb = new THREE.AmbientLight(0xffffff, 0.35);
+    scene.add(amb);
+
+    var maxP = MAX_PARTICLES;
+    var pos = new Float32Array(maxP * 3);
+    var colors = new Float32Array(maxP * 3);
+    var sizes = new Float32Array(maxP);
+    geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geom.setAttribute('customColor', new THREE.BufferAttribute(colors, 3));
+    geom.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+    var vs = [
+      'attribute float size;',
+      'attribute vec3 customColor;',
+      'varying vec3 vColor;',
+      'void main() {',
+      '  vColor = customColor;',
+      '  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);',
+      '  gl_PointSize = size * (280.0 / max(-mvPosition.z, 4.0));',
+      '  gl_Position = projectionMatrix * mvPosition;',
+      '}',
+    ].join('\n');
+    var fs = [
+      'varying vec3 vColor;',
+      'void main() {',
+      '  vec2 c = gl_PointCoord - vec2(0.5);',
+      '  float d = length(c);',
+      '  if (d > 0.5) discard;',
+      '  float alpha = 1.0 - smoothstep(0.25, 0.5, d);',
+      '  gl_FragColor = vec4(vColor, alpha);',
+      '}',
+    ].join('\n');
+
+    var mat = new THREE.ShaderMaterial({
+      uniforms: {},
+      vertexShader: vs,
+      fragmentShader: fs,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+
+    var tpos = new Float32Array(maxP * 3);
+    var tcolors = new Float32Array(maxP * 3);
+    var tsizes = new Float32Array(maxP);
+    trailGeom = new THREE.BufferGeometry();
+    trailGeom.setAttribute('position', new THREE.BufferAttribute(tpos, 3));
+    trailGeom.setAttribute('customColor', new THREE.BufferAttribute(tcolors, 3));
+    trailGeom.setAttribute('size', new THREE.BufferAttribute(tsizes, 1));
+    var tmat = mat.clone();
+    tmat.opacity = 0.22;
+    tmat.transparent = true;
+    trailPoints = new THREE.Points(trailGeom, tmat);
+    trailPoints.frustumCulled = false;
+    scene.add(trailPoints);
+
+    points = new THREE.Points(geom, mat);
+    points.frustumCulled = false;
+    scene.add(points);
+
+    var labelGroup = new THREE.Group();
+    scene.add(labelGroup);
+    labelObjs.length = 0;
+    for (var li = 0; li < maxP; li++) {
+      var div = document.createElement('div');
+      div.className = 'sv-label';
+      div.textContent = '';
+      var lbl = new THREE.CSS2DObject(div);
+      lbl.visible = false;
+      labelGroup.add(lbl);
+      labelObjs.push(lbl);
+    }
+
+    labelRenderer = new THREE.CSS2DRenderer();
+    labelRenderer.domElement.style.position = 'absolute';
+    labelRenderer.domElement.style.top = '0';
+    labelRenderer.domElement.style.left = '0';
+    labelRenderer.domElement.style.pointerEvents = 'none';
+    var host = document.querySelector('.tags-vis-canvas-host');
+    if (host) host.appendChild(labelRenderer.domElement);
+  }
+
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+    var w = window.innerWidth;
+    var h = window.innerHeight;
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(w, h, false);
+    if (labelRenderer) labelRenderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+
+  function resetState(n) {
+    nActive = n;
+    state.theta.length = n;
+    state.r.length = n;
+    state.z.length = n;
+    state.polarity.length = n;
+    state.subjectivity.length = n;
+    state.omega.length = n;
+    for (var i = 0; i < n; i++) {
+      state.theta[i] = Math.random() * Math.PI * 2;
+      state.r[i] = 8 + Math.random() * 32;
+      state.z[i] = (Math.random() - 0.5) * 8;
+      state.omega[i] = 0.35 + Math.random() * 0.4;
+    }
+  }
+
+  function applyPayload(items) {
+    var n = Math.min(items.length, MAX_PARTICLES);
+    if (n === 0) {
+      nActive = 0;
+      geom.setDrawRange(0, 0);
+      trailGeom.setDrawRange(0, 0);
+      for (var zi = 0; zi < labelObjs.length; zi++) {
+        labelObjs[zi].element.textContent = '';
+        labelObjs[zi].visible = false;
+      }
+      statusEl.textContent = 'no phrases — add tags or wait for combine';
+      return;
+    }
+    resetState(n);
+    for (var i = 0; i < n; i++) {
+      var it = items[i];
+      var p = typeof it.polarity === 'number' ? it.polarity : 0;
+      var s = typeof it.subjectivity === 'number' ? it.subjectivity : 0.5;
+      state.polarity[i] = p;
+      state.subjectivity[i] = s;
+      var txt = typeof it.text === 'string' ? it.text : '';
+      labelObjs[i].element.textContent = truncPhrase(txt, 56);
+    }
+    for (var j = n; j < labelObjs.length; j++) {
+      labelObjs[j].element.textContent = '';
+      labelObjs[j].visible = false;
+    }
+    syncAttributesFromState();
+    updateLabelVisibility();
+    syncLabelPositions();
+  }
+
+  function syncAttributesFromState() {
+    var pos = geom.attributes.position.array;
+    var col = geom.attributes.customColor.array;
+    var sz = geom.attributes.size.array;
+    var tpos = trailGeom.attributes.position.array;
+    var tcol = trailGeom.attributes.customColor.array;
+    var tsz = trailGeom.attributes.size.array;
+
+    for (var i = 0; i < nActive; i++) {
+      var p = state.polarity[i];
+      var s = state.subjectivity[i];
+      var th = state.theta[i];
+      var r = state.r[i];
+      var z = state.z[i];
+      var x = r * Math.cos(th);
+      var y = r * Math.sin(th);
+      var ix = i * 3;
+      pos[ix] = x;
+      pos[ix + 1] = y;
+      pos[ix + 2] = z;
+      var c = colorForPolarity(p);
+      col[ix] = c.x;
+      col[ix + 1] = c.y;
+      col[ix + 2] = c.z;
+      sz[i] = 10 + Math.abs(p) * 18 + s * 8;
+
+      tpos[ix] = x * 0.97;
+      tpos[ix + 1] = y * 0.97;
+      tpos[ix + 2] = z * 0.92;
+      tcol[ix] = col[ix] * 0.45;
+      tcol[ix + 1] = col[ix + 1] * 0.45;
+      tcol[ix + 2] = col[ix + 2] * 0.45;
+      tsz[i] = sz[i] * 0.85;
+    }
+    geom.attributes.position.needsUpdate = true;
+    geom.attributes.customColor.needsUpdate = true;
+    geom.attributes.size.needsUpdate = true;
+    trailGeom.attributes.position.needsUpdate = true;
+    trailGeom.attributes.customColor.needsUpdate = true;
+    trailGeom.attributes.size.needsUpdate = true;
+    geom.setDrawRange(0, nActive);
+    trailGeom.setDrawRange(0, nActive);
+  }
+
+  function stepPhysics() {
+    if (nActive === 0) return;
+    var now = performance.now();
+    var glitch = now < glitchUntil;
+    var gkx = glitch ? (Math.random() - 0.5) * 4 : 0;
+    var gky = glitch ? (Math.random() - 0.5) * 4 : 0;
+
+    var pos = geom.attributes.position.array;
+    var col = geom.attributes.customColor.array;
+    var sz = geom.attributes.size.array;
+    var tpos = trailGeom.attributes.position.array;
+    var tcol = trailGeom.attributes.customColor.array;
+    var tsz = trailGeom.attributes.size.array;
+
+    kickOmega *= 0.96;
+
+    for (var i = 0; i < nActive; i++) {
+      var p = state.polarity[i];
+      var s = state.subjectivity[i];
+      var th = state.theta[i];
+      var r = state.r[i];
+      var z = state.z[i];
+
+      tpos[i * 3] = pos[i * 3];
+      tpos[i * 3 + 1] = pos[i * 3 + 1];
+      tpos[i * 3 + 2] = pos[i * 3 + 2];
+      tcol[i * 3] = col[i * 3] * 0.5;
+      tcol[i * 3 + 1] = col[i * 3 + 1] * 0.5;
+      tcol[i * 3 + 2] = col[i * 3 + 2] * 0.5;
+      tsz[i] = sz[i] * 0.8;
+
+      var w = state.omega[i] + kickOmega * (0.5 + Math.random() * 0.5);
+      th += w * DT * (1 + 0.2 * p) * ROT_SCALE;
+      var drift = p * 14 * DT;
+      if (Math.abs(p) < 0.06) {
+        drift = Math.sin(now * 0.001 + i) * 1.2 * DT;
+      }
+      r += drift;
+      r += (Math.random() - 0.5) * s * 2.8 * DT;
+      r = Math.max(4, Math.min(72, r));
+
+      z += Math.sin(th * 2.1) * 0.04 + (Math.random() - 0.5) * s * 0.12;
+      z *= 0.998;
+
+      state.theta[i] = th;
+      state.r[i] = r;
+      state.z[i] = z;
+
+      var x = r * Math.cos(th) + gkx * s;
+      var y = r * Math.sin(th) + gky * s;
+      var ix = i * 3;
+      pos[ix] = x;
+      pos[ix + 1] = y;
+      pos[ix + 2] = z;
+
+      var c = colorForPolarity(p);
+      col[ix] = c.x;
+      col[ix + 1] = c.y;
+      col[ix + 2] = c.z;
+      sz[i] = 10 + Math.abs(p) * 18 + s * 8;
+    }
+    geom.attributes.position.needsUpdate = true;
+    geom.attributes.customColor.needsUpdate = true;
+    geom.attributes.size.needsUpdate = true;
+    trailGeom.attributes.position.needsUpdate = true;
+    trailGeom.attributes.customColor.needsUpdate = true;
+    trailGeom.attributes.size.needsUpdate = true;
+  }
+
+  function reloadData() {
+    fetch(API)
+      .then(function (r) {
+        return r.json().then(function (b) {
+          return { ok: r.ok, status: r.status, b: b };
+        });
+      })
+      .then(function (res) {
+        if (!res.ok || res.b.error) {
+          showErr(res.b.error || 'API failed (' + res.status + ')');
+          return;
+        }
+        hideErr();
+        var items = res.b.phrases || [];
+        var stats = res.b.stats || {};
+        var m = typeof stats.mean_polarity === 'number' ? stats.mean_polarity : 0;
+        if (lastMeanPolarity !== null && Math.abs(m - lastMeanPolarity) > 0.12) {
+          glitchUntil = performance.now() + 220;
+        }
+        lastMeanPolarity = m;
+        applyPayload(items);
+        var c = stats.count || 0;
+        statusEl.textContent =
+          'n=' +
+          c +
+          ' · μ_pol=' +
+          m.toFixed(3) +
+          ' · +/−/0=' +
+          ((stats.pct_positive || 0) * 100).toFixed(0) +
+          '/' +
+          ((stats.pct_negative || 0) * 100).toFixed(0) +
+          '/' +
+          ((stats.pct_neutral || 0) * 100).toFixed(0) +
+          '%';
+      })
+      .catch(function (e) {
+        console.error(e);
+        showErr('Network: ' + (e.message || String(e)));
+      });
+  }
+
+  initThree();
+  resize();
+  window.addEventListener('resize', resize);
+
+  var btnShowText = document.getElementById('btn-show-text');
+  if (btnShowText) {
+    btnShowText.addEventListener('click', function () {
+      showTextLabels = !showTextLabels;
+      btnShowText.setAttribute('aria-pressed', showTextLabels ? 'true' : 'false');
+      btnShowText.textContent = showTextLabels ? 'Hide text' : 'Show text';
+      updateLabelVisibility();
+      syncLabelPositions();
+    });
+  }
+
+  var btnAutoCam = document.getElementById('btn-auto-camera');
+  if (btnAutoCam) {
+    btnAutoCam.addEventListener('click', function () {
+      setAutoCamera(!autoCamera);
+    });
+  }
+
+  TagsVisControls.wire({
+    onExport: function () {
+      if (!autoCamera) controls.update();
+      renderer.render(scene, camera);
+      try {
+        var data = renderer.domElement.toDataURL('image/png');
+        var a = document.createElement('a');
+        a.href = data;
+        a.download = 'sentiment-vortex-' + Date.now() + '.png';
+        a.click();
+      } catch (e) {
+        console.error(e);
+      }
+    },
+  });
+
+  function tick() {
+    requestAnimationFrame(tick);
+    if (!TagsVisControls.frozen && nActive > 0) {
+      stepPhysics();
+    }
+    syncLabelPositions();
+    if (autoCamera && !TagsVisControls.frozen) {
+      stepAutoCamera();
+    } else {
+      controls.update();
+    }
+    renderer.render(scene, camera);
+    if (labelRenderer) labelRenderer.render(scene, camera);
+  }
+
+  var socket = io({ transports: ['websocket', 'polling'] });
+  function kick() {
+    kickOmega = Math.min(2.8, kickOmega + 1.1 + Math.random() * 0.6);
+    reloadData();
+  }
+  socket.on('analyzed', kick);
+  socket.on('tags_updated', kick);
+
+  tick();
+  reloadData();
+  setInterval(reloadData, REFRESH_MS);
+})();
+</script>
+</body>
+</html>

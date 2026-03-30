@@ -59,3 +59,8 @@ docker compose -f docker-compose.tags-vectorfield.yml --env-file .env.tags-vecto
 Open **http://localhost:5000/tags/vectorfield/**. Tags API is also on **http://localhost:8003** (mapped from tags-service). With an empty DB the page still runs (fallback field); add tags via your usual flow or `POST` to tags-service `/api/v1/tags/`.
 
 Navigation links are also added from `/tags/`, `/tags/3d/`, and `/tags/phrases/`.
+
+
+## Tag visualizations
+
+The Flask app serves several tag views; **Sentiment vortex** (`/tags/sentiment-vortex/`) combines grouped tags via the semantic `combine` endpoint, scores phrases with VADER (polarity + a subjectivity proxy), and renders them as a Three.js particle field. It uses the same shared chrome as the other `/tags/*` visualizations (`tags_vis_shared.css`).

@@ -181,7 +181,7 @@ AUTH_PASS = os.getenv("AUTH_PASS", "x")
 
 PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
                    "/tags/", "/geo/", "/screenshots/", "/api/tags/get/", "/api/tags/combine/",
-                   "/api/tags/embeddings/", "/api/tags/add/",
+                   "/api/tags/sentiment-vortex/", "/api/tags/embeddings/", "/api/tags/add/",
                    "/api/step/", "/api/steps", "/api/storage_step/", "/api/storage_latest/",
                    "/api/storage_geo/")
 
@@ -420,6 +420,94 @@ def tags_vectorfield_3d():
 @cross_origin()
 def tags_chaos_attractor():
     return render_template('tags_chaos_attractor.html')
+
+
+def _empty_sentiment_stats():
+    return {
+        "mean_polarity": 0.0,
+        "pct_positive": 0.0,
+        "pct_negative": 0.0,
+        "pct_neutral": 0.0,
+        "count": 0,
+    }
+
+
+@app.route('/tags/sentiment-vortex/')
+@cross_origin()
+def tags_sentiment_vortex():
+    return render_template('tags_sentiment_vortex.html')
+
+
+@app.route('/api/tags/sentiment-vortex/', methods=['GET', 'POST'])
+@cross_origin()
+def sentiment_vortex_api():
+    tags_url = f"{TAGS_SERVICE_URL}/api/v1/tags/tags/group/"
+    try:
+        tr = requests.get(tags_url, timeout=10)
+        tr.raise_for_status()
+        tags = tr.json()
+    except requests.exceptions.RequestException as e:
+        logger.warning("Sentiment vortex tags error: %s", e)
+        return jsonify({
+            "error": "Tags service unavailable",
+            "detail": str(e),
+            "phrases": [],
+            "stats": _empty_sentiment_stats(),
+        }), 502
+
+    if not isinstance(tags, list):
+        return jsonify({
+            "error": "Invalid tags response",
+            "phrases": [],
+            "stats": _empty_sentiment_stats(),
+        }), 502
+
+    tags.sort(key=lambda t: -(int(t.get("count", 0) or 0)))
+    words = [t["name"] for t in tags if t.get("name")]
+    if not words:
+        return jsonify({
+            "phrases": [],
+            "stats": _empty_sentiment_stats(),
+        })
+
+    combine_url = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/combine/"
+    try:
+        cr = requests.post(
+            combine_url,
+            json={"words": words, "limit": 128, "max_phrases": 256},
+            timeout=60,
+        )
+        cr.raise_for_status()
+        cdata = cr.json()
+    except requests.exceptions.RequestException as e:
+        logger.warning("Sentiment vortex combine error: %s", e)
+        return jsonify({
+            "error": str(e),
+            "phrases": [],
+            "stats": _empty_sentiment_stats(),
+        }), 502
+
+    phrases = cdata.get("phrases") or []
+    sent_url = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/sentiment-phrases/"
+    try:
+        sr = requests.post(
+            sent_url,
+            json={"phrases": phrases, "limit": 256},
+            timeout=30,
+        )
+        sr.raise_for_status()
+        sdata = sr.json()
+    except requests.exceptions.RequestException as e:
+        logger.warning("Sentiment vortex sentiment error: %s", e)
+        return jsonify({
+            "error": str(e),
+            "phrases": [],
+            "stats": _empty_sentiment_stats(),
+        }), 502
+
+    items = sdata.get("items") or []
+    stats = sdata.get("stats") or _empty_sentiment_stats()
+    return jsonify({"phrases": items, "stats": stats})
 
 
 @app.route('/api/tags/combine/', methods=['POST'])
