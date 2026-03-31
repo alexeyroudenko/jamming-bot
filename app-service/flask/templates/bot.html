@@ -36,7 +36,7 @@
 
 html, body {
     overflow:hidden;
-    background-color:#000000;
+    background:#000000;
     color: #fff;
     /* iOS fullscreen support */
     height: 100vh;
@@ -93,11 +93,14 @@ html, body {
 }
 
 #debug {
-position:absolute;
-    bottom:50px;
-    margin:20px;
-    padding:20px;
-    font-size:12px;
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    bottom: auto;
+    margin: 0;
+    padding: 0;
+    font-size: 12px;
 }
 
 #log {
@@ -112,7 +115,6 @@ position:absolute;
 .sqr {
     width:128px;
     height:128px;
-    border:1px solid #222222;
 }
 
 .errors {
@@ -126,12 +128,12 @@ position:absolute;
 }
 
 a {
-    background-color: white;
-    border: 1px solid white;
+    color: inherit;
+    text-decoration: none;
 }
 
 a:visited {
-    color: aaa;
+    color: inherit;
 }
 
 
@@ -191,35 +193,41 @@ body, html, button {
 
 #log_url {
     position: absolute;
-    top:32px;
-    left:32px;
-    z-index:110;
-    width:100%;
-    height:64px;
-    /*border:1px solid #aaa;*/    
-    font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;    
+    top: 148px;
+    left: 24px;
+    z-index: 110;
+    width: min(720px, calc(100vw - 48px));
+    min-height: 40px;
+    padding: 10px 12px;
+    /* border: 1px solid var(--bot-border); */
+    /* background: rgba(5, 7, 10, 0.72); */
+    /* box-shadow: var(--bot-shadow); */
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     overflow: hidden;
-    font-size: .4cm;
+    font-size: 14px;
+    color: var(--bot-text);
 }
  
 #log_text {
     position: absolute;
     font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
-    top:64px;
-    left:32px;
-    z-index:100;
-    width:512px;
-    height:80%;
-    /* font-size:14px; */
-    color:#333;
-    overflow:hidden;
-    opacity:1.5;
+    top: 200px;
+    left: 24px;
+    z-index: 100;
+    width: min(560px, calc(100vw - 48px));
+    height: calc(100vh - 260px);
+    padding: 16px;
+    background: rgba(5, 7, 10, 0.62);
+    box-shadow: var(--bot-shadow);
+    color: #cbd5e1;
+    overflow: hidden;
+    opacity: 1;
     white-space: pre-wrap;
-    /*display:none;*/
     pointer-events: none;
     -webkit-user-select: all; /* for Safari */
     user-select: all;
-    font-size: .3cm;
+    font-size: 13px;
+    line-height: 1.55;
     display: none;
 }
 
@@ -229,42 +237,43 @@ code {
 }
 
 #log_words {
-    /* border: 1px solid #ffffff; */
     position: absolute;
     font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
-    bottom:10%;
-    right:284px;
-    z-index:100;
-    width:512px;
-    height:184px;
+    bottom: 24px;
+    right: 24px;
+    z-index: 100;
+    width: min(520px, calc(100vw - 48px));
+    height: 200px;
+    padding: 14px 16px;
+    /* background: rgba(5, 7, 10, 0.62); */
+    box-shadow: var(--bot-shadow);
     vertical-align: bottom;
-    /* font-size:22px; */
-    color:#eee;
-    opacity:1.5;
-    /* white-space: pre-wrap; */
-    font-size: .4cm;
+    color: var(--bot-text);
+    opacity: 1;
+    font-size: 14px;
+    line-height: 1.45;
     overflow: hidden;
     display: table-cell;  
 }
 
 #log_phrases {
     position: absolute;
-    /* border: 1px solid #ffffff; */
     font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
-    bottom:40%;
-    right:184px;
-    z-index:100;
-    width:512px;
-    height:256px;
-    font-size:11px;
+    top: 200px;
+    right: 24px;
+    z-index: 100;
+    width: min(520px, calc(100vw - 48px));
+    height: 240px;
+    padding: 14px 16px;
+    /* background: rgba(5, 7, 10, 0.62); */
+    box-shadow: var(--bot-shadow);
+    font-size: 12px;
     vertical-align: bottom;
-    color:#fff;
-    opacity:1.5;
+    color: #cbd5e1;
+    opacity: 1;
     white-space: pre-wrap;
-    font-size: .4cm;
-    /* overflow: hidden; */
-    color:#888;
-    /* border:1px solid #aaa;   */
+    line-height: 1.45;
+    overflow: hidden;
     display: table-cell;  
 }
 
@@ -302,14 +311,16 @@ code {
 #log_headers {
     position: absolute;
     font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
-    top:64px;
-    right:384px;
-    z-index:100;
-    width:256px;
-    height:256px;
-    font-size:2px;
-    color:#666;
-    opacity:.5;
+    top: 452px;
+    right: 24px;
+    z-index: 100;
+    width: min(260px, calc(100vw - 48px));
+    height: 180px;
+    padding: 12px;
+    /* background: rgba(5, 7, 10, 0.56); */
+    font-size: 10px;
+    color: var(--bot-muted);
+    opacity: .9;
     white-space: pre-wrap;
     overflow: hidden;
 }    
@@ -317,7 +328,6 @@ code {
 #nodes{
     position:absolute;
     z-index:200;
-    border:1px solid #aaa;
     /* width: 512px; */
     /* height: 512px; */
     width: 100%;
@@ -331,7 +341,6 @@ code {
 }
 
 .update_item {
-    border:1px solid #ffffff;
     float:left;
 }
 
@@ -352,8 +361,6 @@ button {
 
 #debug {
     z-index: 200;
-    right:32px;
-    bottom:32px;
     -webkit-touch-callout: none; /* iOS Safari */
     -webkit-user-select: none; /* Safari */
         -khtml-user-select: none; /* Konqueror HTML */
@@ -361,7 +368,265 @@ button {
         -ms-user-select: none; /* Internet Explorer/Edge */
             user-select: none; /* Non-prefixed version, currently */
     visibility: visible;
-    opacity: 0.2;
+    opacity: 1;
+}
+
+:root {
+    --bot-bg: #000000;
+    --bot-surface: rgba(18, 18, 18, 0.94);
+    --bot-surface-strong: rgba(8, 8, 8, 0.98);
+    --bot-border: rgba(255, 255, 255, 0.18);
+    --bot-border-strong: rgba(255, 255, 255, 0.34);
+    --bot-text: #ffffff;
+    --bot-muted: #9a9a9a;
+    --bot-accent: #ff0000;
+    --bot-accent-strong: #ff0000;
+    --bot-danger: #ff0000;
+    --bot-shadow: 0 18px 44px rgba(0, 0, 0, 0.38);
+}
+
+#debug,
+#login-overlay,
+#login-form {
+    font-family: "Segoe UI", Arial, sans-serif;
+}
+
+.bot-topbar {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: start;
+}
+
+.bot-panel {
+    border: 0px solid var(--bot-border);
+    background: transparent;
+    box-shadow: none;
+}
+
+.bot-primary-panel,
+.bot-status-panel,
+.bot-admin-panel {
+    padding: 8px;
+}
+
+.bot-primary-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.bot-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.bot-brand-kicker,
+.bot-section-label {
+    color: var(--bot-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding-top: 3px;
+    padding-right: 3px;
+    text-transform: uppercase;
+}
+
+.bot-brand-title {
+    color: var(--bot-text);
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.1;
+}
+
+.bot-brand-subtitle {
+    color: var(--bot-muted);
+    font-size: 12px;
+    line-height: 1.25;
+    max-width: 56ch;
+}
+
+.bot-auth-slot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    min-height: 22px;
+}
+
+.bot-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.bot-section + .bot-section {
+    margin-top: 6px;
+}
+
+.bot-nav-grid,
+.bot-admin-grid,
+.bot-dev-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.bot-nav-grid .bot-link-chip {
+    opacity: 0.5;
+}
+
+.bot-nav-grid .bot-link-chip:hover {
+    opacity: 1;
+}
+
+.bot-side-column .bot-link-chip,
+.bot-side-column .bot-action {
+    opacity: 0.5;
+}
+
+.bot-side-column .bot-link-chip:hover,
+.bot-side-column .bot-action:hover {
+    opacity: 1;
+}
+
+.bot-side-column {
+    position: fixed;
+    left: 20px;
+    right: 20px;
+    bottom: 20px;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 4px;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    width: auto;
+    z-index: 210;
+}
+
+.bot-link-chip,
+.bot-action,
+.bot-login-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 18px;
+    padding: 2px 8px;
+    /* border: 1px solid var(--bot-border); */
+    /* background: rgba(24, 24, 24, 0.95); */
+    /* color: var(--bot-text); */
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.bot-link-chip:hover,
+.bot-action:hover,
+.bot-login-link:hover {
+    background: transparent;
+    border-color: transparent;
+}
+
+.bot-link-chip span,
+.bot-login-link span,
+.bot-metric-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.bot-link-chip.is-danger,
+.bot-action-danger {
+    border-color: transparent;
+    background: transparent;
+}
+
+.bot-status-grid {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 4px;
+}
+
+.bot-metric {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: transparent;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1;
+}
+
+.bot-metric-label {
+    display: inline;
+    margin-bottom: 0;
+    color: var(--bot-text);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.bot-metric-value {
+    color: var(--bot-text);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+}
+
+.bot-status-panel,
+.bot-admin-panel,
+.bot-status-grid,
+.bot-admin-grid,
+.bot-dev-links {
+    background: transparent;
+}
+
+.bot-status-panel,
+.bot-admin-panel {
+    padding: 0;
+}
+
+.bot-admin-panel {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.bot-admin-grid,
+.bot-dev-links {
+    flex-wrap: nowrap;
+}
+
+.bot-admin-panel .bot-section-label {
+    margin-right: 2px;
+}
+
+button.bot-action {
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+
+.admin-only {
+    display: none;
+}
+
+.guest-only {
+    display: flex;
+}
+
+body.is-admin .admin-only {
+    display: flex;
+}
+
+body.is-admin .guest-only {
+    display: none;
 }
 
 #login-overlay {
@@ -370,62 +635,85 @@ button {
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.95);
+    background:
+        linear-gradient(180deg, rgba(255, 0, 0, 0.08), transparent 24%),
+        rgba(0, 0, 0, 0.94);
     z-index: 9999;
     display: none;
     justify-content: center;
     align-items: center;
+    padding: 10px;
 }
 
 #login-form {
-    background-color: #1a1a1a;
-    padding: 40px;
-    border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-    width: 300px;
+    width: min(420px, 100%);
+    padding: 10px;
+    background: var(--bot-surface-strong);
+    box-shadow: var(--bot-shadow);
+    color: var(--bot-text);
 }
 
 #login-form h2 {
     margin-top: 0;
-    margin-bottom: 20px;
-    color: #fff;
-    text-align: center;
-    font-size: 24px;
+    margin-bottom: 4px;
+    color: var(--bot-text);
+    text-align: left;
+    font-size: 28px;
+}
+
+#login-form p {
+    margin: 0 0 6px;
+    color: var(--bot-muted);
+    font-size: 14px;
+    line-height: 1.2;
 }
 
 #login-form input {
     width: 100%;
-    padding: 12px;
-    margin-bottom: 15px;
-    border: 1px solid #333;
-    border-radius: 4px;
-    background-color: #2a2a2a;
-    color: #fff;
+    padding: 4px 8px;
+    margin-bottom: 4px;
+    background: rgba(18, 18, 18, 0.96);
+    color: var(--bot-text);
     font-size: 14px;
     box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#login-form input:focus {
+    outline: none;
+    border-color: rgba(255, 0, 0, 0.8);
+    box-shadow: 0 0 0 1px rgba(255, 0, 0, 0.18);
 }
 
 #login-form button {
     width: 100%;
-    padding: 12px;
-    background-color: #0066cc;
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    font-size: 16px;
+    padding: 2px 8px;
+    background: rgba(34, 0, 0, 0.98);
+    color: var(--bot-text);
+    font-size: 14px;
+    font-weight: 600;
     cursor: pointer;
 }
 
 #login-form button:hover {
-    background-color: #0052a3;
+    background: rgba(52, 0, 0, 0.98);
 }
 
 #login-error {
-    color: #ff4444;
+    color: #fca5a5;
     margin-bottom: 15px;
-    text-align: center;
+    text-align: left;
     font-size: 14px;
     display: none;
+}
+
+.bot-login-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+    margin-top: 6px;
+    color: var(--bot-muted);
+    font-size: 12px;
 }
 
 /* Responsive design for iPhone 14 and mobile devices */
@@ -440,13 +728,39 @@ button {
     }
     
     #debug {
-        font-size: 9px;
-        padding: 10px;
-        margin: 10px;
-        bottom: 10px;
+        top: 10px;
+        left: 10px;
         right: 10px;
-        max-width: calc(100% - 20px);
-        overflow-x: auto;
+        font-size: 9px;
+    }
+
+    .bot-topbar {
+        grid-template-columns: 1fr;
+    }
+
+    .bot-primary-head {
+        flex-direction: column;
+    }
+
+    .bot-auth-slot {
+        justify-content: flex-start;
+    }
+
+    .bot-side-column {
+        position: fixed;
+        left: 10px;
+        right: 10px;
+        bottom: 10px;
+        flex-direction: column;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        white-space: normal;
+    }
+
+    .bot-status-grid,
+    .bot-admin-grid,
+    .bot-dev-links {
+        flex-wrap: wrap;
     }
     
     #log_url {
@@ -607,58 +921,94 @@ button {
 <div id="login-overlay">
   <div id="login-form">
     <h2>Login</h2>
+    <p>Вход в панель управления Jamming Bot и доступ к служебным действиям.</p>
     <div id="login-error"></div>
     <input type="text" id="username" placeholder="Username" autocomplete="username">
     <input type="password" id="password" placeholder="Password" autocomplete="current-password">
     <button onclick="handleLogin()">Login</button>
+    <div class="bot-login-meta">
+      <span>visualization dashboard</span>
+      <span>admin access</span>
+    </div>
   </div>
 </div>
 
 <div id="nodes"></div>
 
   <div id="debug">
-    
-    <code>
-        | value:<span id="value"></span>
-        | counter:<span id="counter"></span>
-        | latency:<span id="latency"></span> 
-        <!-- | <a href="http://docs.arthew0.online:32768/" target="_blank">v2.1.0</a> | -->
-        <a href="/screenshots/">screenshot</a>|
-        <a href="/geo/">geo globe</a>|
-        <a href="/tags/phrases/">phrases</a>|
-        <a href="/tags/">tag cloud</a>|
-        <a href="/tags/3d/">3D cloud</a>|
-        <a href="/tags/constellation/">constellation</a>|
-        <a href="/tags/vectorfield/">vector field</a>|
-        <a href="/tags/vectorfield-3d/">vector 3D</a>|                
-        <a href="/path/map/">path map</a>|
-        <a href="/tags/chaos-attractor/">chaos</a>|        
-        <a href="/static-app/">react UI</a>|
-        <a href="/tags/sentiment-vortex/">sentiment vortex</a>|
-        
-        <span class="admin-only">
-        <button onclick="do_step()">step</button>
-        <button onclick="stop()">stop</button>    
-        <button onclick="start()">start</button>
-        <button onclick="restart()">restart</button>
-        <button onclick="do_add()" style="display:none">add</button>|
-        <a href="/api/tags/get/">get tags<span id="tags"></span></a>|
-        <a href="/api/tags/add/">add tags<span id="tags"></span></a>|
-        <a href="/api/tags/add_tags_from_steps/">add_tags_from_steps<span id="tags"></span></a>|
-        <a href="/api/tags/clean/">clean tags<span id="clean_tags"></span></a>|
-        <a href="/api/steps/">api<span id="api"></span></a>|
-        <a href="/ctrl/">dashboard:<span id="dashboard"></span></a>|
-        <a href="/queue/">queue:<span id="queue"></span></a>
-        </span>
-        <span class="admin-only">|
-        <button onclick="handleLogout()">logout</button>
-        </span>
-        <span class="guest-only">
-        <a href="#" onclick="showLoginForm(); return false;">login:<span id="login"></span></a>
-        </span>
+    <div class="bot-topbar">
+      <section class="bot-panel bot-primary-panel">
+        <div class="bot-primary-head">
+          <div class="bot-brand">
+            <span class="bot-brand-kicker">Jamming Bot v2.1.0</span>
+          </div>
 
-    </code>
+          <div class="bot-nav-grid">
+            <a class="bot-link-chip is-primary" href="/tags/">tag cloud</a>
+            <a class="bot-link-chip is-primary" href="/tags/3d/">3D cloud</a>
+            <a class="bot-link-chip" href="/geo/">geo globe</a>
+            <a class="bot-link-chip" href="/path/map/">path map</a>
+            <a class="bot-link-chip" href="/static-app/">react UI</a>
+            <a class="bot-link-chip" href="/screenshots/">screenshot</a>
+            <a class="bot-link-chip" href="/tags/phrases/">phrases</a>
+            <a class="bot-link-chip" href="/tags/sentiment-vortex/">sentiment vortex</a>
+            <a class="bot-link-chip" href="/tags/constellation/">constellation</a>
+            <a class="bot-link-chip" href="/tags/vectorfield/">vector field</a>
+            <a class="bot-link-chip" href="/tags/vectorfield-3d/">vector 3D</a>
+            <a class="bot-link-chip" href="/tags/chaos-attractor/">chaos</a>
+          </div>
 
+
+
+          <div class="bot-auth-slot">
+            <div class="guest-only">
+              <a class="bot-login-link" href="#" onclick="showLoginForm(); return false;">login <span id="login"></span></a>
+            </div>
+            <div class="admin-only">
+              <button class="bot-action bot-action-danger" onclick="handleLogout()">logout</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bot-section">
+        </div>
+      </section>
+
+      <div class="bot-side-column">
+        <section class="bot-panel bot-status-panel">
+          <div class="bot-status-grid">
+            <div class="bot-metric">
+              <span class="bot-metric-label">Counter</span>
+              <span class="bot-metric-value" id="counter"></span>
+            </div>
+            <div class="bot-metric">
+              <span class="bot-metric-label">Latency</span>
+              <span class="bot-metric-value" id="latency"></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="bot-panel bot-admin-panel admin-only">
+          <div class="bot-admin-grid">
+            <button class="bot-action" onclick="do_step()">step</button>
+            <button class="bot-action" onclick="stop()">stop</button>
+            <button class="bot-action bot-action-primary" onclick="start()">start</button>
+            <button class="bot-action" onclick="restart()">restart</button>
+            <button class="bot-action bot-action-danger" onclick="handleLogout()">logout</button>
+            <button class="bot-action" onclick="do_add()" style="display:none">add</button>
+            <a class="bot-link-chip" href="/ctrl/">dashboard <span id="dashboard"></span></a>
+            <a class="bot-link-chip" href="/queue/">queue <span id="queue"></span></a>
+          </div>
+          <div class="bot-dev-links">
+            <a class="bot-link-chip" href="/api/tags/get/">get tags <span id="tags"></span></a>
+            <a class="bot-link-chip" href="/api/tags/add/">add tags</a>
+            <a class="bot-link-chip" href="/api/tags/add_tags_from_steps/">add_tags_from_steps</a>
+            <a class="bot-link-chip is-danger" href="/api/tags/clean/">clean tags <span id="clean_tags"></span></a>
+            <a class="bot-link-chip" href="/api/steps/">api <span id="api"></span></a>
+          </div>
+        </section>
+      </div>
+    </div>
   </div>
 
   <div id="log"></div>
@@ -770,12 +1120,11 @@ function handleLogout() {
 }
 
 function updateAdminUI() {
-    // Show/hide elements based on admin status
-    const adminElements = document.querySelectorAll('.admin-only');
-    const guestElements = document.querySelectorAll('.guest-only');
-    
-    adminElements.forEach(el => el.style.display = admin ? 'inline' : 'none');
-    guestElements.forEach(el => el.style.display = admin ? 'none' : 'inline');
+    document.body.classList.toggle('is-admin', admin);
+    const loginBadge = document.getElementById('login');
+    if (loginBadge) {
+        loginBadge.textContent = admin ? 'admin' : 'guest';
+    }
 }
 
 // Allow login with Enter key
