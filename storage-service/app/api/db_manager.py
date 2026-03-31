@@ -43,6 +43,18 @@ async def exists_batch(numbers: list[str]):
     return {str(r["number"]) for r in rows}
 
 
+def _parse_step_number(value):
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return int(float(text))
+    except (TypeError, ValueError):
+        return None
+
+
 async def iter_all_steps(batch_size: int = 500):
     query = steps.select().order_by(steps.c.id)
     offset = 0
@@ -53,6 +65,16 @@ async def iter_all_steps(batch_size: int = 500):
         for r in batch:
             yield _record_to_dict(r)
         offset += batch_size
+
+
+async def get_ids():
+    query = select(steps.c.number)
+    rows = await database.fetch_all(query=query)
+    numbers = sorted(
+        parsed for parsed in (_parse_step_number(r["number"]) for r in rows)
+        if parsed is not None
+    )
+    return {"data": numbers}
 
 
 async def get_latest(limit: int = 3000):

@@ -104,6 +104,11 @@ async def get_latest():
     return await db_manager.get_latest()
 
 
+@app.get("/get/ids")
+async def get_ids():
+    return await db_manager.get_ids()
+
+
 @app.get("/export/csv")
 async def export_csv():
     async def _generate():

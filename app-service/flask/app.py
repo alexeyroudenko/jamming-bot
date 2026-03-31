@@ -186,6 +186,7 @@ PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
                    "/tags/", "/geo/", "/screenshots/", "/api/tags/get/", "/api/tags/combine/",
                    "/api/tags/sentiment-vortex/", "/api/tags/embeddings/", "/api/tags/add/",
                    "/api/step/", "/api/steps", "/api/storage_step/", "/api/storage_latest/",
+                   "/api/storage_ids/",
                    "/api/storage_geo/")
 
 
@@ -1134,6 +1135,19 @@ def api_storage_latest():
         return jsonify(resp.json())
     except Exception as e:
         logger.warning(f"api_storage_latest: {e}")
+        return jsonify({"error": str(e)}), 502
+
+
+@app.route("/api/storage_ids/", methods=["GET"])
+@cross_origin()
+def api_storage_ids():
+    """Proxy to storage-service GET /get/ids."""
+    try:
+        resp = requests.get(f"{STORAGE_SERVICE_URL}/get/ids", timeout=15)
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except Exception as e:
+        logger.warning(f"api_storage_ids: {e}")
         return jsonify({"error": str(e)}), 502
 
 

@@ -51,4 +51,5 @@ to storage-service, which writes it as TSV + individual JSON file.
 GET /api/step/{number}/          → from Redis hash (live, TTL 1h)
 GET /api/storage_step/{number}/  → from storage-service JSON (persistent)
 GET /api/storage_latest/         → last 3000 steps with named fields
+GET /api/storage_ids/            → all stored step numbers sorted ascending
 ```
