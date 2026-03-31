@@ -89,7 +89,51 @@ RANDOM_TAG_WORDS = (
     "nebula", "comet", "aurora", "tide", "current", "vapor", "crystal", "fossil", "ember",
     "moth", "raven", "heron", "oak", "lichen", "moss", "root", "branch", "seed", "petal",
     "amber", "jade", "cobalt", "vermilion", "umber", "slate", "obsidian", "marble", "sand",
-    "rune", "sigil", "mantra", "verse", "stanza", "folio", "archive", "ledger",
+    "rune", "sigil", "mantra", "verse", "stanza", "folio", "archive", "ledger", "quartz", "basalt",
+    "granite", "ash", "char", "soot", "mist", "storm", "thunder", "lightning", "rain", "snow",
+    "frost", "glacier", "river", "delta", "harbor", "reef", "coral", "pearl", "shell", "bloom",
+    "thorn", "vine", "fern", "grove", "willow", "cedar", "pine", "birch", "reed", "meadow",
+    "dune", "canyon", "ridge", "summit", "valley", "cliff", "cave", "grotto", "isle", "lagoon",
+    "lantern", "beacon", "flare", "torch", "halo", "aura", "shadow", "silhouette", "outline", "contour",
+    "ripple", "whirl", "spiral", "helix", "arc", "curve", "plane", "plane", "facet", "plane",
+    "poly", "triad", "tetrad", "fractal", "moire", "raster", "vectorial", "scalar", "normal", "tangent",
+    "qubit", "module", "daemon", "worker", "broker", "cache", "index", "schema", "query", "cursor",
+    "parser", "lexer", "compiler", "runtime", "binary", "opcode", "register", "process", "handle", "streamer",
+    "uplink", "downlink", "gateway", "tunnel", "channel", "carrier", "switch", "relay", "mapper", "sampler",
+    "analyzer", "scanner", "tracker", "listener", "watcher", "ticker", "driver", "loader", "builder", "forger",
+    "weaver", "binder", "shaper", "filter", "mixer", "blender", "sequencer", "looper", "trigger", "quantizer",
+    "chorus", "reverb", "delay", "tremor", "vibrato", "overtone", "undertone", "sonic", "acoustic", "timbre",
+    "rhythm", "tempo", "groove", "riff", "motif", "refrain", "anthem", "ballad", "sonata", "nocturne",
+    "parable", "myth", "legend", "fable", "script", "codex", "preface", "epigraph", "gloss", "marginalia",
+    "chapter", "indexer", "catalog", "library", "shelf", "vault", "cacheline", "registers", "notebook", "scroll",
+    "oracle", "totem", "idol", "relic", "amulet", "talisman", "totemic", "omen", "oraclex", "augury",
+    "labyrinth", "maze", "portal", "threshold", "passage", "corridor", "atrium", "sanctum", "citadel", "bastion",
+    "forge", "kiln", "anvil", "alloy", "filament", "circuit", "coil", "magnet", "plasma", "ion",
+    "photon", "neutron", "electron", "proton", "boson", "quasar", "pulsar", "meteor", "asteroid", "eclipse",
+    "zenith", "nadir", "horizon", "meridian", "solstice", "equinox", "calendar", "sundial", "chronicle", "epoch",
+    "moment", "interval", "duration", "latency", "throughput", "bandwidth", "jitter", "uptime", "heartbeat", "cadencex",
+    "microtone", "undertow", "backscatter", "afterglow", "moonrise", "sunfall", "daybreak", "eventide", "midnight", "dawn",
+    "dusk", "starlight", "moonbeam", "sunbeam", "firefly", "emberlight", "brimstone", "mercury", "saffron", "indigo",
+    "scarlet", "crimson", "azure", "teal", "cyan", "magenta", "ochre", "sepia", "silver", "gold",
+    "bronze", "iron", "steel", "nickel", "copper", "tin", "lead", "graphite", "charcoal", "chalk",
+    "paper", "canvas", "ink", "pigment", "varnish", "resin", "lacquer", "ceramic", "porcelain", "velvet",
+    "silk", "linen", "cotton", "wool", "felt", "leather", "suede", "rope", "cord", "threadline",
+    "needle", "loom", "spindle", "bobbin", "stitch", "patch", "seam", "hem", "pleat", "fold",
+    "crease", "grain", "texture", "pattern", "motley", "mosaic", "collage", "assemblage", "figure", "form",
+    "gesture", "posture", "stance", "glance", "whisper", "murmur", "chorale", "signaler", "beaconry", "flarepath",
+    "rooted", "seedling", "sapling", "canopy", "understory", "mycelium", "spore", "pollen", "nectar", "honey",
+    "wax", "clay", "silt", "loam", "peat", "gravel", "shingle", "bedrock", "moraine", "sediment",
+    "tidemark", "breaker", "foam", "spray", "torrent", "cascade", "waterfall", "brook", "creek", "spring",
+    "well", "reservoir", "aquifer", "monsoon", "cyclone", "typhoon", "gale", "breeze", "gust", "draft",
+    "updraft", "downdraft", "crosswind", "tailwind", "headwind", "thermals", "barometer", "isobar", "front", "pressure",
+    "compass", "bearing", "azimuth", "vectoring", "waypoint", "landmark", "outpost", "wayfarer", "roamer", "nomad",
+    "wanderer", "pilgrim", "seeker", "finder", "keeper", "warden", "scribe", "artisan", "maker", "dreamer",
+    "sleeper", "caller", "runner", "caster", "sender", "receiver", "decoder", "encoder", "packer", "unpacker",
+    "planner", "sketch", "drafting", "blueprint", "diagram", "map", "atlas", "topology", "network", "web",
+    "matrixed", "grid", "cell", "column", "row", "band", "stripe", "ring", "chain", "braid",
+    "knot", "anchor", "pivot", "hinge", "joint", "gear", "lever", "pulley", "springcoil", "ratchet",
+    "flywheel", "engine", "motor", "turbine", "reactor", "battery", "charger", "inverter", "converter", "transformer",
+    "oscillator", "modulator", "demodulator", "synth", "samplerx", "modem", "terminal", "console", "monitor", "viewport",
 )
 
 # ---------------------------------------------------------------------------
@@ -857,8 +901,14 @@ def tags_embeddings():
 @app.route("/api/tags/get/", methods=["GET"])
 def get_tags():
     url = f"{TAGS_SERVICE_URL}/api/v1/tags/tags/group/"
+    count = request.args.get("count", default=50, type=int)
+    page = request.args.get("page", default=0, type=int)
+    params = {
+        "count": 50 if count is None else count,
+        "page": 0 if page is None else page,
+    }
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
         return jsonify(response.json()), 200
     except requests.exceptions.ConnectionError as e:
@@ -1255,17 +1305,28 @@ def add_tag():
 @cross_origin()
 def add_tags():
     if request.method == 'GET':
-        tag = random.choice(RANDOM_TAG_WORDS)
+        batches = request.args.get("count", default=1, type=int)
+        batches = max(1, batches if batches is not None else 1)
+        total = batches * 100
         url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
         headers = {'content-type': 'application/json'}
-        data = {'name': tag, "count": 0}
         try:
-            r = requests.post(url, data=json.dumps(data), headers=headers, timeout=15)
-            body = _tags_response_json(r)
-            if not r.ok:
-                return jsonify({"error": "Tags service error", "status": r.status_code, "detail": body or r.text[:200]}), 502
+            added = []
+            for _ in range(total):
+                tag = random.choice(RANDOM_TAG_WORDS)
+                data = {'name': tag, "count": 0}
+                r = requests.post(url, data=json.dumps(data), headers=headers, timeout=15)
+                body = _tags_response_json(r)
+                if not r.ok:
+                    return jsonify({"error": "Tags service error", "status": r.status_code, "detail": body or r.text[:200]}), 502
+                added.append(tag)
             socketio.emit('tags_updated')
-            return jsonify({"ok": True, "tag": tag, "response": body} if body is not None else {"ok": True, "tag": tag})
+            return jsonify({
+                "ok": True,
+                "count": batches,
+                "added": total,
+                "sample": added[:10],
+            })
         except requests.exceptions.RequestException as e:
             return jsonify({"error": "Tags service unreachable", "detail": str(e)}), 503
 

@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from app.api.models import TagOut, TagIn, TagUpdate #, TagGetAndUpdate
 from app.api import db_manager
@@ -61,5 +61,8 @@ async def delete_tag(id: int):
 
 
 @tags.get('/tags/group/', response_model=List[TagOut])
-async def get_tags_group():
-    return await db_manager.get_grouped_tags()
+async def get_tags_group(
+    count: int = Query(50, ge=1),
+    page: int = Query(0, ge=0),
+):
+    return await db_manager.get_grouped_tags(count=count, page=page)

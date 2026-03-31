@@ -35,7 +35,10 @@
   <label class="tags-vis-density-label" for="constellation-max-speed">MaxSpeed</label>
   <input id="constellation-max-speed" class="tags-vis-select" type="range" min="0" max="12" step="0.1" value="2" aria-label="Max speed">
   <span class="tags-vis-status" id="constellation-max-speed-value">2.0</span>
+  <label class="tags-vis-density-label" for="constellation-auto-add">AUTO_ADD</label>
+  <input id="constellation-auto-add" type="checkbox" aria-label="Auto add loaded tags" checked>
   <button type="button" class="tags-vis-btn" id="btn-anchor-vectors" aria-pressed="false" title="Show anchor direction vectors from embeddings">Anchor vectors</button>
+  <button type="button" class="tags-vis-btn" id="btn-load-next" title="Load next tag page">Load next</button>
   <button type="button" class="tags-vis-btn" id="btn-freeze">Freeze</button>
   <button type="button" class="tags-vis-btn" id="btn-export">Export PNG</button>
   <span class="tags-vis-status" id="tags-vis-status"></span>
@@ -53,7 +56,8 @@
 (function () {
   var TAGS_API = '/api/tags/get/';
   var EMB_API = '/api/tags/embeddings/';
-  var MAX_TAGS = 56;
+  var DEFAULT_VISIBLE_COUNT = 56;
+  var PAGE_SIZE = 50;
   var MAX_DPR = 2;
   var LINK_LENGTH = Math.min(window.innerWidth, window.innerHeight) * 0.18;
   var VIEW_SCALE_MIN = 0.35;
@@ -71,7 +75,9 @@
   var notLinkedRadiusValueEl = document.getElementById('constellation-notlinked-radius-value');
   var maxSpeedSel = document.getElementById('constellation-max-speed');
   var maxSpeedValueEl = document.getElementById('constellation-max-speed-value');
+  var autoAddEl = document.getElementById('constellation-auto-add');
   var anchorVectorsBtn = document.getElementById('btn-anchor-vectors');
+  var loadNextBtn = document.getElementById('btn-load-next');
 
   var nodes = [];
   var links = [];
@@ -82,14 +88,18 @@
   var viewScale = 2;
   var viewOffsetX = 0;
   var viewOffsetY = 0;
-  var visibleCount = MAX_TAGS;
+  var visibleCount = DEFAULT_VISIBLE_COUNT;
   var springLength = Math.round(LINK_LENGTH);
   var notLinkedRadius = 140;
   var maxSpeed = 2;
+  var autoAdd = true;
   var showAnchorVectors = false;
   var lastTagRows = [];
   var lastEmb = null;
   var dragNodeIndex = -1;
+  var loadedPage = -1;
+  var isLoadingTags = false;
+  var hasMorePages = true;
 
   function showErr(msg) {
     banner.textContent = msg;
@@ -135,6 +145,10 @@
     if (maxSpeedValueEl) maxSpeedValueEl.textContent = maxSpeed.toFixed(1);
   }
 
+  function syncAutoAddUi() {
+    if (autoAddEl) autoAddEl.checked = !!autoAdd;
+  }
+
   function setAnchorVectorsVisible(on) {
     showAnchorVectors = !!on;
     if (anchorVectorsBtn) {
@@ -146,16 +160,24 @@
     } catch (e) {}
   }
 
+  function syncLoadNextUi() {
+    if (!loadNextBtn) return;
+    loadNextBtn.disabled = isLoadingTags || !hasMorePages;
+    loadNextBtn.textContent = isLoadingTags ? 'Loading...' : 'Load next';
+  }
+
   function loadPrefs() {
     try {
       var savedCount = parseInt(sessionStorage.getItem('tags-constellation-count') || '', 10);
-      if (Number.isFinite(savedCount)) visibleCount = Math.max(0, Math.min(MAX_TAGS, savedCount));
+      if (Number.isFinite(savedCount)) visibleCount = Math.max(0, savedCount);
       var savedSpring = parseInt(sessionStorage.getItem('tags-constellation-spring-length') || '', 10);
       if (Number.isFinite(savedSpring)) springLength = Math.max(20, Math.min(480, savedSpring));
       var savedRadius = parseInt(sessionStorage.getItem('tags-constellation-notlinked-radius') || '', 10);
       if (Number.isFinite(savedRadius)) notLinkedRadius = Math.max(0, Math.min(480, savedRadius));
       var savedMaxSpeed = parseFloat(sessionStorage.getItem('tags-constellation-max-speed') || '');
       if (Number.isFinite(savedMaxSpeed)) maxSpeed = Math.max(0, Math.min(12, savedMaxSpeed));
+      var savedAutoAdd = sessionStorage.getItem('tags-constellation-auto-add');
+      if (savedAutoAdd !== null) autoAdd = savedAutoAdd === '1';
       showAnchorVectors = sessionStorage.getItem('tags-constellation-anchor-vectors') === '1';
     } catch (e) {}
   }
@@ -224,7 +246,7 @@
       return { name: String(r.name || ''), count: Number(r.count) || 0 };
     }).filter(function (t) { return t.name.length > 0; });
     sorted.sort(function (a, b) { return b.count - a.count; });
-    syncCountUi(Math.min(MAX_TAGS, sorted.length));
+    syncCountUi(sorted.length);
     sorted = sorted.slice(0, visibleCount);
 
     var cx = window.innerWidth * 0.5;
@@ -402,7 +424,7 @@
     return fetch(EMB_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ words: names, max_words: MAX_TAGS, min_sim: 0.36, max_links: 200 }),
+      body: JSON.stringify({ words: names, max_words: Math.max(names.length, DEFAULT_VISIBLE_COUNT), min_sim: 0.36, max_links: 200 }),
     })
       .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
       .then(function (res) {
@@ -414,27 +436,183 @@
       });
   }
 
-  function fetchTags() {
-    return fetch(TAGS_API)
+  function mergeEmbData(baseEmb, extraEmb) {
+    if (!baseEmb || !baseEmb.words || !baseEmb.words.length) return extraEmb || null;
+    if (!extraEmb || !extraEmb.words || !extraEmb.words.length) return baseEmb;
+    var offset = baseEmb.words.length;
+    var merged = {
+      ok: !!(baseEmb.ok || extraEmb.ok),
+      mode: extraEmb.mode || baseEmb.mode || 'vectors',
+      words: baseEmb.words.slice(),
+      vectors2d: (baseEmb.vectors2d || []).slice(),
+      vectors3d: (baseEmb.vectors3d || []).slice(),
+      vectors2d_current: (baseEmb.vectors2d_current || baseEmb.vectors2d || []).slice(),
+      vectors3d_current: (baseEmb.vectors3d_current || baseEmb.vectors3d || []).slice(),
+      vectors2d_alt: (baseEmb.vectors2d_alt || []).slice(),
+      vectors3d_alt: (baseEmb.vectors3d_alt || []).slice(),
+      directions2d: (baseEmb.directions2d || []).slice(),
+      directions3d: (baseEmb.directions3d || []).slice(),
+      links: (baseEmb.links || []).slice(),
+    };
+    Array.prototype.push.apply(merged.words, extraEmb.words || []);
+    Array.prototype.push.apply(merged.vectors2d, extraEmb.vectors2d || []);
+    Array.prototype.push.apply(merged.vectors3d, extraEmb.vectors3d || []);
+    Array.prototype.push.apply(merged.vectors2d_current, extraEmb.vectors2d_current || extraEmb.vectors2d || []);
+    Array.prototype.push.apply(merged.vectors3d_current, extraEmb.vectors3d_current || extraEmb.vectors3d || []);
+    Array.prototype.push.apply(merged.vectors2d_alt, extraEmb.vectors2d_alt || []);
+    Array.prototype.push.apply(merged.vectors3d_alt, extraEmb.vectors3d_alt || []);
+    Array.prototype.push.apply(merged.directions2d, extraEmb.directions2d || []);
+    Array.prototype.push.apply(merged.directions3d, extraEmb.directions3d || []);
+    var extraLinks = extraEmb.links || [];
+    for (var i = 0; i < extraLinks.length; i++) {
+      merged.links.push({
+        i: offset + extraLinks[i].i,
+        j: offset + extraLinks[i].j,
+        sim: extraLinks[i].sim,
+      });
+    }
+    return merged;
+  }
+
+  function getMissingEmbWords(tagRows) {
+    var have = Object.create(null);
+    if (lastEmb && Array.isArray(lastEmb.words)) {
+      for (var i = 0; i < lastEmb.words.length; i++) {
+        have[normTag(lastEmb.words[i])] = true;
+      }
+    }
+    var missing = [];
+    for (var j = 0; j < tagRows.length; j++) {
+      var name = String(tagRows[j] && tagRows[j].name || '');
+      var key = normTag(name);
+      if (!key || have[key]) continue;
+      have[key] = true;
+      missing.push(name);
+    }
+    return missing;
+  }
+
+  function ensureEmbeddingsFor(tagRows) {
+    var rows = Array.isArray(tagRows) ? tagRows.slice() : [];
+    if (!rows.length) {
+      lastEmb = null;
+      return Promise.resolve(null);
+    }
+    var missingNames = getMissingEmbWords(rows);
+    if (!missingNames.length && lastEmb) return Promise.resolve(lastEmb);
+    return fetchEmb(missingNames).then(function (extraEmb) {
+      if (!lastEmb || !lastEmb.words || !lastEmb.words.length) {
+        lastEmb = extraEmb;
+      } else {
+        lastEmb = mergeEmbData(lastEmb, extraEmb);
+      }
+      return lastEmb;
+    });
+  }
+
+  function mergeTagPages(pages) {
+    var byName = Object.create(null);
+    for (var i = 0; i < pages.length; i++) {
+      var row = pages[i];
+      var name = String(row && row.name || '');
+      if (!name) continue;
+      byName[name] = {
+        name: name,
+        count: Number(row.count) || 0,
+      };
+    }
+    return Object.keys(byName).map(function (name) { return byName[name]; });
+  }
+
+  function fetchTagPage(page) {
+    return fetch(TAGS_API + '?count=' + PAGE_SIZE + '&page=' + page)
       .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
       .then(function (res) {
         if (!res.ok || (res.b && res.b.error)) {
           showErr('Tags API: ' + (res.b && res.b.error ? res.b.error : 'failed'));
-          return;
+          return null;
         }
         hideErr();
         if (!Array.isArray(res.b)) {
           showErr('Tags API: expected array');
-          return;
+          return null;
         }
-        var names = res.b.map(function (row) { return String(row.name || ''); }).filter(Boolean);
-        return fetchEmb(names).then(function (emb) {
-          loadFromTagsAndEmb(res.b, emb);
-        });
+        return res.b;
+      });
+  }
+
+  function applyTagRows(tagRows) {
+    lastTagRows = Array.isArray(tagRows) ? tagRows.slice() : [];
+    if (!lastTagRows.length) {
+      lastEmb = null;
+      loadFromTagsAndEmb([], null);
+      return Promise.resolve();
+    }
+    return ensureEmbeddingsFor(lastTagRows).then(function (emb) {
+      loadFromTagsAndEmb(lastTagRows, emb);
+    });
+  }
+
+  function refreshLoadedPages() {
+    isLoadingTags = true;
+    syncLoadNextUi();
+    var reqs = [];
+    var targetPage = Math.max(0, loadedPage);
+    for (var page = 0; page <= targetPage; page++) {
+      reqs.push(fetchTagPage(page));
+    }
+    return Promise.all(reqs)
+      .then(function (pages) {
+        var rows = [];
+        for (var i = 0; i < pages.length; i++) {
+          if (Array.isArray(pages[i])) rows = rows.concat(pages[i]);
+        }
+        rows = mergeTagPages(rows);
+        return applyTagRows(rows);
       })
       .catch(function (e) {
         console.error(e);
         showErr('Network: ' + (e.message || String(e)));
+      })
+      .finally(function () {
+        isLoadingTags = false;
+        syncLoadNextUi();
+      });
+  }
+
+  function fetchTags() {
+    return refreshLoadedPages();
+  }
+
+  function loadNextPage() {
+    if (isLoadingTags || !hasMorePages) return Promise.resolve();
+    isLoadingTags = true;
+    syncLoadNextUi();
+    var nextPage = Math.max(0, loadedPage) + 1;
+    return fetchTagPage(nextPage)
+      .then(function (rows) {
+        if (!Array.isArray(rows) || !rows.length) {
+          hasMorePages = false;
+          return;
+        }
+        hasMorePages = true;
+        var mergedRows = mergeTagPages(lastTagRows.concat(rows));
+        if (autoAdd) {
+          visibleCount = mergedRows.length;
+          try {
+            sessionStorage.setItem('tags-constellation-count', String(visibleCount));
+          } catch (e) {}
+        }
+        loadedPage = nextPage;
+        return applyTagRows(mergedRows);
+      })
+      .catch(function (e) {
+        console.error(e);
+        showErr('Network: ' + (e.message || String(e)));
+      })
+      .finally(function () {
+        isLoadingTags = false;
+        syncLoadNextUi();
       });
   }
 
@@ -446,11 +624,12 @@
   syncSpringLengthUi();
   syncNotLinkedRadiusUi();
   syncMaxSpeedUi();
+  syncAutoAddUi();
   setAnchorVectorsVisible(showAnchorVectors);
   if (countSel) {
     countSel.addEventListener('input', function () {
-      visibleCount = Math.max(0, Math.min(MAX_TAGS, parseInt(countSel.value || '0', 10) || 0));
-      syncCountUi(Math.min(MAX_TAGS, lastTagRows.length));
+      visibleCount = Math.max(0, parseInt(countSel.value || '0', 10) || 0);
+      syncCountUi(lastTagRows.length);
       try {
         sessionStorage.setItem('tags-constellation-count', String(visibleCount));
       } catch (e) {}
@@ -489,6 +668,21 @@
       setAnchorVectorsVisible(!showAnchorVectors);
     });
   }
+  if (autoAddEl) {
+    autoAddEl.addEventListener('change', function () {
+      autoAdd = !!autoAddEl.checked;
+      syncAutoAddUi();
+      try {
+        sessionStorage.setItem('tags-constellation-auto-add', autoAdd ? '1' : '0');
+      } catch (e) {}
+    });
+  }
+  if (loadNextBtn) {
+    loadNextBtn.addEventListener('click', function () {
+      loadNextPage();
+    });
+  }
+  syncLoadNextUi();
   canvas.addEventListener('pointerdown', onPointerDown);
   canvas.addEventListener('mousemove', onPointerMove);
   canvas.addEventListener('click', onClick);

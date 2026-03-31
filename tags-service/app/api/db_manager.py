@@ -57,12 +57,15 @@ async def update_tag(id: int, payload: TagIn):
     return await get_tag(id)
 
 
-async def get_grouped_tags():
+async def get_grouped_tags(count: int = 50, page: int = 0):
     from sqlalchemy import desc
+    safe_count = max(1, min(500, int(count)))
+    safe_page = max(0, int(page))
     query = (
         tags.select()
         .order_by(desc(tags.c.count))
-        .limit(150)
+        .limit(safe_count)
+        .offset(safe_page * safe_count)
     )
     rows = await database.fetch_all(query=query)
     return [_record_to_dict(r) for r in rows]
