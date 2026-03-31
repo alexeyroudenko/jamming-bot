@@ -5,7 +5,10 @@ import json
 import random
 import logging
 import threading
+import tempfile
 import requests
+
+import yaml
 
 from functools import wraps
 from flask import Flask, Response, Blueprint, jsonify, request, redirect, render_template, session, url_for
@@ -222,6 +225,77 @@ def _ensure_redis_defaults():
         if not redis.get(key):
             redis.set(key, default)
     return {k: float(redis.get(k)) for k in defaults}
+
+
+BOT_YAML_KEYS = ("send_events", "send_sublinks", "log_events")
+
+
+def _read_bot_yaml_flags():
+    """Current send_events / send_sublinks / log_events from bot.yaml (same file the bot reloads)."""
+    path = (os.getenv("BOT_YAML_PATH") or "").strip()
+    out = {k: False for k in BOT_YAML_KEYS}
+    if not path or not os.path.isfile(path):
+        return out
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        if not isinstance(data, dict):
+            return out
+        for k in BOT_YAML_KEYS:
+            if k in data and data[k] is not None:
+                out[k] = bool(data[k])
+    except Exception as e:
+        logger.warning("bot.yaml read failed: %s", e)
+    return out
+
+
+def _write_bot_yaml_flags(updates: dict):
+    """Merge bool updates into bot.yaml, with a fallback for mounted files."""
+    path = (os.getenv("BOT_YAML_PATH") or "").strip()
+    if not path:
+        raise ValueError("BOT_YAML_PATH is not set")
+    for k in updates:
+        if k not in BOT_YAML_KEYS:
+            raise ValueError(f"invalid bot.yaml key: {k}")
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    if not isinstance(data, dict):
+        data = {}
+    for k, v in updates.items():
+        data[k] = bool(v)
+    parent = os.path.dirname(os.path.abspath(path)) or "."
+    fd, tmp_path = tempfile.mkstemp(prefix="bot_", suffix=".yaml.tmp", dir=parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            yaml.safe_dump(
+                data,
+                f,
+                default_flow_style=False,
+                allow_unicode=True,
+                sort_keys=False,
+            )
+        os.replace(tmp_path, path)
+        return
+    except OSError as e:
+        # k8s subPath/hostPath single-file mounts can reject rename with EBUSY.
+        if e.errno != 16:
+            raise
+        logger.info("bot.yaml rename failed (%s), falling back to in-place write", e)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(
+            data,
+            f,
+            default_flow_style=False,
+            allow_unicode=True,
+            sort_keys=False,
+        )
+        f.flush()
+        os.fsync(f.fileno())
 
 
 STEP_HASH_TTL = int(os.getenv('STEP_HASH_TTL', '3600'))
@@ -697,7 +771,11 @@ def clear_all():
 
 @app.route("/ctrl/", methods=["GET"])
 def ctrl():
-    return render_template('ctrl.html', cfg=_ensure_redis_defaults())
+    return render_template(
+        "ctrl.html",
+        cfg=_ensure_redis_defaults(),
+        bot_flags=_read_bot_yaml_flags(),
+    )
 
 
 @app.route("/set/<v>/", methods=["GET"])
@@ -1313,6 +1391,31 @@ def handle_do_storage(value):
 @socketio.on('sleep_time')
 def handle_sleep_time(value):
     redis.set('sleep_time', float(value))
+
+
+def _socket_bot_yaml_flag(key: str, value):
+    try:
+        b = bool(float(value))
+        _write_bot_yaml_flags({key: b})
+        logger.info("bot.yaml %s=%s (socketio)", key, b)
+    except Exception as e:
+        logger.exception("bot.yaml %s update failed: %s", key, e)
+
+
+@socketio.on('bot_send_events')
+def handle_bot_send_events(value):
+    _socket_bot_yaml_flag("send_events", value)
+
+
+@socketio.on('bot_send_sublinks')
+def handle_bot_send_sublinks(value):
+    _socket_bot_yaml_flag("send_sublinks", value)
+
+
+@socketio.on('bot_log_events')
+def handle_bot_log_events(value):
+    _socket_bot_yaml_flag("log_events", value)
+
 
 @socketio.event
 def my_ping():

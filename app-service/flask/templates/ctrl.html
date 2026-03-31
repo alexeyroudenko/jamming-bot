@@ -60,6 +60,19 @@
             <input type="checkbox" id="do_storage" name="do_storage" {% if cfg.do_storage == 1 %}checked{% endif %} />
             <label for="do_storage">do_storage</label>
         </span>
+        <br>
+        <span>
+            <input type="checkbox" id="send_events" name="send_events" {% if bot_flags['send_events'] %}checked{% endif %} />
+            <label for="send_events">send_events</label>
+        </span>
+        <span>
+            <input type="checkbox" id="send_sublinks" name="send_sublinks" {% if bot_flags['send_sublinks'] %}checked{% endif %} />
+            <label for="send_sublinks">send_sublinks</label>
+        </span>
+        <span>
+            <input type="checkbox" id="log_events" name="log_events" {% if bot_flags['log_events'] %}checked{% endif %} />
+            <label for="log_events">log_events</label>
+        </span>
         <span>
         <form action="set_tick" method="get">                
             <input  style="width:300px"  type="range" class="form-range" min="0" max="1" id="pi_input" name="tick" id="tick" step="any" value={{ cfg.value }}><br>                   
@@ -130,6 +143,21 @@
     const do_storage = document.querySelector("#do_storage");
     do_storage.addEventListener("input", (event) => {
         socket.emit('do_storage', (event.target.checked)?1.:0.);
+    });
+
+    const send_events = document.querySelector("#send_events");
+    send_events.addEventListener("input", (event) => {
+        socket.emit('bot_send_events', (event.target.checked)?1.:0.);
+    });
+
+    const send_sublinks = document.querySelector("#send_sublinks");
+    send_sublinks.addEventListener("input", (event) => {
+        socket.emit('bot_send_sublinks', (event.target.checked)?1.:0.);
+    });
+
+    const log_events = document.querySelector("#log_events");
+    log_events.addEventListener("input", (event) => {
+        socket.emit('bot_log_events', (event.target.checked)?1.:0.);
     });
 
     const value = document.querySelector("#value");

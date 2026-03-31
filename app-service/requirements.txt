@@ -11,6 +11,7 @@ gunicorn==23.0.0
 click==8.1.8
 sentry-sdk[flask,rq]>=2.35.0
 requests==2.32.3
+pyyaml==6.0.2
 prometheus-flask-exporter==0.20.3
 prometheus-client==0.21.1
 boto3==1.35.86

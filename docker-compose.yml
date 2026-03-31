@@ -77,13 +77,17 @@ services:
       - OTEL_TRACING_ENABLED=${OTEL_TRACING_ENABLED:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=app-service
+      - BOT_YAML_PATH=/app/bot_config/bot.yaml
     volumes:
       - type: bind
         source: ./app-service/flask
         target: /app
       - type: bind
         source: ./data
-        target: /app/data 
+        target: /app/data
+      - type: bind
+        source: ./bot-service/bot/bot.yaml
+        target: /app/bot_config/bot.yaml
     depends_on:
       - redis
       - tags_service

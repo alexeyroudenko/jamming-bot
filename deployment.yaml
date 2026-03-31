@@ -753,6 +753,8 @@ spec:
         volumeMounts:
         - name: bot-db
           mountPath: /app/data
+        - name: bot-config
+          mountPath: /app/bot.yaml
         resources:
           requests:
             cpu: "250m"
@@ -769,6 +771,10 @@ spec:
       - name: bot-db
         persistentVolumeClaim:
           claimName: bot-db-pvc
+      - name: bot-config
+        hostPath:
+          path: /opt/jamming-bot/bot-service/bot/bot.yaml
+          type: File
 ---
 # ===================== data-service =====================
 apiVersion: apps/v1
@@ -972,6 +978,11 @@ spec:
           value: "http://jaeger:4318"
         - name: OTEL_SERVICE_NAME
           value: "app-service"
+        - name: BOT_YAML_PATH
+          value: "/app/bot_config/bot.yaml"
+        volumeMounts:
+        - name: bot-config
+          mountPath: /app/bot_config/bot.yaml
         resources:
           requests:
             cpu: "250m"
@@ -989,6 +1000,11 @@ spec:
             port: 5000
           initialDelaySeconds: 90
           periodSeconds: 20
+      volumes:
+      - name: bot-config
+        hostPath:
+          path: /opt/jamming-bot/bot-service/bot/bot.yaml
+          type: File
 ---
 apiVersion: v1
 kind: Service
