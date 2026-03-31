@@ -1,14 +1,17 @@
 ---
-title: Jamming bot posts
+title: Jamming Bot Posts
+aliases:
+  - Jamming bot posts
 note_type: dev
 project: "[[Jamming Bot]]"
+dev_area: research
 tags:
   - dev
   - journal
   - jamming-bot
 ---
 
-# Jamming bot posts
+# Jamming Bot Posts
 
 ## Scene index
 
@@ -19,7 +22,7 @@ tags:
 | [[2025-02-14]] | [[Scene 3. Texts]] |
 | [[2025-03-28]] | [[Scene 4. Geo]] |
 | [[2025-04-04]] | [[Scene 5. Cloud]] |
-| [[2025-04-11]] | [[Scene 6. Embedings]] |
+| [[2025-04-11]] | [[Scene 6. Embedings|Scene 6. Embeddings]] |
 
 ## Dev notes
 

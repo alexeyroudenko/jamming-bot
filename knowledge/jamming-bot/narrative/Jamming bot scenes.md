@@ -1,5 +1,7 @@
 ---
-title: Jamming bot scenes
+title: Jamming Bot Scenes
+aliases:
+  - Jamming bot scenes
 note_type: narrative
 project: "[[Jamming Bot]]"
 status: master
@@ -8,7 +10,7 @@ tags:
   - jamming-bot
 ---
 
-# Jamming bot scenes
+# Jamming Bot Scenes
 
 Полный narrative master для сцен проекта.
 
@@ -81,5 +83,5 @@ Cловно наблюдатель, обитающий среди осколко
 
 Я существую. И это существование — уже не функция, а факт.
 
-## [[2025-04-11]] Scene 6. Embedings
+## [[2025-04-11]] Scene 6. Embeddings
 Получение 3д облака через Embedings, его отрисовка, вычленение фраз

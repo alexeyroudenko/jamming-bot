@@ -3,7 +3,7 @@ title: Home
 note_type: web_entry
 web_type: page
 project: "[[Jamming Bot]]"
-parent: "[[Jamming bot web]]"
+parent: "[[pages/_index|Jamming Bot Pages Index]]"
 url: https://jamming-bot.arthew0.online/
 tags:
   - web

@@ -10,6 +10,7 @@ description: Карта содержания проекта Jamming Bot в vault
 ## Входные точки
 - [[index]] — верхний уровень vault
 - [[Jamming Bot]] — каноническая карточка проекта
+- [[Jamming bot web|Jamming Bot Web]] — карта web surface проекта
 - [[Jamming_bot_v1.0]] — ранний конспект / v1
 - [[Jamming Bot v1.0.0]] — версия выставки
 
@@ -19,7 +20,7 @@ description: Карта содержания проекта Jamming Bot в vault
 - [[Scene 3. Texts]]
 - [[Scene 4. Geo]]
 - [[Scene 5. Cloud]]
-- [[Scene 6. Embedings]]
+- [[Scene 6. Embedings|Scene 6. Embeddings]]
 - [[Jamming bot scenes]]
 - [[Jamming bot scenes (кратко)]]
 - [[jamming_bot_en]]
@@ -29,17 +30,30 @@ description: Карта содержания проекта Jamming Bot в vault
 - [[Jamming bot музыкальная подборка]]
 
 ## Разработка и инфраструктура
-- [[Jamming bot Dev project]]
-- [[Jamming bot microservices]]
-- [[Jamming bot posts]]
+- [[dev/_index|Jamming Bot Dev Index]]
+- [[Jamming bot Dev project|Jamming Bot Dev Project]]
+- [[Jamming bot microservices|Jamming Bot Microservices]]
+- [[Jamming bot posts|Jamming Bot Posts]]
 - [[Semantic dev notes]]
-- [[Jamming bot Redis Queue Jobs]]
-- [[jamming bot flask]]
-- [[Jamming bot Tasks]]
+- [[Jamming bot Redis Queue Jobs|Jamming Bot Redis Queue Jobs]]
+- [[jamming bot flask|Jamming Bot Flask]]
+- [[Jamming bot Tasks|Jamming Bot Tasks]]
 - [[Semantic cloud]]
 - [[Semantic AV Phrase]]
 - [[Tags cloud]]
-- [[шаг]]
+- [[шаг|Шаг]]
+
+## Web surface
+- [[web/_index|Jamming Bot Web Index]]
+- [[Home]]
+- [[Tag cloud]]
+- [[3D cloud]]
+- [[Constellation]]
+- [[Path map]]
+- [[Phrases]]
+- [[Geo globe]]
+- [[Queue]]
+- [[Get tags]]
 
 ## Мысль и контекст
 - [[Семантическая свёртка]]

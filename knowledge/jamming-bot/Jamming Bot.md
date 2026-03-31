@@ -5,6 +5,8 @@ status: active
 version: "2.1.0"
 years: 2023-2026
 url: https://jamming-bot.arthew0.online/
+aliases:
+  - Jamming bot
 owner:
   - "[[arthew0]]"
 soft:
@@ -42,44 +44,24 @@ tags:
 
 В настоящее время [[пауки]], [[краулеры]] и боты несут сервисную цель. Они выступают в роли поисковиков, собирают информацию и автоматизируют инфраструктуры интернета. Jamming Bot - это фантазия на тему постапокалиптического будущего, когда основные функции интернета и ботов-помощников будут повержены и останется лишь один самовоспроизводящийся бот, бесцельно бороздящий просторы интернета и, возможно, изучающий в обрывках смыслов на страницах интернета общее настроение человечества. Это [[бот]], у которого нет цели, а только путь.
 
-## Сцены
+## Быстрые входы
 
-- [[Scene 1. Path]]
-- [[Scene 2. Dependency Parsing]]
-- [[Scene 3. Texts]]
-- [[Scene 4. Geo]]
-- [[Scene 5. Cloud]]
-- [[Scene 6. Embedings]]
+- [[Jamming Bot MOC]] - полная карта содержимого проекта
+- [[Jamming bot web|Jamming Bot Web]] - карта веб-поверхности и интерфейсов
+- [[dev/_index|Jamming Bot Dev Index]] - архитектура, инфраструктура, задачи и исследования
+- [[exhibitions/_index|Выставки]] - материалы показов и экспликаций
 
-## Narrative
+## Ключевые блоки проекта
 
-- Полный текст: [[Jamming bot scenes]]
-- Краткая версия: [[Jamming bot scenes (кратко)]]
-- English version: [[jamming_bot_en]]
-- [[Jamming Bot Развитие мысли]]
-- [[Jamming Bot Размышления]]
-- [[Jamming bot музыкальная подборка]]
+- Сцены: [[Scene 1. Path]], [[Scene 2. Dependency Parsing]], [[Scene 3. Texts]], [[Scene 4. Geo]], [[Scene 5. Cloud]], [[Scene 6. Embedings|Scene 6. Embeddings]]
+- Нарратив: [[Jamming bot scenes]], [[Jamming bot scenes (кратко)]], [[jamming_bot_en]]
+- Разработка: [[Jamming bot Dev project|Jamming Bot Dev Project]], [[Jamming bot microservices|Jamming Bot Microservices]], [[Jamming bot Tasks|Jamming Bot Tasks]]
+- Архив: [[Jamming Bot v1.0.0]], [[Jamming_bot_v1.0]]
 
-## Разработка
+## Текущая роль заметки
 
-- [[Jamming bot Dev project]]
-- [[Jamming bot microservices]]
-- [[Semantic dev notes]]
-- [[Jamming bot posts]]
-- [[Jamming bot Redis Queue Jobs]]
-- [[jamming bot flask]]
-- [[Jamming bot Tasks]]
-- [[Semantic cloud]]
-- [[Semantic AV Phrase]]
-- [[Tags cloud]]
-- [[шаг]]
-
-## Архив и материалы
-
-- [[Jamming Bot v1.0.0]]
-- [[Jamming_bot_v1.0]]
-- [[Jamming bot Scenaria.canvas]]
-- [[exhibitions/_index|Выставки]]
+- Каноническая карточка проекта: что это, зачем, текущий статус.
+- Подробная навигация и длинные перечни вынесены в [[Jamming Bot MOC]].
 
 ## Связанные идеи
 

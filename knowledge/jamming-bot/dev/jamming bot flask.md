@@ -1,7 +1,10 @@
 ---
-title: jamming bot flask
+title: Jamming Bot Flask
+aliases:
+  - jamming bot flask
 note_type: dev
 project: "[[Jamming Bot]]"
+dev_area: architecture
 tags:
   - dev
   - flask
@@ -9,7 +12,7 @@ tags:
   - jamming-bot
 ---
 
-# jamming bot flask
+# Jamming Bot Flask
 
 ## Endpoints
 

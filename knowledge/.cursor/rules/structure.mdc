@@ -6,9 +6,11 @@ globs: ["**/*.md"]
 Структура vault (верхний уровень):
 - `journal/` — датированные заметки и черновики
 - `jamming-bot/` — проект Jamming Bot (карточка проекта, MOC, canvas)
+- `jamming-bot/web/` — MOC для web surface, API и ops-интерфейсов
 - `jamming-bot/scenes/` — атомарные заметки сцен
 - `jamming-bot/narrative/` — полный нарратив, краткие версии, размышления
 - `jamming-bot/dev/` — разработка, инфраструктура, задачи, техзаметки
+- `jamming-bot/pages/` — описания публичных экранов и визуализаций
 - `jamming-bot/archive/` — исторические версии и архив проекта
 - `concepts/` — перекрёстные концепты (бот, пауки, идеи)
 - `refs/` — стек и инструменты (Docker, Spacy, D3…)
@@ -18,7 +20,9 @@ globs: ["**/*.md"]
 При рефакторинге или создании заметок:
 - Используй иерархию заголовков (#, ##, ###).
 - Создавай MOC (Maps of Content) для важных тем; для Jamming Bot — [[Jamming Bot MOC]].
+- Для второго уровня навигации используй `[[web/_index|Jamming Bot Web Index]]`, `[[pages/_index|Jamming Bot Pages Index]]` и `[[dev/_index|Jamming Bot Dev Index]]`.
 - Для проекта Jamming Bot придерживайся принципа: одна заметка — одна роль (`project`, `scene`, `narrative`, `dev`, `archive`, `task`, `moc`).
+- Для техзаметок добавляй `dev_area`, для веб-заметок — `web_type` и `parent`.
 - Добавляй теги осмысленно (#tag).
 - Предлагай Dataview-запросы, если это улучшит заметку.
 - При объединении заметок сохраняй все важные связи.

@@ -1,5 +1,7 @@
 ---
-title: Scene 6. Embedings
+title: Scene 6. Embeddings
+aliases:
+  - Scene 6. Embedings
 note_type: scene
 project: "[[Jamming Bot]]"
 order: 6
@@ -9,7 +11,7 @@ tags:
   - embeddings
 ---
 
-# Scene 6. Embedings
+# Scene 6. Embeddings
 
 Через embeddings собранные тексты преобразуются в многомерное облако смыслов. Похожие фразы группируются, а из общего массива начинают проступать устойчивые сочетания и остаточные формулы человеческого опыта.
 

@@ -1,14 +1,17 @@
 ---
-title: Jamming bot Dev project
+title: Jamming Bot Dev Project
+aliases:
+  - Jamming bot Dev project
 note_type: dev
 project: "[[Jamming Bot]]"
+dev_area: infra
 tags:
   - dev
   - infrastructure
   - jamming-bot
 ---
 
-# Jamming bot Dev project
+# Jamming Bot Dev Project
 
 Техническая заметка по разработке и инфраструктуре проекта.
 

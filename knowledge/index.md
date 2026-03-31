@@ -1,6 +1,8 @@
 ---
 title: Knowledge index
 note_type: moc
+aliases:
+  - Knowledge Vault
 tags:
   - moc
   - knowledge
@@ -13,7 +15,6 @@ tags:
 ## Проекты
 
 - [[Jamming Bot]]
-- [[Jamming Bot MOC]]
 
 ## Разделы vault
 
@@ -30,7 +31,8 @@ tags:
 
 ## Что внутри Jamming Bot
 
-- Сцены: [[Scene 1. Path]], [[Scene 2. Dependency Parsing]], [[Scene 3. Texts]]
-- Нарратив: [[Jamming bot scenes]], [[Jamming bot scenes (кратко)]], [[jamming_bot_en]]
-- Разработка: [[Jamming bot Dev project]], [[Semantic dev notes]], [[Jamming bot Tasks]]
-- Архив: [[Jamming_bot_v1.0]], [[Jamming Bot v1.0.0]]
+- Карточка проекта: [[Jamming Bot]]
+- Карта содержания: [[Jamming Bot MOC]]
+- Web surface: [[Jamming bot web|Jamming Bot Web]]
+- Разработка: [[dev/_index|Jamming Bot Dev Index]]
+- Веб-разделы: [[web/_index|Jamming Bot Web Index]]

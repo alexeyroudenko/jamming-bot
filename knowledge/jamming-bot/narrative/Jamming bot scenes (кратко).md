@@ -1,5 +1,7 @@
 ---
-title: Jamming bot scenes (кратко)
+title: Jamming Bot Scenes (кратко)
+aliases:
+  - Jamming bot scenes (кратко)
 note_type: narrative
 project: "[[Jamming Bot]]"
 status: synopsis
@@ -9,7 +11,7 @@ tags:
   - jamming-bot
 ---
 
-# Jamming bot scenes (кратко)
+# Jamming Bot Scenes (кратко)
 
 Краткий синопсис сцен. Полная версия: [[Jamming bot scenes]].
 

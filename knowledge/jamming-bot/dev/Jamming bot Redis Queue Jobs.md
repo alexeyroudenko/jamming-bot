@@ -1,7 +1,10 @@
 ---
-title: Jamming bot Redis Queue Jobs
+title: Jamming Bot Redis Queue Jobs
+aliases:
+  - Jamming bot Redis Queue Jobs
 note_type: dev
 project: "[[Jamming Bot]]"
+dev_area: infra
 tags:
   - dev
   - queue
@@ -9,7 +12,7 @@ tags:
   - jamming-bot
 ---
 
-# Jamming bot Redis Queue Jobs
+# Jamming Bot Redis Queue Jobs
 
 - `jobs.dostep(data)` — store in queue
 - `jobs.dopass(ip)` — use `maxminddb` for geolocation detection

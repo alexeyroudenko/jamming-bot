@@ -2,6 +2,7 @@
 title: Semantic dev notes
 note_type: dev
 project: "[[Jamming Bot]]"
+dev_area: research
 tags:
   - dev
   - nlp

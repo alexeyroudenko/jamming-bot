@@ -1,5 +1,7 @@
 ---
-title: Jamming bot музыкальная подборка
+title: Jamming Bot Музыкальная подборка
+aliases:
+  - Jamming bot музыкальная подборка
 note_type: narrative
 project: "[[Jamming Bot]]"
 tags:
@@ -8,7 +10,7 @@ tags:
   - jamming-bot
 ---
 
-# Jamming bot музыкальная подборка
+# Jamming Bot Музыкальная подборка
 
 - Planet Funk - Unhuman Perfection
   https://www.youtube.com/watch?v=WQ7p2OkzswU

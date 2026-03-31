@@ -1,7 +1,10 @@
 ---
-title: Jamming bot microservices
+title: Jamming Bot Microservices
+aliases:
+  - Jamming bot microservices
 note_type: dev
 project: "[[Jamming Bot]]"
+dev_area: architecture
 tags:
   - dev
   - microservices
@@ -9,7 +12,7 @@ tags:
   - jamming-bot
 ---
 
-# Jamming bot microservices
+# Jamming Bot Microservices
 
 Список микросервисов и инфраструктурных сервисов проекта по актуальному `docker-compose.yml`.
 
