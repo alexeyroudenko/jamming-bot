@@ -1,4 +1,15 @@
 
+knowledge/.obsidian/workspace*
+
+.obsidian/plugins/*/
+!.obsidian/plugins/*/data.json     # оставляем настройки плагинов
+.obsidian/snippets/
+.obsidian/themes/
+
+.smart-connections/
+.pro/
+copilot-index-*.json
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -1,0 +1,27 @@
+.obsidian/
+**/node_modules/
+**/.git/
+**/__pycache__/
+**/.venv/
+**/venv/
+**/dist/
+
+**/media/
+
+node_modules/
+dist/
+build/
+.git/
+*.log
+*.tmp
+
+knowledge/.obsidian/
+knowledge/attachments/
+knowledge/trash/          # или .trash
+knowledge/.obsidian/workspace.json
+knowledge/.obsidian/cache/
+
+knowledge/**/*.png
+knowledge/**/*.jpg
+knowledge/**/*.pdf
+knowledge/**/*.mp4

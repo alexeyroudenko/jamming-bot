@@ -1,0 +1,11 @@
+{
+  "id": "cursor-integration",
+  "name": "Cursor Integration",
+  "version": "1.0.19",
+  "minAppVersion": "1.0.0",
+  "description": "Preview and navigate your vault in Cursor/VS Code with full plugin support.",
+  "author": "px39n",
+  "authorUrl": "https://github.com/px39n",
+  "fundingUrl": "",
+  "isDesktopOnly": true
+}

@@ -1,0 +1,11 @@
+{
+  "accentColor": "#ff0000",
+  "interfaceFontFamily": "",
+  "textFontFamily": "Corbel",
+  "baseFontSize": 18,
+  "theme": "obsidian",
+  "cssTheme": "Minimal",
+  "enabledCssSnippets": [
+    "headers"
+  ]
+}

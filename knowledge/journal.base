@@ -1,0 +1,16 @@
+views:
+  - type: list
+    name: Table
+    filters:
+      and:
+        - file.folder == "journal"
+    markers: number
+    indentProperties: false
+  - type: table
+    name: View
+    filters:
+      and:
+        - file.folder == "journal"
+    order:
+      - file.name
+      - type

@@ -1,0 +1,3 @@
+Alexey Roudenko (arthew0) is a media artist and physicist who works with the latest computer technology. In his works, Alexey combines modern technology with visionary ideas of Kandinsky, Malevich, Skryabin, and the traditions of the Russian avant-garde. His interests lie in the field of sound synthesis, studies of forms and motions by means of computer vision, and simulations of synaesthesia.
+
+arthew0 sees his creative career as a continuing experiment, only a small part of which emerges in the view of the public. Some steps are divided by a gap several years long, some remain private, and others lead into deadlock.
