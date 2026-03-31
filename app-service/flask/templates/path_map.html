@@ -183,6 +183,16 @@
 <div class="tags-vis-toolbar path-map-toolbar">
   <button type="button" class="tags-vis-btn" id="btn-auto" aria-pressed="false">Auto</button>
   <button type="button" class="tags-vis-btn" id="btn-refresh">Refresh</button>
+  <fieldset class="path-map-mode-group" id="rows-group">
+    <legend style="display:none">Rows</legend>
+    <span class="path-map-mode-title">Rows</span>
+    <label class="path-map-mode-label"><input type="radio" name="row-count" value="1">1</label>
+    <label class="path-map-mode-label"><input type="radio" name="row-count" value="2">2</label>
+    <label class="path-map-mode-label"><input type="radio" name="row-count" value="4">4</label>
+    <label class="path-map-mode-label"><input type="radio" name="row-count" value="5" checked>5</label>
+    <label class="path-map-mode-label"><input type="radio" name="row-count" value="10">10</label>
+    <label class="path-map-mode-label"><input type="radio" name="row-count" value="20">20</label>
+  </fieldset>
   <fieldset class="path-map-mode-group" id="mode-group">
     <legend style="display:none">Display mode</legend>
     <span class="path-map-mode-title">Mode</span>
@@ -213,6 +223,7 @@
   var STORAGE_API = '/api/storage_latest/';
   var MAX_STEPS = 3000;
   var MODE_STORAGE_KEY = 'path-map-display-mode';
+  var ROWS_STORAGE_KEY = 'path-map-row-count';
   var canvas = document.getElementById('path-map');
   var ctx = canvas.getContext('2d', { alpha: false });
   var banner = document.getElementById('api-error');
@@ -224,18 +235,21 @@
   var hintEl = document.getElementById('path-map-hint');
   var legendEl = document.getElementById('path-map-legend');
   var modeInputs = Array.prototype.slice.call(document.querySelectorAll('input[name="display-mode"]'));
+  var rowInputs = Array.prototype.slice.call(document.querySelectorAll('input[name="row-count"]'));
 
   var dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
   var steps = [];
   var cols = 1;
   var rows = 1;
-  var cellSize = 8;
+  var cellWidth = 8;
+  var cellHeight = 8;
   var gridWidth = 1;
   var gridHeight = 1;
   var originX = 0;
   var originY = 0;
   var hoveredIndex = -1;
   var displayMode = 'status';
+  var rowCount = 5;
   var autoMode = false;
   var autoTarget = null;
   var autoTimer = null;
@@ -394,12 +408,16 @@
   function computeLayout() {
     var width = window.innerWidth || 1;
     var height = window.innerHeight || 1;
-    cols = Math.max(1, Math.ceil(Math.sqrt(MAX_STEPS * width / Math.max(height, 1))));
-    rows = Math.max(1, Math.ceil(MAX_STEPS / cols));
-    cellSize = Math.max(3, Math.floor(Math.min(width / cols, height / rows)));
-    if (!Number.isFinite(cellSize) || cellSize < 1) cellSize = 3;
-    gridWidth = cols * cellSize;
-    gridHeight = rows * cellSize;
+    var usableWidth = Math.max(120, width - 24);
+    var usableHeight = Math.max(80, height - 120);
+    rows = rowCount;
+    cols = Math.max(1, Math.ceil(MAX_STEPS / rows));
+    cellWidth = Math.max(1, Math.floor(usableWidth / cols));
+    cellHeight = Math.max(2, Math.floor(usableHeight / rows));
+    if (!Number.isFinite(cellWidth) || cellWidth < 1) cellWidth = 1;
+    if (!Number.isFinite(cellHeight) || cellHeight < 1) cellHeight = 2;
+    gridWidth = cols * cellWidth;
+    gridHeight = rows * cellHeight;
     originX = Math.floor((width - gridWidth) / 2);
     originY = Math.floor((height - gridHeight) / 2);
   }
@@ -423,6 +441,20 @@
         displayMode = saved;
         return;
       }
+    }
+  }
+
+  function applyStoredRows() {
+    var saved = null;
+    try {
+      saved = sessionStorage.getItem(ROWS_STORAGE_KEY);
+    } catch (e) {}
+    if (!saved) return;
+    var parsed = parseInt(saved, 10);
+    if (![1, 2, 4, 5, 10, 20].includes(parsed)) return;
+    rowCount = parsed;
+    for (var i = 0; i < rowInputs.length; i++) {
+      rowInputs[i].checked = parseInt(rowInputs[i].value, 10) === parsed;
     }
   }
 
@@ -492,11 +524,11 @@
     for (var i = 0; i < steps.length; i++) {
       var col = i % cols;
       var row = Math.floor(i / cols);
-      var x = originX + col * cellSize;
-      var y = originY + row * cellSize;
+      var x = originX + col * cellWidth;
+      var y = originY + row * cellHeight;
       var step = steps[i];
       ctx.fillStyle = stepFill(step);
-      ctx.fillRect(x, y, cellSize, cellSize);
+      ctx.fillRect(x, y, cellWidth, cellHeight);
     }
 
     if (hoveredIndex >= 0 && hoveredIndex < steps.length) {
@@ -531,10 +563,10 @@
     var col = index % cols;
     var row = Math.floor(index / cols);
     return {
-      x: originX + col * cellSize,
-      y: originY + row * cellSize,
-      w: cellSize,
-      h: cellSize
+      x: originX + col * cellWidth,
+      y: originY + row * cellHeight,
+      w: cellWidth,
+      h: cellHeight
     };
   }
 
@@ -549,6 +581,7 @@
     }
     var label = steps.length + ' / ' + MAX_STEPS + ' visible';
     if (steps.length) label += ' · latest step ' + latestStepNumber;
+    label += ' · rows ' + rowCount;
     label += ' · mode ' + getModeLabel();
     label += ' · 4xx ' + redCount;
     statusEl.textContent = label;
@@ -622,8 +655,8 @@
     var localX = clientX - originX;
     var localY = clientY - originY;
     if (localX < 0 || localY < 0 || localX >= gridWidth || localY >= gridHeight) return -1;
-    var col = Math.floor(localX / cellSize);
-    var row = Math.floor(localY / cellSize);
+    var col = Math.floor(localX / cellWidth);
+    var row = Math.floor(localY / cellHeight);
     var index = row * cols + col;
     return index >= 0 && index < steps.length ? index : -1;
   }
@@ -736,6 +769,23 @@
     }
   }
 
+  function setRowCount(nextRows) {
+    rowCount = nextRows;
+    try {
+      sessionStorage.setItem(ROWS_STORAGE_KEY, String(nextRows));
+    } catch (e) {}
+    computeLayout();
+    updateStatus();
+    render();
+    if (hoveredIndex >= 0 && hoveredIndex < steps.length) {
+      if (autoMode) {
+        syncAutoTooltip();
+      } else {
+        showTooltipForIndex(hoveredIndex, true);
+      }
+    }
+  }
+
   function toggleAuto() {
     if (autoMode) {
       stopAuto();
@@ -799,6 +849,11 @@
       if (event.target.checked) setDisplayMode(event.target.value);
     });
   });
+  rowInputs.forEach(function (input) {
+    input.addEventListener('change', function (event) {
+      if (event.target.checked) setRowCount(parseInt(event.target.value, 10));
+    });
+  });
   window.addEventListener('resize', resizeCanvas);
   window.addEventListener('mousemove', onPointerMove);
   window.addEventListener('mouseleave', function () {
@@ -806,6 +861,7 @@
   });
 
   applyStoredMode();
+  applyStoredRows();
   resizeCanvas();
   updateLegend();
   loadInitial();
