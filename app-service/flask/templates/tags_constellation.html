@@ -35,6 +35,7 @@
   <label class="tags-vis-density-label" for="constellation-max-speed">MaxSpeed</label>
   <input id="constellation-max-speed" class="tags-vis-select" type="range" min="0" max="12" step="0.1" value="2" aria-label="Max speed">
   <span class="tags-vis-status" id="constellation-max-speed-value">2.0</span>
+  <button type="button" class="tags-vis-btn" id="btn-anchor-vectors" aria-pressed="false" title="Show anchor direction vectors from embeddings">Anchor vectors</button>
   <button type="button" class="tags-vis-btn" id="btn-freeze">Freeze</button>
   <button type="button" class="tags-vis-btn" id="btn-export">Export PNG</button>
   <span class="tags-vis-status" id="tags-vis-status"></span>
@@ -44,7 +45,7 @@
 <div class="tags-vis-scanlines" aria-hidden="true"></div>
 <div id="info" class="tags-vis-banner" aria-live="polite"></div>
 <div class="tags-vis-canvas-host"><canvas id="vis"></canvas></div>
-<p class="tags-vis-hint">Co-occurrence from live tag bursts · similarity edges from spaCy (when available) · glitch on links</p>
+<p class="tags-vis-hint">Co-occurrence from live tag bursts · similarity edges from spaCy (when available) · red vectors show anchor directions</p>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
 <script src="{{ url_for('static', filename='tags_vis_controls.js') }}"></script>
@@ -70,6 +71,7 @@
   var notLinkedRadiusValueEl = document.getElementById('constellation-notlinked-radius-value');
   var maxSpeedSel = document.getElementById('constellation-max-speed');
   var maxSpeedValueEl = document.getElementById('constellation-max-speed-value');
+  var anchorVectorsBtn = document.getElementById('btn-anchor-vectors');
 
   var nodes = [];
   var links = [];
@@ -84,6 +86,7 @@
   var springLength = Math.round(LINK_LENGTH);
   var notLinkedRadius = 140;
   var maxSpeed = 2;
+  var showAnchorVectors = false;
   var lastTagRows = [];
   var lastEmb = null;
   var dragNodeIndex = -1;
@@ -132,6 +135,17 @@
     if (maxSpeedValueEl) maxSpeedValueEl.textContent = maxSpeed.toFixed(1);
   }
 
+  function setAnchorVectorsVisible(on) {
+    showAnchorVectors = !!on;
+    if (anchorVectorsBtn) {
+      anchorVectorsBtn.setAttribute('aria-pressed', showAnchorVectors ? 'true' : 'false');
+      anchorVectorsBtn.classList.toggle('is-active', showAnchorVectors);
+    }
+    try {
+      sessionStorage.setItem('tags-constellation-anchor-vectors', showAnchorVectors ? '1' : '0');
+    } catch (e) {}
+  }
+
   function loadPrefs() {
     try {
       var savedCount = parseInt(sessionStorage.getItem('tags-constellation-count') || '', 10);
@@ -142,6 +156,7 @@
       if (Number.isFinite(savedRadius)) notLinkedRadius = Math.max(0, Math.min(480, savedRadius));
       var savedMaxSpeed = parseFloat(sessionStorage.getItem('tags-constellation-max-speed') || '');
       if (Number.isFinite(savedMaxSpeed)) maxSpeed = Math.max(0, Math.min(12, savedMaxSpeed));
+      showAnchorVectors = sessionStorage.getItem('tags-constellation-anchor-vectors') === '1';
     } catch (e) {}
   }
 
@@ -218,12 +233,16 @@
 
     var wordTo2d = Object.create(null);
     var wordTo3d = Object.create(null);
+    var wordToDir2d = Object.create(null);
     if (emb && emb.ok && emb.words && emb.vectors2d && emb.words.length === emb.vectors2d.length) {
       embMode = emb.mode || 'vectors';
       for (var e = 0; e < emb.words.length; e++) {
         wordTo2d[normTag(emb.words[e])] = emb.vectors2d[e];
         if (emb.vectors3d && emb.vectors3d.length === emb.words.length) {
           wordTo3d[normTag(emb.words[e])] = emb.vectors3d[e];
+        }
+        if (emb.directions2d && emb.directions2d.length === emb.words.length) {
+          wordToDir2d[normTag(emb.words[e])] = emb.directions2d[e];
         }
       }
     } else {
@@ -254,6 +273,7 @@
         name: display,
         nm: nm,
         vector3d: wordTo3d[nm] || null,
+        direction2d: wordToDir2d[nm] || null,
         x: x,
         y: y,
         vx: vx,
@@ -426,6 +446,7 @@
   syncSpringLengthUi();
   syncNotLinkedRadiusUi();
   syncMaxSpeedUi();
+  setAnchorVectorsVisible(showAnchorVectors);
   if (countSel) {
     countSel.addEventListener('input', function () {
       visibleCount = Math.max(0, Math.min(MAX_TAGS, parseInt(countSel.value || '0', 10) || 0));
@@ -461,6 +482,11 @@
       try {
         sessionStorage.setItem('tags-constellation-max-speed', String(maxSpeed));
       } catch (e) {}
+    });
+  }
+  if (anchorVectorsBtn) {
+    anchorVectorsBtn.addEventListener('click', function () {
+      setAnchorVectorsVisible(!showAnchorVectors);
     });
   }
   canvas.addEventListener('pointerdown', onPointerDown);
@@ -586,13 +612,29 @@
       var p = worldToScreen(nd.x, nd.y);
       var tw = 0.82 + 0.18 * Math.sin(t * 0.6 + nd.phase);
       var rr = Math.max(1.5, nd.r * viewScale) * (0.92 + 0.08 * tw);
+      if (showAnchorVectors && nd.direction2d && nd.direction2d.length >= 2) {
+        var dx = Number(nd.direction2d[0]) || 0;
+        var dy = Number(nd.direction2d[1]) || 0;
+        var dlen = Math.sqrt(dx * dx + dy * dy);
+        if (dlen > 1e-6) {
+          var ux = dx / dlen;
+          var uy = dy / dlen;
+          var vlen = Math.max(16, 18 * viewScale);
+          ctx.beginPath();
+          ctx.strokeStyle = 'rgba(255, 90, 90, 0.9)';
+          ctx.lineWidth = Math.max(1.5, 1.4 * viewScale);
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x + ux * vlen, p.y + uy * vlen);
+          ctx.stroke();
+        }
+      }
       ctx.beginPath();
       ctx.strokeStyle = 'rgba(255, 255, 255, ' + (0.7 + 0.18 * tw) + ')';
       ctx.lineWidth = Math.max(1, 1.2 * viewScale);
       ctx.arc(p.x, p.y, rr, 0, Math.PI * 2);
       ctx.stroke();
       ctx.fillStyle = 'rgba(244, 244, 245, 0.88)';
-      ctx.font = '500 ' + Math.max(9, 10 * viewScale) + 'px ui-monospace, monospace';
+      ctx.font = '500 ' + Math.max(5, 5 * viewScale) + 'px ui-monospace, monospace';
       ctx.fillText(
         nd.name.length > 14 ? nd.name.slice(0, 12) + '…' : nd.name,
         p.x + Math.max(2, rr) + 2,
