@@ -23,6 +23,18 @@
 </nav>
 
 <div class="tags-vis-toolbar">
+  <label class="tags-vis-density-label" for="constellation-count">Count</label>
+  <input id="constellation-count" class="tags-vis-select" type="range" min="0" max="56" step="1" value="56" aria-label="Count">
+  <span class="tags-vis-status" id="constellation-count-value">56</span>
+  <label class="tags-vis-density-label" for="constellation-spring-length">Spring length</label>
+  <input id="constellation-spring-length" class="tags-vis-select" type="range" min="20" max="480" step="1" value="120" aria-label="Spring length">
+  <span class="tags-vis-status" id="constellation-spring-length-value">120</span>
+  <label class="tags-vis-density-label" for="constellation-notlinked-radius">NotLinkedRadius</label>
+  <input id="constellation-notlinked-radius" class="tags-vis-select" type="range" min="0" max="480" step="1" value="140" aria-label="Not linked radius">
+  <span class="tags-vis-status" id="constellation-notlinked-radius-value">140</span>
+  <label class="tags-vis-density-label" for="constellation-max-speed">MaxSpeed</label>
+  <input id="constellation-max-speed" class="tags-vis-select" type="range" min="0" max="12" step="0.1" value="2" aria-label="Max speed">
+  <span class="tags-vis-status" id="constellation-max-speed-value">2.0</span>
   <button type="button" class="tags-vis-btn" id="btn-freeze">Freeze</button>
   <button type="button" class="tags-vis-btn" id="btn-export">Export PNG</button>
   <span class="tags-vis-status" id="tags-vis-status"></span>
@@ -30,6 +42,7 @@
 
 <div id="api-error" class="tags-vis-banner" role="alert"></div>
 <div class="tags-vis-scanlines" aria-hidden="true"></div>
+<div id="info" class="tags-vis-banner" aria-live="polite"></div>
 <div class="tags-vis-canvas-host"><canvas id="vis"></canvas></div>
 <p class="tags-vis-hint">Co-occurrence from live tag bursts · similarity edges from spaCy (when available) · glitch on links</p>
 
@@ -41,21 +54,39 @@
   var EMB_API = '/api/tags/embeddings/';
   var MAX_TAGS = 56;
   var MAX_DPR = 2;
-  var CO_OCC_WEIGHT = 0.22;
   var LINK_LENGTH = Math.min(window.innerWidth, window.innerHeight) * 0.18;
+  var VIEW_SCALE_MIN = 0.35;
+  var VIEW_SCALE_MAX = 4;
   var frameDt = 1;
   var statusEl = document.getElementById('tags-vis-status');
   var banner = document.getElementById('api-error');
   var canvas = document.getElementById('vis');
   var ctx = canvas.getContext('2d');
+  var countSel = document.getElementById('constellation-count');
+  var countValueEl = document.getElementById('constellation-count-value');
+  var springLengthSel = document.getElementById('constellation-spring-length');
+  var springLengthValueEl = document.getElementById('constellation-spring-length-value');
+  var notLinkedRadiusSel = document.getElementById('constellation-notlinked-radius');
+  var notLinkedRadiusValueEl = document.getElementById('constellation-notlinked-radius-value');
+  var maxSpeedSel = document.getElementById('constellation-max-speed');
+  var maxSpeedValueEl = document.getElementById('constellation-max-speed-value');
 
   var nodes = [];
   var links = [];
   var nameToIndex = Object.create(null);
-  var coOcc = Object.create(null);
   var embMode = 'none';
   var t0 = performance.now();
   var glitchPhase = 0;
+  var viewScale = 2;
+  var viewOffsetX = 0;
+  var viewOffsetY = 0;
+  var visibleCount = MAX_TAGS;
+  var springLength = Math.round(LINK_LENGTH);
+  var notLinkedRadius = 140;
+  var maxSpeed = 2;
+  var lastTagRows = [];
+  var lastEmb = null;
+  var dragNodeIndex = -1;
 
   function showErr(msg) {
     banner.textContent = msg;
@@ -65,27 +96,59 @@
     banner.classList.remove('visible');
   }
 
+  function bumpActivity() {}
+
+  function setInfo(text) {
+    var infoEl = document.getElementById('info');
+    if (!infoEl) return;
+    if (text) {
+      infoEl.textContent = text;
+      infoEl.classList.add('visible');
+    } else {
+      infoEl.classList.remove('visible');
+    }
+  }
+
+  function syncCountUi(total) {
+    var maxCount = Math.max(0, total || 0);
+    if (countSel) countSel.max = String(maxCount);
+    visibleCount = Math.max(0, Math.min(maxCount, visibleCount));
+    if (countSel) countSel.value = String(visibleCount);
+    if (countValueEl) countValueEl.textContent = String(visibleCount);
+  }
+
+  function syncSpringLengthUi() {
+    if (springLengthSel) springLengthSel.value = String(springLength);
+    if (springLengthValueEl) springLengthValueEl.textContent = String(springLength);
+  }
+
+  function syncNotLinkedRadiusUi() {
+    if (notLinkedRadiusSel) notLinkedRadiusSel.value = String(notLinkedRadius);
+    if (notLinkedRadiusValueEl) notLinkedRadiusValueEl.textContent = String(notLinkedRadius);
+  }
+
+  function syncMaxSpeedUi() {
+    if (maxSpeedSel) maxSpeedSel.value = String(maxSpeed);
+    if (maxSpeedValueEl) maxSpeedValueEl.textContent = maxSpeed.toFixed(1);
+  }
+
+  function loadPrefs() {
+    try {
+      var savedCount = parseInt(sessionStorage.getItem('tags-constellation-count') || '', 10);
+      if (Number.isFinite(savedCount)) visibleCount = Math.max(0, Math.min(MAX_TAGS, savedCount));
+      var savedSpring = parseInt(sessionStorage.getItem('tags-constellation-spring-length') || '', 10);
+      if (Number.isFinite(savedSpring)) springLength = Math.max(20, Math.min(480, savedSpring));
+      var savedRadius = parseInt(sessionStorage.getItem('tags-constellation-notlinked-radius') || '', 10);
+      if (Number.isFinite(savedRadius)) notLinkedRadius = Math.max(0, Math.min(480, savedRadius));
+      var savedMaxSpeed = parseFloat(sessionStorage.getItem('tags-constellation-max-speed') || '');
+      if (Number.isFinite(savedMaxSpeed)) maxSpeed = Math.max(0, Math.min(12, savedMaxSpeed));
+    } catch (e) {}
+  }
+
   function normTag(x) {
     if (typeof x === 'string') return x.trim().toLowerCase();
     if (x && typeof x.name === 'string') return String(x.name).trim().toLowerCase();
     return '';
-  }
-
-  function coOccKey(a, b) {
-    return a < b ? a + '\t' + b : b + '\t' + a;
-  }
-
-  function ingestCoOccFromList(arr) {
-    if (!arr || arr.length < 2) return;
-    var names = [];
-    for (var i = 0; i < arr.length; i++) {
-      var n = normTag(arr[i]);
-      if (n && nameToIndex[n] !== undefined) names.push(n);
-    }
-    for (var j = 0; j < names.length - 1; j++) {
-      var k = coOccKey(names[j], names[j + 1]);
-      coOcc[k] = Math.min(48, (coOcc[k] || 0) + 1);
-    }
   }
 
   function resize() {
@@ -97,6 +160,8 @@
     canvas.style.width = w + 'px';
     canvas.style.height = h + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    viewOffsetX = w * 0.5 * (1 - viewScale);
+    viewOffsetY = h * 0.52 * (1 - viewScale);
   }
   window.addEventListener('resize', resize);
   resize();
@@ -118,30 +183,6 @@
     }
   }
 
-  function mergeCoOccIntoLinks() {
-    for (var key in coOcc) {
-      if (!coOcc.hasOwnProperty(key)) continue;
-      var parts = key.split('\t');
-      if (parts.length !== 2) continue;
-      var a = parts[0];
-      var b = parts[1];
-      if (nameToIndex[a] === undefined || nameToIndex[b] === undefined) continue;
-      var w = CO_OCC_WEIGHT * Math.min(6, coOcc[key]);
-      if (w < 0.05) continue;
-      var ia = nameToIndex[a];
-      var ib = nameToIndex[b];
-      var found = false;
-      for (var k = 0; k < links.length; k++) {
-        if ((links[k].i === ia && links[k].j === ib) || (links[k].i === ib && links[k].j === ia)) {
-          links[k].w += w;
-          found = true;
-          break;
-        }
-      }
-      if (!found) links.push({ i: ia, j: ib, w: w });
-    }
-  }
-
   function spiralPos(i, n, cx, cy, R) {
     var ang = i * 2.4;
     var r = R * (0.25 + 0.65 * Math.sqrt((i + 1) / n));
@@ -149,6 +190,18 @@
   }
 
   function loadFromTagsAndEmb(tagRows, emb) {
+    lastTagRows = Array.isArray(tagRows) ? tagRows : [];
+    lastEmb = emb || null;
+    var prevByName = Object.create(null);
+    for (var pi = 0; pi < nodes.length; pi++) {
+      prevByName[nodes[pi].nm] = {
+        x: nodes[pi].x,
+        y: nodes[pi].y,
+        vx: nodes[pi].vx,
+        vy: nodes[pi].vy,
+        phase: nodes[pi].phase,
+      };
+    }
     nodes = [];
     links = [];
     nameToIndex = Object.create(null);
@@ -156,20 +209,25 @@
       return { name: String(r.name || ''), count: Number(r.count) || 0 };
     }).filter(function (t) { return t.name.length > 0; });
     sorted.sort(function (a, b) { return b.count - a.count; });
-    sorted = sorted.slice(0, MAX_TAGS);
+    syncCountUi(Math.min(MAX_TAGS, sorted.length));
+    sorted = sorted.slice(0, visibleCount);
 
     var cx = window.innerWidth * 0.5;
     var cy = window.innerHeight * 0.52;
     var R = Math.min(window.innerWidth, window.innerHeight) * 0.32;
 
     var wordTo2d = Object.create(null);
+    var wordTo3d = Object.create(null);
     if (emb && emb.ok && emb.words && emb.vectors2d && emb.words.length === emb.vectors2d.length) {
       embMode = emb.mode || 'vectors';
       for (var e = 0; e < emb.words.length; e++) {
         wordTo2d[normTag(emb.words[e])] = emb.vectors2d[e];
+        if (emb.vectors3d && emb.vectors3d.length === emb.words.length) {
+          wordTo3d[normTag(emb.words[e])] = emb.vectors3d[e];
+        }
       }
     } else {
-      embMode = emb && emb.mode === 'unavailable' ? 'co-occurrence only' : 'co-occurrence only';
+      embMode = emb && emb.mode === 'unavailable' ? 'positions only' : 'positions only';
     }
 
     for (var i = 0; i < sorted.length; i++) {
@@ -177,38 +235,147 @@
       var display = sorted[i].name;
       var count = sorted[i].count;
       nameToIndex[nm] = i;
-      var vx = 0;
-      var vy = 0;
+      var prev = prevByName[nm] || null;
+      var vx = prev ? prev.vx : 0;
+      var vy = prev ? prev.vy : 0;
       var x;
       var y;
-      var v2 = wordTo2d[nm];
-      if (v2 && v2.length >= 2) {
-        x = cx + v2[0] * R * 1.8;
-        y = cy + v2[1] * R * 1.8;
+      if (prev) {
+        x = prev.x;
+        y = prev.y;
       } else {
-        var sp = spiralPos(i, sorted.length, cx, cy, R);
-        x = sp.x;
-        y = sp.y;
+        var ang = Math.random() * Math.PI * 2;
+        x = cx + Math.cos(ang) * notLinkedRadius;
+        y = cy + Math.sin(ang) * notLinkedRadius;
       }
       var maxC = sorted[0].count || 1;
       var r = 2 + 5 * Math.sqrt(count / maxC);
       nodes.push({
         name: display,
         nm: nm,
+        vector3d: wordTo3d[nm] || null,
         x: x,
         y: y,
         vx: vx,
         vy: vy,
         count: count,
         r: r,
-        phase: Math.random() * Math.PI * 2,
+        phase: prev ? prev.phase : Math.random() * Math.PI * 2,
       });
     }
 
     buildLinksFromEmb(emb);
-    mergeCoOccIntoLinks();
 
     statusEl.textContent = nodes.length + ' stars · ' + links.length + ' links · ' + embMode;
+  }
+
+  function rebuildFromCache() {
+    if (!lastTagRows || !lastTagRows.length) return;
+    loadFromTagsAndEmb(lastTagRows, lastEmb);
+  }
+
+  function worldToScreen(x, y) {
+    return {
+      x: x * viewScale + viewOffsetX,
+      y: y * viewScale + viewOffsetY,
+    };
+  }
+
+  function screenToWorld(x, y) {
+    return {
+      x: (x - viewOffsetX) / viewScale,
+      y: (y - viewOffsetY) / viewScale,
+    };
+  }
+
+  function findNodeAtScreen(sx, sy) {
+    var p = screenToWorld(sx, sy);
+    var best = null;
+    var bestD2 = Infinity;
+    for (var i = 0; i < nodes.length; i++) {
+      var dx = p.x - nodes[i].x;
+      var dy = p.y - nodes[i].y;
+      var hitR = Math.max(8, nodes[i].r + 6) / viewScale;
+      var d2 = dx * dx + dy * dy;
+      if (d2 <= hitR * hitR && d2 < bestD2) {
+        best = nodes[i];
+        bestD2 = d2;
+      }
+    }
+    return best;
+  }
+
+  function onPointerMove(ev) {
+    if (dragNodeIndex >= 0 && dragNodeIndex < nodes.length) {
+      bumpActivity();
+      var rectDrag = canvas.getBoundingClientRect();
+      var dragPos = screenToWorld(ev.clientX - rectDrag.left, ev.clientY - rectDrag.top);
+      nodes[dragNodeIndex].x = dragPos.x;
+      nodes[dragNodeIndex].y = dragPos.y;
+      nodes[dragNodeIndex].vx = 0;
+      nodes[dragNodeIndex].vy = 0;
+      var dragNode = nodes[dragNodeIndex];
+      setInfo(
+        dragNode.name +
+        ' · count ' + dragNode.count +
+        (dragNode.vector3d ? ' · v3d [' + dragNode.vector3d.map(function (v) { return Number(v).toFixed(2); }).join(', ') + ']' : '')
+      );
+      return;
+    }
+    var rect = canvas.getBoundingClientRect();
+    var hit = findNodeAtScreen(ev.clientX - rect.left, ev.clientY - rect.top);
+    if (hit) {
+      setInfo(
+        hit.name +
+        ' · count ' + hit.count +
+        (hit.vector3d ? ' · v3d [' + hit.vector3d.map(function (v) { return Number(v).toFixed(2); }).join(', ') + ']' : '')
+      );
+    }
+    else setInfo('');
+  }
+
+  function onClick(ev) {
+    bumpActivity();
+    var rect = canvas.getBoundingClientRect();
+    var hit = findNodeAtScreen(ev.clientX - rect.left, ev.clientY - rect.top);
+    if (hit) {
+      setInfo(
+        hit.name +
+        ' · count ' + hit.count +
+        (hit.vector3d ? ' · v3d [' + hit.vector3d.map(function (v) { return Number(v).toFixed(2); }).join(', ') + ']' : '')
+      );
+    }
+  }
+
+  function onWheel(ev) {
+    bumpActivity();
+    ev.preventDefault();
+    var rect = canvas.getBoundingClientRect();
+    var sx = ev.clientX - rect.left;
+    var sy = ev.clientY - rect.top;
+    var before = screenToWorld(sx, sy);
+    var zoom = ev.deltaY < 0 ? 1.12 : 1 / 1.12;
+    var nextScale = Math.max(VIEW_SCALE_MIN, Math.min(VIEW_SCALE_MAX, viewScale * zoom));
+    if (Math.abs(nextScale - viewScale) < 1e-6) return;
+    viewScale = nextScale;
+    viewOffsetX = sx - before.x * viewScale;
+    viewOffsetY = sy - before.y * viewScale;
+  }
+
+  function onPointerDown(ev) {
+    bumpActivity();
+    var rect = canvas.getBoundingClientRect();
+    var hit = findNodeAtScreen(ev.clientX - rect.left, ev.clientY - rect.top);
+    dragNodeIndex = hit ? nodes.indexOf(hit) : -1;
+    if (dragNodeIndex >= 0) {
+      canvas.style.cursor = 'grabbing';
+      setInfo(nodes[dragNodeIndex].name + ' · count ' + nodes[dragNodeIndex].count);
+    }
+  }
+
+  function onPointerUp() {
+    dragNodeIndex = -1;
+    canvas.style.cursor = '';
   }
 
   function fetchEmb(names) {
@@ -251,10 +418,62 @@
       });
   }
 
+  loadPrefs();
   TagsVisControls.wire({
     canvas: canvas,
     onFreezeChange: function () {},
   });
+  syncSpringLengthUi();
+  syncNotLinkedRadiusUi();
+  syncMaxSpeedUi();
+  if (countSel) {
+    countSel.addEventListener('input', function () {
+      visibleCount = Math.max(0, Math.min(MAX_TAGS, parseInt(countSel.value || '0', 10) || 0));
+      syncCountUi(Math.min(MAX_TAGS, lastTagRows.length));
+      try {
+        sessionStorage.setItem('tags-constellation-count', String(visibleCount));
+      } catch (e) {}
+      rebuildFromCache();
+    });
+  }
+  if (springLengthSel) {
+    springLengthSel.addEventListener('input', function () {
+      springLength = Math.max(20, Math.min(480, parseInt(springLengthSel.value || '120', 10) || 120));
+      syncSpringLengthUi();
+      try {
+        sessionStorage.setItem('tags-constellation-spring-length', String(springLength));
+      } catch (e) {}
+    });
+  }
+  if (notLinkedRadiusSel) {
+    notLinkedRadiusSel.addEventListener('input', function () {
+      notLinkedRadius = Math.max(0, Math.min(480, parseInt(notLinkedRadiusSel.value || '140', 10) || 140));
+      syncNotLinkedRadiusUi();
+      try {
+        sessionStorage.setItem('tags-constellation-notlinked-radius', String(notLinkedRadius));
+      } catch (e) {}
+    });
+  }
+  if (maxSpeedSel) {
+    maxSpeedSel.addEventListener('input', function () {
+      maxSpeed = Math.max(0, Math.min(12, parseFloat(maxSpeedSel.value || '2') || 2));
+      syncMaxSpeedUi();
+      try {
+        sessionStorage.setItem('tags-constellation-max-speed', String(maxSpeed));
+      } catch (e) {}
+    });
+  }
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('mousemove', onPointerMove);
+  canvas.addEventListener('click', onClick);
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+  window.addEventListener('pointerup', onPointerUp);
+  canvas.addEventListener('touchstart', bumpActivity, { passive: true });
+  canvas.addEventListener('touchmove', function (e) {
+    if (e.touches.length !== 1) return;
+    var t = e.touches[0];
+    onPointerMove({ clientX: t.clientX, clientY: t.clientY });
+  }, { passive: true });
 
   function forceStep() {
     if (TagsVisControls.frozen) return;
@@ -262,6 +481,8 @@
     if (n === 0) return;
     var rep = 180 * frameDt;
     var damp = Math.pow(0.9, frameDt);
+    var degree = new Array(n);
+    for (var di = 0; di < n; di++) degree[di] = 0;
     for (var i = 0; i < n; i++) {
       nodes[i].fx = 0;
       nodes[i].fy = 0;
@@ -288,20 +509,45 @@
     for (var L = 0; L < links.length; L++) {
       var li = links[L].i;
       var lj = links[L].j;
+      degree[li] += 1;
+      degree[lj] += 1;
       var w = links[L].w * 0.028 * frameDt;
       var ddx = nodes[lj].x - nodes[li].x;
       var ddy = nodes[lj].y - nodes[li].y;
       var dist = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
-      var stretch = dist - LINK_LENGTH;
+      var stretch = dist - springLength;
       var pull = stretch * w;
       nodes[li].fx += (ddx / dist) * pull;
       nodes[li].fy += (ddy / dist) * pull;
       nodes[lj].fx -= (ddx / dist) * pull;
       nodes[lj].fy -= (ddy / dist) * pull;
     }
+    for (var ui = 0; ui < n; ui++) {
+      if (degree[ui] !== 0) continue;
+      var rx = nodes[ui].x - cx;
+      var ry = nodes[ui].y - cy;
+      var rr = Math.sqrt(rx * rx + ry * ry);
+      if (rr < 1e-6) {
+        rx = Math.cos(nodes[ui].phase || 0);
+        ry = Math.sin(nodes[ui].phase || 0);
+        rr = 1;
+      }
+      var ux = rx / rr;
+      var uy = ry / rr;
+      var tx = cx + ux * notLinkedRadius;
+      var ty = cy + uy * notLinkedRadius;
+      nodes[ui].fx += (tx - nodes[ui].x) * 0.012 * frameDt;
+      nodes[ui].fy += (ty - nodes[ui].y) * 0.012 * frameDt;
+    }
     for (var k = 0; k < n; k++) {
       nodes[k].vx = (nodes[k].vx + nodes[k].fx) * damp;
       nodes[k].vy = (nodes[k].vy + nodes[k].fy) * damp;
+      var speed = Math.sqrt(nodes[k].vx * nodes[k].vx + nodes[k].vy * nodes[k].vy);
+      if (speed > maxSpeed) {
+        var s = maxSpeed / speed;
+        nodes[k].vx *= s;
+        nodes[k].vy *= s;
+      }
       if (Math.abs(nodes[k].vx) < 0.001) nodes[k].vx = 0;
       if (Math.abs(nodes[k].vy) < 0.001) nodes[k].vy = 0;
       nodes[k].x += nodes[k].vx;
@@ -322,12 +568,14 @@
       var a = nodes[links[L].i];
       var b = nodes[links[L].j];
       if (!a || !b) continue;
+      var ap = worldToScreen(a.x, a.y);
+      var bp = worldToScreen(b.x, b.y);
       ctx.save();
       ctx.setLineDash([]);
       ctx.globalAlpha = 0.12 + 0.22 * Math.min(1, links[L].w);
       ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
+      ctx.moveTo(ap.x, ap.y);
+      ctx.lineTo(bp.x, bp.y);
       ctx.stroke();
       ctx.restore();
     }
@@ -335,14 +583,21 @@
     var t = (performance.now() - t0) / 1000;
     for (var i = 0; i < nodes.length; i++) {
       var nd = nodes[i];
+      var p = worldToScreen(nd.x, nd.y);
       var tw = 0.82 + 0.18 * Math.sin(t * 0.6 + nd.phase);
+      var rr = Math.max(1.5, nd.r * viewScale) * (0.92 + 0.08 * tw);
       ctx.beginPath();
-      ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.7 + 0.18 * tw) + ')';
-      ctx.arc(nd.x, nd.y, nd.r * (0.92 + 0.08 * tw), 0, Math.PI * 2);
-      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 255, 255, ' + (0.7 + 0.18 * tw) + ')';
+      ctx.lineWidth = Math.max(1, 1.2 * viewScale);
+      ctx.arc(p.x, p.y, rr, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.fillStyle = 'rgba(244, 244, 245, 0.88)';
-      ctx.font = '500 10px ui-monospace, monospace';
-      ctx.fillText(nd.name.length > 14 ? nd.name.slice(0, 12) + '…' : nd.name, nd.x + nd.r + 2, nd.y + 3);
+      ctx.font = '500 ' + Math.max(9, 10 * viewScale) + 'px ui-monospace, monospace';
+      ctx.fillText(
+        nd.name.length > 14 ? nd.name.slice(0, 12) + '…' : nd.name,
+        p.x + Math.max(2, rr) + 2,
+        p.y + 3
+      );
     }
   }
 
@@ -358,13 +613,9 @@
 
   var socket = io({ transports: ['websocket', 'polling'] });
   socket.on('analyzed', function (data) {
-    if (data && data.tags) ingestCoOccFromList(data.tags);
-    if (data && data.semantic_words) ingestCoOccFromList(data.semantic_words);
     fetchTags();
   });
   socket.on('tags_updated', function (data) {
-    if (data && data.tags) ingestCoOccFromList(data.tags);
-    if (data && data.semantic_words) ingestCoOccFromList(data.semantic_words);
     fetchTags();
   });
 

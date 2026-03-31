@@ -25,7 +25,13 @@ https://jamming-bot.arthew0.online/tags/vectorfield/
 
 ## Алгоритм
 
-Vector field использует не отдельный dataset, а текущий поток тегов проекта. Страница берёт теги через `GET /api/tags/get/`, затем отправляет их в `POST /api/tags/embeddings/`, где Flask строит компактное представление на базе spaCy-векторов.
+
+Vector field использует не отдельный dataset, а текущий поток тегов проекта. 
+Страница берёт теги через
+`GET /api/tags/get/`,
+затем отправляет их в 
+`POST /api/tags/embeddings/`,
+ где Flask строит компактное представление на базе spaCy-векторов.
 
 ### Как это работает
 
