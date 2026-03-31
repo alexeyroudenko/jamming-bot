@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jamming bot — Path map</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='tags_vis_shared.css') }}">
+  <style>
+    .path-map-toolbar {
+      left: 12px;
+      right: auto;
+      max-width: calc(100vw - 24px);
+    }
+
+    .path-map-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--tags-vis-muted);
+      font-size: 11px;
+      font-family: ui-monospace, monospace;
+    }
+
+    .path-map-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #ef4444;
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.7);
+    }
+
+    .path-map-dot.ok {
+      background: #fafafa;
+      box-shadow: 0 0 10px rgba(250, 250, 250, 0.45);
+    }
+
+    .path-map-tooltip {
+      position: fixed;
+      z-index: 25;
+      min-width: 240px;
+      max-width: min(420px, calc(100vw - 24px));
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--tags-vis-border);
+      background: rgba(9, 9, 11, 0.94);
+      color: var(--tags-vis-text);
+      box-shadow: 0 12px 38px rgba(0, 0, 0, 0.42);
+      font-size: 12px;
+      line-height: 1.45;
+      pointer-events: none;
+      opacity: 0;
+      transform: translate3d(0, 0, 0);
+      transition: opacity 0.12s ease;
+      backdrop-filter: blur(8px);
+    }
+
+    .path-map-tooltip.visible {
+      opacity: 1;
+    }
+
+    .path-map-tooltip code {
+      color: var(--tags-vis-accent);
+      word-break: break-word;
+    }
+
+    .path-map-tooltip-row {
+      margin-top: 4px;
+    }
+
+    .path-map-tooltip-label {
+      color: var(--tags-vis-muted);
+      margin-right: 6px;
+    }
+
+    .path-map-auto-cursor {
+      position: fixed;
+      width: 16px;
+      height: 16px;
+      border: 1px solid var(--tags-vis-accent);
+      border-radius: 999px;
+      box-shadow:
+        0 0 0 1px rgba(9, 9, 11, 0.88),
+        0 0 22px rgba(34, 211, 238, 0.55);
+      pointer-events: none;
+      z-index: 24;
+      opacity: 0;
+      transform: translate(-50%, -50%);
+      transition: opacity 0.18s ease;
+    }
+
+    .path-map-auto-cursor.visible {
+      opacity: 1;
+    }
+
+    .path-map-auto-cursor::after {
+      content: "";
+      position: absolute;
+      inset: 4px;
+      border-radius: 999px;
+      background: rgba(34, 211, 238, 0.8);
+    }
+
+    .path-map-legend {
+      position: fixed;
+      bottom: 10px;
+      right: 12px;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(24, 24, 27, 0.82);
+      border: 1px solid var(--tags-vis-border);
+      color: var(--tags-vis-muted);
+      font-size: 10px;
+      font-family: ui-monospace, monospace;
+    }
+
+    .path-map-swatch {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body class="tags-vis-body">
+<nav class="tags-vis-nav" aria-label="Subpages">
+  <div>
+    <span class="tags-vis-title">Path map</span>
+    <a href="/">← home</a>
+    <a href="/tags/vectorfield/">vector field</a>
+    <a href="/geo/">geo globe</a>
+    <a href="/screenshots/">screenshots</a>
+  </div>
+</nav>
+
+<div class="tags-vis-toolbar path-map-toolbar">
+  <button type="button" class="tags-vis-btn" id="btn-auto" aria-pressed="false">Auto</button>
+  <button type="button" class="tags-vis-btn" id="btn-refresh">Refresh</button>
+  <span class="path-map-status" id="path-map-status">Loading…</span>
+</div>
+
+<div id="api-error" class="tags-vis-banner" role="alert"></div>
+<div class="tags-vis-scanlines" aria-hidden="true"></div>
+<div class="tags-vis-canvas-host">
+  <canvas id="path-map"></canvas>
+</div>
+<div id="path-map-tooltip" class="path-map-tooltip" role="status" aria-live="polite"></div>
+<div id="path-map-auto-cursor" class="path-map-auto-cursor" aria-hidden="true"></div>
+<p class="tags-vis-hint">Latest 3000 steps. Grid flows left-to-right, then top-to-bottom. White = all non-4xx, red = 4xx.</p>
+<div class="path-map-legend">
+  <span><span class="path-map-swatch" style="background:#fafafa"></span>non-4xx</span>
+  <span><span class="path-map-swatch" style="background:#ef4444"></span>4xx</span>
+</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
+<script>
+(function () {
+  var STORAGE_API = '/api/storage_latest/';
+  var MAX_STEPS = 3000;
+  var canvas = document.getElementById('path-map');
+  var ctx = canvas.getContext('2d', { alpha: false });
+  var banner = document.getElementById('api-error');
+  var statusEl = document.getElementById('path-map-status');
+  var tooltipEl = document.getElementById('path-map-tooltip');
+  var autoCursorEl = document.getElementById('path-map-auto-cursor');
+  var autoBtn = document.getElementById('btn-auto');
+  var refreshBtn = document.getElementById('btn-refresh');
+
+  var dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+  var steps = [];
+  var cols = 1;
+  var rows = 1;
+  var cellSize = 8;
+  var gridWidth = 1;
+  var gridHeight = 1;
+  var originX = 0;
+  var originY = 0;
+  var hoveredIndex = -1;
+  var autoMode = false;
+  var autoTarget = null;
+  var autoTimer = null;
+  var syncTimer = null;
+  var latestStepNumber = -1;
+  var reconnectSocket = null;
+
+  function showErr(msg) {
+    banner.textContent = msg;
+    banner.classList.add('visible');
+  }
+
+  function hideErr() {
+    banner.classList.remove('visible');
+  }
+
+  function statusColor(code) {
+    return code >= 400 && code < 500 ? '#ef4444' : '#fafafa';
+  }
+
+  function parseStepNumber(v) {
+    var n = parseInt(String(v == null ? '' : v), 10);
+    return Number.isFinite(n) ? n : NaN;
+  }
+
+  function trimText(v) {
+    return String(v == null ? '' : v).trim();
+  }
+
+  function normalizeRow(row, fallbackIndex) {
+    if (!row || typeof row !== 'object') {
+      return {
+        _n: fallbackIndex,
+        status_code: 0,
+        url: '',
+        src: '',
+        timestamp: '',
+        error: ''
+      };
+    }
+    var n = parseStepNumber(row.number != null ? row.number : row.id);
+    var statusCode = parseInt(String(row.status_code == null ? '' : row.status_code), 10);
+    return {
+      _n: Number.isFinite(n) ? n : fallbackIndex,
+      status_code: Number.isFinite(statusCode) ? statusCode : 0,
+      url: trimText(row.url),
+      src: trimText(row.src || row.src_url),
+      timestamp: trimText(row.timestamp),
+      error: trimText(row.error),
+      ip: trimText(row.ip),
+      text_length: parseInt(String(row.text_length == null ? '' : row.text_length), 10) || 0
+    };
+  }
+
+  function stepKey(step) {
+    return String(step && step._n != null ? step._n : '');
+  }
+
+  function sortAndTrim(nextSteps) {
+    nextSteps.sort(function (a, b) { return a._n - b._n; });
+    if (nextSteps.length > MAX_STEPS) {
+      nextSteps = nextSteps.slice(nextSteps.length - MAX_STEPS);
+    }
+    latestStepNumber = nextSteps.length ? nextSteps[nextSteps.length - 1]._n : -1;
+    return nextSteps;
+  }
+
+  function mergeStep(step) {
+    var key = stepKey(step);
+    var found = false;
+    var next = steps.map(function (item) {
+      if (stepKey(item) !== key) return item;
+      found = true;
+      return Object.assign({}, item, step);
+    });
+    if (!found) next.push(step);
+    steps = sortAndTrim(next);
+  }
+
+  function computeLayout() {
+    var width = window.innerWidth || 1;
+    var height = window.innerHeight || 1;
+    cols = Math.max(1, Math.ceil(Math.sqrt(MAX_STEPS * width / Math.max(height, 1))));
+    rows = Math.max(1, Math.ceil(MAX_STEPS / cols));
+    cellSize = Math.max(3, Math.floor(Math.min(width / cols, height / rows)));
+    if (!Number.isFinite(cellSize) || cellSize < 1) cellSize = 3;
+    gridWidth = cols * cellSize;
+    gridHeight = rows * cellSize;
+    originX = Math.floor((width - gridWidth) / 2);
+    originY = Math.floor((height - gridHeight) / 2);
+  }
+
+  function resizeCanvas() {
+    dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+    canvas.width = Math.max(1, Math.floor(window.innerWidth * dpr));
+    canvas.height = Math.max(1, Math.floor(window.innerHeight * dpr));
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    computeLayout();
+    render();
+    if (hoveredIndex >= 0) {
+      showTooltipForIndex(hoveredIndex, false);
+    }
+  }
+
+  function drawBackground() {
+    var w = window.innerWidth;
+    var h = window.innerHeight;
+    var bg = ctx.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, '#040405');
+    bg.addColorStop(1, '#09090b');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = 'rgba(34, 211, 238, 0.06)';
+    ctx.fillRect(originX - 1, originY - 1, gridWidth + 2, gridHeight + 2);
+  }
+
+  function render() {
+    drawBackground();
+    if (!steps.length) {
+      ctx.fillStyle = '#a1a1aa';
+      ctx.font = '12px ui-monospace, monospace';
+      ctx.fillText('No steps available', 18, 110);
+      return;
+    }
+
+    for (var i = 0; i < steps.length; i++) {
+      var col = i % cols;
+      var row = Math.floor(i / cols);
+      var x = originX + col * cellSize;
+      var y = originY + row * cellSize;
+      var step = steps[i];
+      ctx.fillStyle = statusColor(step.status_code);
+      ctx.fillRect(x, y, cellSize, cellSize);
+    }
+
+    if (hoveredIndex >= 0 && hoveredIndex < steps.length) {
+      var point = getPointRect(hoveredIndex);
+      ctx.strokeStyle = '#22d3ee';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(point.x - 1, point.y - 1, point.w + 2, point.h + 2);
+    }
+  }
+
+  function getPointRect(index) {
+    var col = index % cols;
+    var row = Math.floor(index / cols);
+    return {
+      x: originX + col * cellSize,
+      y: originY + row * cellSize,
+      w: cellSize,
+      h: cellSize
+    };
+  }
+
+  function clamp(v, min, max) {
+    return Math.max(min, Math.min(max, v));
+  }
+
+  function updateStatus() {
+    var redCount = 0;
+    for (var i = 0; i < steps.length; i++) {
+      if (steps[i].status_code >= 400 && steps[i].status_code < 500) redCount += 1;
+    }
+    var label = steps.length + ' / ' + MAX_STEPS + ' visible';
+    if (steps.length) label += ' · latest step ' + latestStepNumber;
+    label += ' · 4xx ' + redCount;
+    statusEl.textContent = label;
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function setTooltipPosition(clientX, clientY) {
+    var pad = 16;
+    var x = clientX + 18;
+    var y = clientY + 18;
+    var rect = tooltipEl.getBoundingClientRect();
+    if (x + rect.width > window.innerWidth - pad) x = clientX - rect.width - 18;
+    if (y + rect.height > window.innerHeight - pad) y = clientY - rect.height - 18;
+    tooltipEl.style.left = clamp(x, pad, Math.max(pad, window.innerWidth - rect.width - pad)) + 'px';
+    tooltipEl.style.top = clamp(y, pad, Math.max(pad, window.innerHeight - rect.height - pad)) + 'px';
+  }
+
+  function renderTooltip(step) {
+    var dotClass = step.status_code >= 400 && step.status_code < 500 ? 'path-map-dot' : 'path-map-dot ok';
+    tooltipEl.innerHTML =
+      '<div class="path-map-tooltip-row"><span class="' + dotClass + '"></span> step <code>' + escapeHtml(step._n) + '</code></div>' +
+      '<div class="path-map-tooltip-row"><span class="path-map-tooltip-label">status</span><code>' + escapeHtml(step.status_code || 0) + '</code></div>' +
+      '<div class="path-map-tooltip-row"><span class="path-map-tooltip-label">url</span><code>' + escapeHtml(step.url || '—') + '</code></div>' +
+      '<div class="path-map-tooltip-row"><span class="path-map-tooltip-label">src</span><code>' + escapeHtml(step.src || '—') + '</code></div>' +
+      '<div class="path-map-tooltip-row"><span class="path-map-tooltip-label">time</span><code>' + escapeHtml(step.timestamp || '—') + '</code></div>' +
+      '<div class="path-map-tooltip-row"><span class="path-map-tooltip-label">ip</span><code>' + escapeHtml(step.ip || '—') + '</code></div>' +
+      '<div class="path-map-tooltip-row"><span class="path-map-tooltip-label">error</span><code>' + escapeHtml(step.error || '—') + '</code></div>';
+  }
+
+  function showTooltipForIndex(index, fromPointer, clientX, clientY) {
+    if (index < 0 || index >= steps.length) return;
+    hoveredIndex = index;
+    render();
+    var step = steps[index];
+    renderTooltip(step);
+    tooltipEl.classList.add('visible');
+    var rect = getPointRect(index);
+    var px = typeof clientX === 'number' ? clientX : rect.x + rect.w / 2;
+    var py = typeof clientY === 'number' ? clientY : rect.y + rect.h / 2;
+    setTooltipPosition(px, py);
+    if (!fromPointer && autoMode) {
+      autoCursorEl.style.left = px + 'px';
+      autoCursorEl.style.top = py + 'px';
+      autoCursorEl.classList.add('visible');
+    }
+  }
+
+  function hideTooltip() {
+    hoveredIndex = -1;
+    tooltipEl.classList.remove('visible');
+    autoCursorEl.classList.remove('visible');
+    render();
+  }
+
+  function pointIndexFromClient(clientX, clientY) {
+    var localX = clientX - originX;
+    var localY = clientY - originY;
+    if (localX < 0 || localY < 0 || localX >= gridWidth || localY >= gridHeight) return -1;
+    var col = Math.floor(localX / cellSize);
+    var row = Math.floor(localY / cellSize);
+    var index = row * cols + col;
+    return index >= 0 && index < steps.length ? index : -1;
+  }
+
+  function onPointerMove(ev) {
+    if (autoMode) return;
+    var index = pointIndexFromClient(ev.clientX, ev.clientY);
+    if (index < 0) {
+      hideTooltip();
+      return;
+    }
+    showTooltipForIndex(index, true, ev.clientX, ev.clientY);
+  }
+
+  function pickAutoTarget() {
+    if (!steps.length) return null;
+    return Math.floor(Math.random() * steps.length);
+  }
+
+  function stopAuto() {
+    autoMode = false;
+    autoBtn.setAttribute('aria-pressed', 'false');
+    autoBtn.textContent = 'Auto';
+    if (autoTimer) {
+      window.clearInterval(autoTimer);
+      autoTimer = null;
+    }
+    autoTarget = null;
+    autoCursorEl.classList.remove('visible');
+  }
+
+  function tickAuto() {
+    if (!steps.length) return;
+    if (autoTarget == null || autoTarget >= steps.length) {
+      autoTarget = pickAutoTarget();
+    } else {
+      var drift = Math.floor((Math.random() * 11) - 5);
+      autoTarget = clamp(autoTarget + drift, 0, steps.length - 1);
+      if (Math.random() < 0.18) autoTarget = pickAutoTarget();
+    }
+    var rect = getPointRect(autoTarget);
+    var cx = rect.x + rect.w / 2;
+    var cy = rect.y + rect.h / 2;
+    showTooltipForIndex(autoTarget, false, cx, cy);
+  }
+
+  function startAuto() {
+    if (autoTimer) window.clearInterval(autoTimer);
+    autoMode = true;
+    autoBtn.setAttribute('aria-pressed', 'true');
+    autoBtn.textContent = 'Auto: on';
+    autoTarget = pickAutoTarget();
+    tickAuto();
+    autoTimer = window.setInterval(tickAuto, 900);
+  }
+
+  function toggleAuto() {
+    if (autoMode) {
+      stopAuto();
+      hideTooltip();
+    } else {
+      startAuto();
+    }
+  }
+
+  async function loadInitial() {
+    try {
+      hideErr();
+      statusEl.textContent = 'Loading…';
+      var res = await fetch(STORAGE_API, { cache: 'no-store' });
+      var body = await res.json().catch(function () { return {}; });
+      if (!res.ok || body.error) {
+        throw new Error(body.error || ('HTTP ' + res.status));
+      }
+      var rows = Array.isArray(body.data) ? body.data : [];
+      var normalized = rows.map(function (row, index) {
+        return normalizeRow(row, index);
+      });
+      steps = sortAndTrim(normalized);
+      updateStatus();
+      render();
+      if (autoMode) tickAuto();
+    } catch (err) {
+      showErr('Could not load step map: ' + (err.message || String(err)));
+      statusEl.textContent = 'Load failed';
+      render();
+    }
+  }
+
+  function scheduleSync() {
+    if (syncTimer) window.clearInterval(syncTimer);
+    syncTimer = window.setInterval(loadInitial, 45000);
+  }
+
+  function initSocket() {
+    reconnectSocket = io({ transports: ['websocket', 'polling'] });
+    reconnectSocket.on('connect', function () {
+      hideErr();
+    });
+    reconnectSocket.on('connect_error', function () {
+      showErr('WebSocket unavailable; showing latest loaded data.');
+    });
+    reconnectSocket.on('step', function (msg) {
+      var normalized = normalizeRow(msg, steps.length);
+      if (!Number.isFinite(normalized._n)) return;
+      mergeStep(normalized);
+      updateStatus();
+      render();
+      if (autoMode) tickAuto();
+    });
+  }
+
+  refreshBtn.addEventListener('click', loadInitial);
+  autoBtn.addEventListener('click', toggleAuto);
+  window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('mousemove', onPointerMove);
+  window.addEventListener('mouseleave', function () {
+    if (!autoMode) hideTooltip();
+  });
+
+  resizeCanvas();
+  loadInitial();
+  scheduleSync();
+  initSocket();
+})();
+</script>
+</body>
+</html>

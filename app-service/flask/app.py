@@ -496,6 +496,12 @@ def tags_chaos_attractor():
     return render_template('tags_chaos_attractor.html')
 
 
+@app.route('/path/map/')
+@cross_origin()
+def path_map():
+    return render_template('path_map.html')
+
+
 def _empty_sentiment_stats():
     return {
         "mean_polarity": 0.0,
