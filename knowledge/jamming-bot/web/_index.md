@@ -21,8 +21,8 @@ tags:
 
 ## Быстрые ссылки
 
-- [[Home]]
-- [[Tag cloud]]
+- [[01 - Home]]
+- [[05 - Tag cloud]]
 - [[Constellation]]
 - [[Path map]]
 - [[Get tags]]

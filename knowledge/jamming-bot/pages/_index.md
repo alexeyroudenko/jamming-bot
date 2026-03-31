@@ -16,22 +16,22 @@ tags:
 
 ## Main entry
 
-- [[Home]]
+- [[01 - Home]]
 - [[React UI]]
 
 ## Tag and language visualizations
 
-- [[Tag cloud]]
-- [[3D cloud]]
+- [[05 - Tag cloud]]
+- [[05 - 3D cloud]]
 - [[Constellation]]
-- [[Phrases]]
+- [[05 - Phrases]]
 - [[Sentiment vortex]]
-- [[Vector field]]
-- [[Vector field 3D]]
+- [[05 - Vector field]]
+- [[05 - Vector field 3D]]
 - [[Chaos attractor]]
 
 ## Path and trace
 
 - [[Path map]]
-- [[Geo globe]]
-- [[Screenshots]]
+- [[04 - Geo globe]]
+- [[01 - Screenshots]]

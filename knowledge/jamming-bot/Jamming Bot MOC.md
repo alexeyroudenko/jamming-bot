@@ -45,14 +45,14 @@ description: Карта содержания проекта Jamming Bot в vault
 
 ## Web surface
 - [[web/_index|Jamming Bot Web Index]]
-- [[Home]]
+- [[01 - Home]]
 - [[React UI]]
-- [[Tag cloud]]
-- [[3D cloud]]
+- [[05 - Tag cloud]]
+- [[05 - 3D cloud]]
 - [[Constellation]]
 - [[Path map]]
-- [[Phrases]]
-- [[Geo globe]]
+- [[05 - Phrases]]
+- [[04 - Geo globe]]
 - [[Queue]]
 - [[Get tags]]
 
