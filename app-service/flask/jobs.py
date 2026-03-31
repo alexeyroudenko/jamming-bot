@@ -257,6 +257,8 @@ def dostep(step):
     tags = []
     words = []
     hrases = []
+    noun_phrases = []
+    sim = []
         
     if len(text) > 128:
         with sentry_sdk.start_span(op="http.client", description="semantic_service /tags/"):
@@ -461,10 +463,11 @@ def analyze(html, step_number=None, step_url=None):
             rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
             sem_data = rr.json()
             sentry_sdk.logger.info(f"semantic_service data: {sem_data}")
-            sim = sem_data.get('sim', [])
-            words = sim
+            words = sem_data.get('words', []) or []
+            hrases = sem_data.get('hrases', []) or []
+            noun_phrases = hrases
+            sim = sem_data.get('sim', []) or []
             tags = words
-            hrases = words
 
         with sentry_sdk.start_span(op="http.client", description="tags_service add tags") as span:
             span.set_data("tags_count", len(tags))
@@ -478,6 +481,8 @@ def analyze(html, step_number=None, step_url=None):
     self_job.meta['tags'] = tags
     self_job.meta['words'] = words
     self_job.meta['hrases'] = hrases
+    self_job.meta['noun_phrases'] = noun_phrases
+    self_job.meta['sim'] = sim
     self_job.meta['progress'] = {'num_iterations': 2, 'iteration': 2, 'percent': 100}
     self_job.save_meta()
 
@@ -485,6 +490,7 @@ def analyze(html, step_number=None, step_url=None):
         "tags": tags,
         "words": words,
         "hrases": hrases,
+        "noun_phrases": noun_phrases,
         "entities": entities,
         "text_length": len(text),
         "pod": POD_NAME,

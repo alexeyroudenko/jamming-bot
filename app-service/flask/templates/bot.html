@@ -1005,28 +1005,9 @@ return length
         if (data.analyzed) {
             document.getElementById("log_words").innerHTML = "<code>" + data.analyzed.words.join(', ') + "</code>";
         }
-        if (struct_text) {
-            // Animate log_phrases like log_text
-            let phrasesTextLength = struct_text.length;
-            // Calculate delay to show all text in 2 seconds (2000ms)
-            // Since we increment by 10 characters per step, delay = (2000ms / total_chars) * 10
-            let phrasesDelay = phrasesTextLength > 0 ? Math.max(1, (2000 / phrasesTextLength) * 10) : 8;
-            let phrasesIndex = 0;
-            let phrasesTimeoutId = -1;
-            
-            function animatePhrases() {
-                const phrasesElement = document.getElementById("log_phrases");
-                if (struct_text) {
-                    if (phrasesIndex < struct_text.length) {
-                        phrasesElement.innerHTML = "<code>" + struct_text.slice(0, phrasesIndex) + "</code>";
-                        phrasesIndex += 10;
-                        phrasesTimeoutId = setTimeout(animatePhrases, phrasesDelay);
-                    } else {
-                        clearTimeout(phrasesTimeoutId);
-                    }
-                }
-            }
-            animatePhrases();
+        const phrasesElement = document.getElementById("log_phrases");
+        if (phrasesElement) {
+            phrasesElement.innerHTML = "<code></code>";
         }
 
         // Animate log_headers letter by letter
@@ -1137,7 +1118,7 @@ return length
         sanimateText();
 
         // Animate log_phrases for analyzed data
-        let nounPhrases = data['noun_phrases'] || data['hrases'] || [];
+        let nounPhrases = data['noun_phrases'] || [];
         let analyzedPhrases = "<h3>noun_phrases</h3>" + nounPhrases.join('<br>');
         let analyzedPhrasesIndex = 0;
         let analyzedPhrasesTimeoutId = -1;

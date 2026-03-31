@@ -905,7 +905,7 @@ def step():
         data['current_url'] = data['url']
         data['src_url'] = data['src']
         data['status_string'] = "ok" if str(data['status_code']) == "200" else "error"
-        data['struct_text'] = data['text']
+        data['struct_text'] = ""
         data['semantic'] = ""
         data['semantic_words'] = ""
         is_silent = data.get('silent') == '1'
@@ -1098,6 +1098,7 @@ def all_steps():
                         'semantic': job.result['semantic'],
                         'words': job.meta.get('semantic_words'),
                         'hrases': job.meta.get('semantic_hrases'),
+                        'noun_phrases': job.meta.get('noun_phrases'),
                         'sim': job.meta.get('sim'),
                     })
                 else:
@@ -1308,6 +1309,7 @@ def get_step(step_num):
                         'semantic': job.result['semantic'],
                         'words': job.meta.get('semantic_words'),
                         'hrases': job.meta.get('semantic_hrases'),
+                        'noun_phrases': job.meta.get('noun_phrases'),
                         'sim': job.meta.get('sim'),
                     })
     return jsonify(l)
