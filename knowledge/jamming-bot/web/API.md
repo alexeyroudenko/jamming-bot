@@ -16,6 +16,7 @@ API-заметки web surface проекта.
 
 ## Endpoints
 
+- [[jamming bot api]]
 - [[Get tags]]
 
 ## Ещё не вынесено в отдельные заметки
