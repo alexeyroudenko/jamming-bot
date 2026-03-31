@@ -76,6 +76,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.info(f"Sentry initialized for environment: {ENVIRONMENT}" if SENTRY_DSN else "Sentry not configured")
 
+DEFAULT_COMBINE_MAX_PHRASES = 512
+
 # Candidates for GET /api/tags/add/ (one random token per request).
 RANDOM_TAG_WORDS = (
     "flow", "signal", "noise", "drift", "pulse", "wave", "node", "edge", "mesh", "field",
@@ -594,10 +596,18 @@ def sentiment_vortex_api():
 @app.route('/api/tags/combine/', methods=['POST'])
 @cross_origin()
 def combine_tags_proxy():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "invalid request body", "phrases": []}), 400
+    payload = dict(data)
+    try:
+        max_phrases = int(payload.get("max_phrases", DEFAULT_COMBINE_MAX_PHRASES))
+    except (TypeError, ValueError):
+        max_phrases = DEFAULT_COMBINE_MAX_PHRASES
+    payload["max_phrases"] = max(1, min(max_phrases, DEFAULT_COMBINE_MAX_PHRASES))
     url = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/combine/"
     try:
-        resp = requests.post(url, json=data, timeout=60)
+        resp = requests.post(url, json=payload, timeout=60)
         resp.raise_for_status()
         return jsonify(resp.json())
     except Exception as e:

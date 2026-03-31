@@ -170,7 +170,7 @@ def _analyze_all(text: str):
 class CombineIn(BaseModel):
     words: List[str]
     limit: int = 32
-    max_phrases: int = 256
+    max_phrases: int = 512
 
 
 @semantic.post('/combine/')

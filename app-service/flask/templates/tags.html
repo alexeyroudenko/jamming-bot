@@ -50,7 +50,10 @@
       color: #555;
       z-index: 20;
       pointer-events: auto;
+      -ms-overflow-style: none;
+      scrollbar-width: none;
     }
+    #console::-webkit-scrollbar { display: none; }
     #console .line { white-space: pre; margin: 0; }
     #console .ts { color: #333; }
     #console .ws { color: #4a8; }
@@ -79,8 +82,7 @@
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
 <script>
 (function () {
-  /** TEMP: remote tags list — revert to '/api/tags/get/' for same-origin */
-  var API = 'https://jamming-bot.arthew0.online/api/tags/get/';
+  var API = '/api/tags/get/';
   var REFRESH_INTERVAL = 30000;
   var REPEL_RADIUS = 150;
   var REPEL_STRENGTH = 80;
@@ -89,6 +91,7 @@
   var PAD = 6;
   var HIGHLIGHT_COLOR = 'rgb(0,255,160)';
   var HIGHLIGHT_DECAY = 0.015;
+  var FLOAT_AMPLITUDE = 8;
 
   function highlightTags(names) {
     for (var i = 0; i < names.length; i++) {
@@ -251,6 +254,14 @@
     return al < br && ar > bl && at < bb && ab > bt;
   }
 
+  function ambientNoiseOffset(p, timeSec) {
+    var phase = p.noisePhase || 0;
+    return {
+      x: Math.sin(timeSec * 0.42 + phase) * p.driftAmp + Math.cos(timeSec * 0.17 + phase * 0.7) * p.driftAmp * 0.35,
+      y: Math.cos(timeSec * 0.36 + phase * 1.3) * p.driftAmp * 0.7 + Math.sin(timeSec * 0.21 + phase * 0.4) * p.driftAmp * 0.28
+    };
+  }
+
   function mergeParticles(tags) {
     var maxCount = 1;
     for (var i = 0; i < tags.length; i++) {
@@ -292,6 +303,8 @@
           opacity: 0,
           removing: false,
           highlightT: 0,
+          noisePhase: Math.random() * Math.PI * 2,
+          driftAmp: 1.5 + Math.random() * FLOAT_AMPLITUDE,
           _w: 0, _h: 0
         };
         p._w = measureWord(p.text, size);
@@ -357,6 +370,7 @@
 
   function animate() {
     ctx.clearRect(0, 0, W, H);
+    var nowSec = performance.now() * 0.001;
 
     var toRemove = [];
 
@@ -396,8 +410,9 @@
       }
 
       // Spring back to home
-      p.vx += (p.homeX - p.x) * RETURN_SPEED;
-      p.vy += (p.homeY - p.y) * RETURN_SPEED;
+      var drift = ambientNoiseOffset(p, nowSec);
+      p.vx += (p.homeX + drift.x - p.x) * RETURN_SPEED;
+      p.vy += (p.homeY + drift.y - p.y) * RETURN_SPEED;
 
       p.vx *= 0.82;
       p.vy *= 0.82;

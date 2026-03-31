@@ -23,6 +23,7 @@
 </nav>
 
 <div class="tags-vis-toolbar">
+  <button type="button" class="tags-vis-btn" id="btn-anchor-labels" aria-pressed="false" title="Show which tags are currently pushing sigma, rho, and beta">Anchor labels</button>
   <button type="button" class="tags-vis-btn" id="btn-freeze">Freeze</button>
   <button type="button" class="tags-vis-btn" id="btn-export">Export PNG</button>
   <span class="tags-vis-status" id="tags-vis-status"></span>
@@ -30,7 +31,10 @@
 
 <div id="api-error" class="tags-vis-banner" role="alert"></div>
 <div class="tags-vis-scanlines" aria-hidden="true"></div>
-<div class="tags-vis-canvas-host"><canvas id="chaos"></canvas></div>
+<div class="tags-vis-canvas-host">
+  <canvas id="chaos"></canvas>
+  <div id="chaos-anchors-layer" class="vf-anchors-layer is-hidden" aria-hidden="true"></div>
+</div>
 <p class="tags-vis-hint">Lorenz ODE · σ,ρ from tag entropy / count variance · shake on tags_updated</p>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
@@ -39,8 +43,7 @@
 <script src="{{ url_for('static', filename='tags_vis_controls.js') }}"></script>
 <script>
 (function () {
-  /** TEMP: remote tags list — revert to '/api/tags/get/' for same-origin */
-  var TAGS_API = 'https://jamming-bot.arthew0.online/api/tags/get/';
+  var TAGS_API = '/api/tags/get/';
   var TRAIL = 5500;
   var DT = 0.0045;
   var MAX_DPR = 2;
@@ -62,6 +65,12 @@
   var rhoKick = 0;
   var entropyNorm = 0.5;
   var countVarNorm = 0.5;
+  var anchorLayer = document.getElementById('chaos-anchors-layer');
+  var showAnchorLabels = false;
+  var influenceAnchors = [];
+  var lastTagRows = [];
+  var _projV = new THREE.Vector3();
+  var _projDir = new THREE.Vector3();
 
   function showErr(msg) {
     banner.textContent = msg;
@@ -116,6 +125,126 @@
       entropyNorm.toFixed(2) +
       ' Ṽ=' +
       countVarNorm.toFixed(2);
+    if (showAnchorLabels) syncAnchorLabelPositions();
+  }
+
+  function anchorTooltip(a) {
+    return (a.name || '') + ' -> ' + (a.groupLabel || '') + ' · weight ' + Number(a.weight || 0).toFixed(2);
+  }
+
+  function syncAnchorLabelPositions() {
+    if (!showAnchorLabels || !anchorLayer || !camera || !renderer) return;
+    var items = anchorLayer.querySelectorAll('.vf-anchor-item');
+    var rect = renderer.domElement.getBoundingClientRect();
+    var host = renderer.domElement.parentElement
+      ? renderer.domElement.parentElement.getBoundingClientRect()
+      : rect;
+    var w = rect.width;
+    var h = rect.height;
+    for (var i = 0; i < items.length && i < influenceAnchors.length; i++) {
+      var a = influenceAnchors[i];
+      _projV.set(a.x, a.y, a.z);
+      _projV.project(camera);
+      if (Math.abs(_projV.x) > 1.35 || Math.abs(_projV.y) > 1.35 || _projV.z < -1.05 || _projV.z > 1.05) {
+        items[i].style.display = 'none';
+        continue;
+      }
+      items[i].style.display = '';
+      var sx = (_projV.x * 0.5 + 0.5) * w + rect.left - host.left;
+      var sy = (-_projV.y * 0.5 + 0.5) * h + rect.top - host.top;
+      items[i].style.left = sx + 'px';
+      items[i].style.top = sy + 'px';
+      items[i].style.transform = 'translate(-50%, -100%)';
+      _projDir.set(a.x + a.dx * a.lineScale, a.y + a.dy * a.lineScale, a.z + a.dz * a.lineScale);
+      _projDir.project(camera);
+      var line = items[i].querySelector('.vf-anchor-line');
+      if (line) {
+        var dxs = ((_projDir.x - _projV.x) * 0.5) * w;
+        var dys = ((-_projDir.y + _projV.y) * 0.5) * h;
+        var len = Math.min(62, Math.max(18, Math.sqrt(dxs * dxs + dys * dys)));
+        line.style.setProperty('--vf-anchor-line-length', len.toFixed(1) + 'px');
+        line.style.setProperty('--vf-anchor-line-angle', (Math.atan2(dys, dxs) * 180 / Math.PI).toFixed(2) + 'deg');
+      }
+      var lab = items[i].querySelector('.vf-anchor-label');
+      if (lab) lab.title = anchorTooltip(a);
+    }
+  }
+
+  function rebuildAnchorLabels() {
+    if (!anchorLayer) return;
+    anchorLayer.innerHTML = '';
+    if (!showAnchorLabels) return;
+    for (var i = 0; i < influenceAnchors.length; i++) {
+      var a = influenceAnchors[i];
+      var item = document.createElement('div');
+      item.className = 'vf-anchor-item';
+      var line = document.createElement('span');
+      line.className = 'vf-anchor-line';
+      line.setAttribute('aria-hidden', 'true');
+      var lab = document.createElement('span');
+      lab.className = 'vf-anchor-label';
+      lab.textContent = a.labelText || a.name || '';
+      lab.title = anchorTooltip(a);
+      item.appendChild(line);
+      item.appendChild(lab);
+      anchorLayer.appendChild(item);
+    }
+    syncAnchorLabelPositions();
+  }
+
+  function setAnchorLabelsVisible(on) {
+    showAnchorLabels = !!on;
+    if (anchorLayer) {
+      anchorLayer.classList.toggle('is-hidden', !showAnchorLabels);
+      anchorLayer.setAttribute('aria-hidden', showAnchorLabels ? 'false' : 'true');
+    }
+    var btn = document.getElementById('btn-anchor-labels');
+    if (btn) btn.setAttribute('aria-pressed', showAnchorLabels ? 'true' : 'false');
+    try {
+      sessionStorage.setItem('tags-chaos-anchor-labels', showAnchorLabels ? '1' : '0');
+    } catch (e) {}
+    if (showAnchorLabels) rebuildAnchorLabels();
+    else if (anchorLayer) anchorLayer.innerHTML = '';
+  }
+
+  function buildInfluenceAnchors(rows) {
+    var top = rows
+      .map(function (r) {
+        return { name: String(r.name || ''), count: Number(r.count) || 0 };
+      })
+      .filter(function (r) {
+        return r.name.length > 0;
+      })
+      .sort(function (a, b) {
+        return b.count - a.count;
+      })
+      .slice(0, 9);
+    var groups = [
+      { key: 'sigma', label: 'sigma', origin: [-26, 18, -6], dir: [1, 0.2, 0.15] },
+      { key: 'rho', label: 'rho', origin: [22, 10, 8], dir: [0.2, 0.9, 0.22] },
+      { key: 'beta', label: 'beta', origin: [-12, -18, 12], dir: [0.12, 0.3, 1] }
+    ];
+    influenceAnchors = [];
+    var maxCount = top.length ? top[0].count || 1 : 1;
+    for (var i = 0; i < top.length; i++) {
+      var g = groups[i % groups.length];
+      var row = top[i];
+      var weight = Math.sqrt((row.count || 0) / maxCount);
+      influenceAnchors.push({
+        name: row.name,
+        labelText: row.name + ' -> ' + g.label,
+        groupLabel: g.label,
+        x: g.origin[0] + (i % groups.length) * 1.5,
+        y: g.origin[1] - Math.floor(i / groups.length) * 8,
+        z: g.origin[2] + Math.floor(i / groups.length) * 4,
+        dx: g.dir[0],
+        dy: g.dir[1],
+        dz: g.dir[2],
+        lineScale: 10 + weight * 18,
+        weight: weight
+      });
+    }
+    if (showAnchorLabels) rebuildAnchorLabels();
   }
 
   function lorenzStep() {
@@ -171,6 +300,7 @@
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    syncAnchorLabelPositions();
   }
 
   function pushPoint() {
@@ -220,11 +350,13 @@
         }
         hideErr();
         if (!Array.isArray(res.b)) return;
+        lastTagRows = res.b;
         var st = statsFromTags(res.b);
         entropyNorm = st.H;
         countVarNorm = st.V;
         rhoKick *= 0.92;
         applyParams();
+        buildInfluenceAnchors(res.b);
       })
       .catch(function (e) {
         console.error(e);
@@ -236,6 +368,19 @@
   resize();
   window.addEventListener('resize', resize);
   applyParams();
+
+  (function initAnchorToggle() {
+    var btn = document.getElementById('btn-anchor-labels');
+    if (!btn) return;
+    try {
+      if (sessionStorage.getItem('tags-chaos-anchor-labels') === '1') {
+        setAnchorLabelsVisible(true);
+      }
+    } catch (e) {}
+    btn.addEventListener('click', function () {
+      setAnchorLabelsVisible(!showAnchorLabels);
+    });
+  })();
 
   TagsVisControls.wire({
     onExport: function () {
@@ -268,6 +413,7 @@
       pushPoint();
     }
     controls.update();
+    if (showAnchorLabels) syncAnchorLabelPositions();
     renderer.render(scene, camera);
   }
 

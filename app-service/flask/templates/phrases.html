@@ -100,10 +100,10 @@
 
 <script>
 (function () {
-  /** TEMP: remote tags list — revert to '/api/tags/get/' for same-origin */
-  var TAGS_API = 'https://jamming-bot.arthew0.online/api/tags/get/';
+  var TAGS_API = '/api/tags/get/';
   var COMBINE_API = '/api/tags/combine/';
   var REFRESH_INTERVAL = 60000;
+  var DEFAULT_MAX_PHRASES = 512;
   var statusEl = document.getElementById('status');
   var phrasesEl = document.getElementById('phrases');
   var loadingEl = document.getElementById('loading');
@@ -127,7 +127,7 @@
         return fetch(COMBINE_API, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ words: words, limit: 128, max_phrases: 16384 })
+          body: JSON.stringify({ words: words, limit: 128, max_phrases: DEFAULT_MAX_PHRASES })
         });
       })
       .then(function (r) { if (r) return r.json(); })

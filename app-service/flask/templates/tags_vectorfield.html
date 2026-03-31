@@ -51,8 +51,7 @@
 <script src="{{ url_for('static', filename='tags_vis_controls.js') }}"></script>
 <script>
 (function () {
-  /** TEMP: remote tags list — revert to '/api/tags/get/' for same-origin */
-  var TAGS_API = 'https://jamming-bot.arthew0.online/api/tags/get/';
+  var TAGS_API = '/api/tags/get/';
   var EMB_API = '/api/tags/embeddings/';
   var MAX_PARTICLES_CAPACITY = 32000;
   /** Motion speed (lower = slower). 0.05 ≈ 20× slower than original baseline. */
@@ -259,6 +258,15 @@
       var v = (camera.top - a.y) / (camera.top - camera.bottom);
       items[i].style.left = u * 100 + '%';
       items[i].style.top = v * 100 + '%';
+      var line = items[i].querySelector('.vf-anchor-line');
+      if (line) {
+        var len = Math.min(56, 18 + (a.countWeight || 1) * 5.5);
+        line.style.setProperty('--vf-anchor-line-length', len.toFixed(1) + 'px');
+        line.style.setProperty(
+          '--vf-anchor-line-angle',
+          (Math.atan2(a.dy || 0, a.dx || 0) * 180 / Math.PI).toFixed(2) + 'deg'
+        );
+      }
       var h = items[i].querySelector('.vf-anchor-handle');
       if (h) h.title = anchorTooltip(a);
     }
@@ -294,7 +302,12 @@
       lab.textContent = a.labelText || a.name || '';
       lab.title = anchorTooltip(a);
 
+      var line = document.createElement('span');
+      line.className = 'vf-anchor-line';
+      line.setAttribute('aria-hidden', 'true');
+
       item.appendChild(handle);
+      item.appendChild(line);
       item.appendChild(lab);
       anchorLayer.appendChild(item);
     }

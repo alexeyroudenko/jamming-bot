@@ -13,17 +13,17 @@
       background: rgba(0, 0, 0, 0.92);
     }
     .sv-label {
-      color: #a1a1aa;
-      font-size: 10px;
+      color: #d4d4d8;
+      font-size: 8px;
       line-height: 1.2;
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
       max-width: min(220px, 36vw);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      text-shadow: 0 0 6px #000, 0 1px 3px #000;
+      text-shadow: 0 1px 1px rgba(0, 0, 0, 0.9);
       pointer-events: none;
-      margin-top: -14px;
+      margin-top: -10px;
     }
     .tags-vis-grain {
       pointer-events: none;
@@ -80,9 +80,9 @@
   var DT = 0.016;
   var ROT_SCALE = 1 / 3;
 
-  var warm = new THREE.Vector3(0.95, 0.42, 0.28);
-  var cool = new THREE.Vector3(0.25, 0.55, 0.98);
-  var muted = new THREE.Vector3(0.45, 0.48, 0.52);
+  var warm = new THREE.Vector3(1.0, 0.0, 0.0);
+  var cool = new THREE.Vector3(1.0, 1.0, 1.0);
+  var muted = new THREE.Vector3(0.58, 0.58, 0.62);
 
   var statusEl = document.getElementById('tags-vis-status');
   var banner = document.getElementById('api-error');
@@ -194,7 +194,7 @@
     controls.dampingFactor = 0.06;
     controls.target.set(0, 0, 0);
 
-    var amb = new THREE.AmbientLight(0xffffff, 0.35);
+    var amb = new THREE.AmbientLight(0xffffff, 0.9);
     scene.add(amb);
 
     var maxP = MAX_PARTICLES;
@@ -234,7 +234,7 @@
       fragmentShader: fs,
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
     });
 
     var tpos = new Float32Array(maxP * 3);
@@ -245,10 +245,11 @@
     trailGeom.setAttribute('customColor', new THREE.BufferAttribute(tcolors, 3));
     trailGeom.setAttribute('size', new THREE.BufferAttribute(tsizes, 1));
     var tmat = mat.clone();
-    tmat.opacity = 0.22;
+    tmat.opacity = 0.04;
     tmat.transparent = true;
     trailPoints = new THREE.Points(trailGeom, tmat);
     trailPoints.frustumCulled = false;
+    trailPoints.visible = false;
     scene.add(trailPoints);
 
     points = new THREE.Points(geom, mat);
@@ -360,7 +361,7 @@
       col[ix] = c.x;
       col[ix + 1] = c.y;
       col[ix + 2] = c.z;
-      sz[i] = 10 + Math.abs(p) * 18 + s * 8;
+      sz[i] = 2.2 + Math.abs(p) * 3.6 + s * 1.5;
 
       tpos[ix] = x * 0.97;
       tpos[ix + 1] = y * 0.97;
@@ -368,7 +369,7 @@
       tcol[ix] = col[ix] * 0.45;
       tcol[ix + 1] = col[ix + 1] * 0.45;
       tcol[ix + 2] = col[ix + 2] * 0.45;
-      tsz[i] = sz[i] * 0.85;
+      tsz[i] = sz[i] * 0.55;
     }
     geom.attributes.position.needsUpdate = true;
     geom.attributes.customColor.needsUpdate = true;
@@ -409,7 +410,7 @@
       tcol[i * 3] = col[i * 3] * 0.5;
       tcol[i * 3 + 1] = col[i * 3 + 1] * 0.5;
       tcol[i * 3 + 2] = col[i * 3 + 2] * 0.5;
-      tsz[i] = sz[i] * 0.8;
+      tsz[i] = sz[i] * 0.5;
 
       var w = state.omega[i] + kickOmega * (0.5 + Math.random() * 0.5);
       th += w * DT * (1 + 0.2 * p) * ROT_SCALE;
@@ -439,7 +440,7 @@
       col[ix] = c.x;
       col[ix + 1] = c.y;
       col[ix + 2] = c.z;
-      sz[i] = 10 + Math.abs(p) * 18 + s * 8;
+      sz[i] = 2.2 + Math.abs(p) * 3.6 + s * 1.5;
     }
     geom.attributes.position.needsUpdate = true;
     geom.attributes.customColor.needsUpdate = true;

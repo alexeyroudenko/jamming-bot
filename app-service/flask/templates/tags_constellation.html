@@ -37,12 +37,13 @@
 <script src="{{ url_for('static', filename='tags_vis_controls.js') }}"></script>
 <script>
 (function () {
-  /** TEMP: remote tags list — revert to '/api/tags/get/' for same-origin */
-  var TAGS_API = 'https://jamming-bot.arthew0.online/api/tags/get/';
+  var TAGS_API = '/api/tags/get/';
   var EMB_API = '/api/tags/embeddings/';
   var MAX_TAGS = 56;
   var MAX_DPR = 2;
   var CO_OCC_WEIGHT = 0.22;
+  var LINK_LENGTH = Math.min(window.innerWidth, window.innerHeight) * 0.18;
+  var frameDt = 1;
   var statusEl = document.getElementById('tags-vis-status');
   var banner = document.getElementById('api-error');
   var canvas = document.getElementById('vis');
@@ -159,7 +160,7 @@
 
     var cx = window.innerWidth * 0.5;
     var cy = window.innerHeight * 0.52;
-    var R = Math.min(window.innerWidth, window.innerHeight) * 0.38;
+    var R = Math.min(window.innerWidth, window.innerHeight) * 0.32;
 
     var wordTo2d = Object.create(null);
     if (emb && emb.ok && emb.words && emb.vectors2d && emb.words.length === emb.vectors2d.length) {
@@ -190,7 +191,7 @@
         y = sp.y;
       }
       var maxC = sorted[0].count || 1;
-      var r = 3 + 10 * Math.sqrt(count / maxC);
+      var r = 2 + 5 * Math.sqrt(count / maxC);
       nodes.push({
         name: display,
         nm: nm,
@@ -259,8 +260,8 @@
     if (TagsVisControls.frozen) return;
     var n = nodes.length;
     if (n === 0) return;
-    var rep = 420;
-    var damp = 0.88;
+    var rep = 180 * frameDt;
+    var damp = Math.pow(0.9, frameDt);
     for (var i = 0; i < n; i++) {
       nodes[i].fx = 0;
       nodes[i].fy = 0;
@@ -279,25 +280,30 @@
         nodes[b].fx += (dx / d) * f;
         nodes[b].fy += (dy / d) * f;
       }
-      var gx = (cx - nodes[a].x) * 0.003;
-      var gy = (cy - nodes[a].y) * 0.003;
+      var gx = (cx - nodes[a].x) * 0.0018 * frameDt;
+      var gy = (cy - nodes[a].y) * 0.0018 * frameDt;
       nodes[a].fx += gx;
       nodes[a].fy += gy;
     }
     for (var L = 0; L < links.length; L++) {
       var li = links[L].i;
       var lj = links[L].j;
-      var w = links[L].w * 0.14;
+      var w = links[L].w * 0.028 * frameDt;
       var ddx = nodes[lj].x - nodes[li].x;
       var ddy = nodes[lj].y - nodes[li].y;
-      nodes[li].fx += ddx * w;
-      nodes[li].fy += ddy * w;
-      nodes[lj].fx -= ddx * w;
-      nodes[lj].fy -= ddy * w;
+      var dist = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
+      var stretch = dist - LINK_LENGTH;
+      var pull = stretch * w;
+      nodes[li].fx += (ddx / dist) * pull;
+      nodes[li].fy += (ddy / dist) * pull;
+      nodes[lj].fx -= (ddx / dist) * pull;
+      nodes[lj].fy -= (ddy / dist) * pull;
     }
     for (var k = 0; k < n; k++) {
       nodes[k].vx = (nodes[k].vx + nodes[k].fx) * damp;
       nodes[k].vy = (nodes[k].vy + nodes[k].fy) * damp;
+      if (Math.abs(nodes[k].vx) < 0.001) nodes[k].vx = 0;
+      if (Math.abs(nodes[k].vy) < 0.001) nodes[k].vy = 0;
       nodes[k].x += nodes[k].vx;
       nodes[k].y += nodes[k].vy;
     }
@@ -308,21 +314,17 @@
     var h = window.innerHeight;
     ctx.fillStyle = '#09090b';
     ctx.fillRect(0, 0, w, h);
-    glitchPhase += 0.07;
-    var dashJitter = 2 + Math.sin(glitchPhase * 1.7) * 1.2;
+    glitchPhase += 0.02;
 
-    ctx.strokeStyle = 'rgba(34, 211, 238, 0.22)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
     ctx.lineWidth = 1;
     for (var L = 0; L < links.length; L++) {
       var a = nodes[links[L].i];
       var b = nodes[links[L].j];
       if (!a || !b) continue;
       ctx.save();
-      ctx.setLineDash([4 + dashJitter, 5 + (L % 3)]);
-      ctx.globalAlpha = 0.25 + 0.35 * Math.min(1, links[L].w);
-      if (Math.random() < 0.04) {
-        ctx.translate((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2);
-      }
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.12 + 0.22 * Math.min(1, links[L].w);
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
@@ -333,13 +335,13 @@
     var t = (performance.now() - t0) / 1000;
     for (var i = 0; i < nodes.length; i++) {
       var nd = nodes[i];
-      var tw = 0.65 + 0.35 * Math.sin(t * 1.2 + nd.phase);
+      var tw = 0.82 + 0.18 * Math.sin(t * 0.6 + nd.phase);
       ctx.beginPath();
-      ctx.fillStyle = 'rgba(34, 211, 238, ' + (0.35 + 0.45 * tw) + ')';
+      ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.7 + 0.18 * tw) + ')';
       ctx.arc(nd.x, nd.y, nd.r * (0.92 + 0.08 * tw), 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = 'rgba(250, 250, 250, 0.9)';
-      ctx.font = '600 10px ui-monospace, monospace';
+      ctx.fillStyle = 'rgba(244, 244, 245, 0.88)';
+      ctx.font = '500 10px ui-monospace, monospace';
       ctx.fillText(nd.name.length > 14 ? nd.name.slice(0, 12) + '…' : nd.name, nd.x + nd.r + 2, nd.y + 3);
     }
   }
@@ -347,6 +349,8 @@
   function tick() {
     requestAnimationFrame(tick);
     if (document.visibilityState !== 'hidden') {
+      frameDt = Math.min(1.35, Math.max(0.7, ((performance.now() - t0) / 16.6667)));
+      t0 = performance.now();
       if (!TagsVisControls.frozen) forceStep();
       draw();
     }

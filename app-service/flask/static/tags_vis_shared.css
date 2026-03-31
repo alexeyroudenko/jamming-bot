@@ -160,6 +160,28 @@ body.tags-vis-body {
   gap: 5px;
 }
 
+.vf-anchor-line {
+  width: var(--vf-anchor-line-length, 28px);
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.1), rgba(255, 48, 48, 0.95));
+  transform-origin: left center;
+  transform: rotate(var(--vf-anchor-line-angle, 0deg));
+  box-shadow: 0 0 12px rgba(255, 48, 48, 0.18);
+}
+
+.vf-anchor-line::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-top: 2px solid rgba(255, 72, 72, 0.95);
+  border-right: 2px solid rgba(255, 72, 72, 0.95);
+  transform: translateY(-50%) rotate(45deg);
+}
+
 .vf-anchor-handle {
   pointer-events: auto;
   width: 12px;

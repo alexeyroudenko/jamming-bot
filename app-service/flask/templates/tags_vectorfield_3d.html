@@ -85,6 +85,7 @@
   var GRID3_Y = 5;
   var GRID3_Z = 5;
   var _projV = new THREE.Vector3();
+  var _projDir = new THREE.Vector3();
 
   function getDensityPref() {
     if (densitySel && densitySel.value) return densitySel.value;
@@ -246,6 +247,23 @@
       items[i].style.left = sx + 'px';
       items[i].style.top = sy + 'px';
       items[i].style.transform = 'translate(-50%, -100%)';
+      _projDir.set(
+        a.x + (a.dx || 0) * 34,
+        a.y + (a.dy || 0) * 34,
+        a.z + (a.dz || 0) * 34
+      );
+      _projDir.project(camera);
+      var line = items[i].querySelector('.vf-anchor-line');
+      if (line) {
+        var dxs = ((_projDir.x - _projV.x) * 0.5) * w;
+        var dys = ((-_projDir.y + _projV.y) * 0.5) * h;
+        var len = Math.min(60, Math.max(16, Math.sqrt(dxs * dxs + dys * dys)));
+        line.style.setProperty('--vf-anchor-line-length', len.toFixed(1) + 'px');
+        line.style.setProperty(
+          '--vf-anchor-line-angle',
+          (Math.atan2(dys, dxs) * 180 / Math.PI).toFixed(2) + 'deg'
+        );
+      }
       var lab = items[i].querySelector('.vf-anchor-label');
       if (lab) lab.title = anchorTooltip(a);
     }
@@ -263,6 +281,10 @@
       lab.className = 'vf-anchor-label';
       lab.textContent = a.labelText || a.name || '';
       lab.title = anchorTooltip(a);
+      var line = document.createElement('span');
+      line.className = 'vf-anchor-line';
+      line.setAttribute('aria-hidden', 'true');
+      item.appendChild(line);
       item.appendChild(lab);
       anchorLayer.appendChild(item);
     }
