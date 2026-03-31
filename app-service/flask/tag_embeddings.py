@@ -36,9 +36,15 @@ def build_embeddings_response(
     max_links: int = 160,
 ) -> Dict[str, Any]:
     """
-    Returns { ok, mode, words, vectors2d, vectors3d?, links, error? }
-    vectors2d: first two components of each doc vector divided by vector_norm (unit-norm slice).
-    vectors3d: first three components / vector_norm — same convention, for 3D tag visualizations.
+    Returns {
+        ok, mode, words,
+        vectors2d, vectors3d,
+        vectors2d_current, vectors3d_current,
+        vectors2d_alt, vectors3d_alt,
+        directions2d, directions3d,
+        links, error?
+    }
+    vectors2d/vectors3d are kept as aliases of *_current for backward compatibility.
     links: [{ "i", "j", "sim" }] indices into words
     """
     if not isinstance(words, list):
@@ -48,6 +54,12 @@ def build_embeddings_response(
             "words": [],
             "vectors2d": [],
             "vectors3d": [],
+            "vectors2d_current": [],
+            "vectors3d_current": [],
+            "vectors2d_alt": [],
+            "vectors3d_alt": [],
+            "directions2d": [],
+            "directions3d": [],
             "links": [],
         }
 
@@ -73,6 +85,12 @@ def build_embeddings_response(
             "words": clean,
             "vectors2d": [],
             "vectors3d": [],
+            "vectors2d_current": [],
+            "vectors3d_current": [],
+            "vectors2d_alt": [],
+            "vectors3d_alt": [],
+            "directions2d": [],
+            "directions3d": [],
             "links": [],
         }
 
@@ -93,19 +111,36 @@ def build_embeddings_response(
             "words": valid_words,
             "vectors2d": v2,
             "vectors3d": v3,
+            "vectors2d_current": v2,
+            "vectors3d_current": v3,
+            "vectors2d_alt": v2,
+            "vectors3d_alt": v3,
+            "directions2d": v2,
+            "directions3d": v3,
             "links": [],
         }
 
-    vectors2d: List[List[float]] = []
-    vectors3d: List[List[float]] = []
+    vectors2d_current: List[List[float]] = []
+    vectors3d_current: List[List[float]] = []
+    vectors2d_alt: List[List[float]] = []
+    vectors3d_alt: List[List[float]] = []
+    directions2d: List[List[float]] = []
+    directions3d: List[List[float]] = []
     for d in docs:
         v = d.vector
         norm = float(d.vector_norm)
-        x = float(v[0]) / norm if norm else 0.0
-        y = float(v[1]) / norm if norm else 0.0
-        z = float(v[2]) / norm if norm else 0.0
-        vectors2d.append([x, y])
-        vectors3d.append([x, y, z])
+        c0 = float(v[0]) / norm if norm and len(v) > 0 else 0.0
+        c1 = float(v[1]) / norm if norm and len(v) > 1 else 0.0
+        c2 = float(v[2]) / norm if norm and len(v) > 2 else 0.0
+        c3 = float(v[3]) / norm if norm and len(v) > 3 else c0
+        c4 = float(v[4]) / norm if norm and len(v) > 4 else c1
+        c5 = float(v[5]) / norm if norm and len(v) > 5 else c2
+        vectors2d_current.append([c0, c1])
+        vectors3d_current.append([c0, c1, c2])
+        vectors2d_alt.append([c3, c4])
+        vectors3d_alt.append([c3, c4, c5])
+        directions2d.append([c0, c1])
+        directions3d.append([c0, c1, c2])
 
     pairs: List[Tuple[int, int, float]] = []
     n = len(docs)
@@ -123,8 +158,14 @@ def build_embeddings_response(
         "ok": True,
         "mode": "vectors",
         "words": valid_words,
-        "vectors2d": vectors2d,
-        "vectors3d": vectors3d,
+        "vectors2d": vectors2d_current,
+        "vectors3d": vectors3d_current,
+        "vectors2d_current": vectors2d_current,
+        "vectors3d_current": vectors3d_current,
+        "vectors2d_alt": vectors2d_alt,
+        "vectors3d_alt": vectors3d_alt,
+        "directions2d": directions2d,
+        "directions3d": directions3d,
         "links": links,
     }
 

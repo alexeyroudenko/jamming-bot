@@ -30,6 +30,24 @@
     <option value="med">Med</option>
     <option value="high">High</option>
   </select>
+  <label class="tags-vis-density-label" for="vf-noise">Noise value</label>
+  <input id="vf-noise" class="tags-vis-select" type="range" min="0" max="1.65" step="0.01" value="0.55" aria-label="Noise value">
+  <span class="tags-vis-status" id="vf-noise-value">0.55</span>
+  <label class="tags-vis-density-label" for="vf-anchors">Anchors value</label>
+  <input id="vf-anchors" class="tags-vis-select" type="range" min="0" max="8" step="0.1" value="1" aria-label="Anchors value">
+  <span class="tags-vis-status" id="vf-anchors-value">1.0</span>
+  <label class="tags-vis-density-label" for="vf-compensation-x">CompensationX</label>
+  <input id="vf-compensation-x" class="tags-vis-select" type="range" min="-4" max="4" step="0.01" value="0" aria-label="CompensationX">
+  <span class="tags-vis-status" id="vf-compensation-x-value">0.00</span>
+  <label class="tags-vis-density-label" for="vf-anchor-mode">Anchor mode</label>
+  <select id="vf-anchor-mode" class="tags-vis-select" aria-label="Anchor mode">
+    <option value="current">Current</option>
+    <option value="random">Random</option>
+    <option value="alt-components">Alt vectors</option>
+  </select>
+  <label class="tags-vis-density-label" for="vf-anchor-count">Count anchors</label>
+  <input id="vf-anchor-count" class="tags-vis-select" type="range" min="0" max="256" step="1" value="32" aria-label="Count anchors">
+  <span class="tags-vis-status" id="vf-anchor-count-value">32</span>
   <button type="button" class="tags-vis-btn" id="btn-anchor-labels" aria-pressed="false" title="Show anchors at influence centers; drag handles to move and reshape the field">Anchor labels</button>
   <button type="button" class="tags-vis-btn" id="btn-show-vectors" aria-pressed="false" title="Overlay flow direction on a grid (same field as particles)">Field vectors</button>
   <button type="button" class="tags-vis-btn" id="btn-freeze">Freeze</button>
@@ -60,7 +78,11 @@
 
   var effectiveParticles = MAX_PARTICLES_CAPACITY;
   var MAX_TAGS = 48;
+  var MAX_ANCHOR_CANDIDATES = 256;
+  var DEFAULT_ANCHOR_COUNT = 32;
   var MAX_DPR = 2;
+  var NOISE_BASE = 0.55;
+  var ANCHORS_BASE = 1.0;
   /** Time scale for field evolution when not frozen; reduced-motion uses ~0.25 so the field barely drifts unless user unfreezes. */
   var animSlow = 1;
   var reduceMotionPreferred = false;
@@ -69,6 +91,20 @@
   var banner = document.getElementById('api-error');
   var canvas = document.getElementById('vf');
   var densitySel = document.getElementById('vf-density');
+  var noiseSel = document.getElementById('vf-noise');
+  var anchorsSel = document.getElementById('vf-anchors');
+  var compensationXSel = document.getElementById('vf-compensation-x');
+  var anchorModeSel = document.getElementById('vf-anchor-mode');
+  var anchorCountSel = document.getElementById('vf-anchor-count');
+  var noiseValueEl = document.getElementById('vf-noise-value');
+  var anchorsValueEl = document.getElementById('vf-anchors-value');
+  var compensationXValueEl = document.getElementById('vf-compensation-x-value');
+  var anchorCountValueEl = document.getElementById('vf-anchor-count-value');
+  var noiseStrength = NOISE_BASE;
+  var anchorsStrength = ANCHORS_BASE;
+  var compensationX = 0;
+  var anchorMode = 'current';
+  var anchorCount = DEFAULT_ANCHOR_COUNT;
 
   var renderer, scene, camera, points, geom, posAttr, colAttr;
   var anchors = [];
@@ -87,6 +123,8 @@
   var vectorGeom = null;
   var vectorLines = null;
   var vectorPosArr = null;
+  var lastTagRows = null;
+  var lastEmb = null;
 
   function getDensityPref() {
     if (densitySel && densitySel.value) return densitySel.value;
@@ -186,9 +224,94 @@
     );
   }
 
+  function syncNoiseUi() {
+    if (noiseSel) noiseSel.value = String(noiseStrength);
+    if (noiseValueEl) noiseValueEl.textContent = Number(noiseStrength).toFixed(2);
+  }
+
+  function syncAnchorsUi() {
+    if (anchorsSel) anchorsSel.value = String(anchorsStrength);
+    if (anchorsValueEl) anchorsValueEl.textContent = Number(anchorsStrength).toFixed(1);
+  }
+
+  function syncCompensationXUi() {
+    if (compensationXSel) compensationXSel.value = String(compensationX);
+    if (compensationXValueEl) compensationXValueEl.textContent = Number(compensationX).toFixed(2);
+  }
+
+  function syncAnchorModeUi() {
+    if (anchorModeSel) anchorModeSel.value = anchorMode;
+  }
+
+  function syncAnchorCountUi() {
+    if (anchorCountSel) anchorCountSel.value = String(anchorCount);
+    if (anchorCountValueEl) anchorCountValueEl.textContent = String(anchorCount);
+  }
+
+  function loadSliderPrefs() {
+    try {
+      var savedNoise = parseFloat(sessionStorage.getItem('tags-vectorfield-noise'));
+      if (Number.isFinite(savedNoise)) {
+        noiseStrength = Math.max(0, Math.min(NOISE_BASE * 3, savedNoise));
+      }
+      var savedAnchors = parseFloat(sessionStorage.getItem('tags-vectorfield-anchors'));
+      if (Number.isFinite(savedAnchors)) {
+        anchorsStrength = Math.max(0, Math.min(8, savedAnchors));
+      }
+      var savedCompensationX = parseFloat(sessionStorage.getItem('tags-vectorfield-compensation-x'));
+      if (Number.isFinite(savedCompensationX)) {
+        compensationX = Math.max(-4, Math.min(4, savedCompensationX));
+      }
+      var savedMode = sessionStorage.getItem('tags-vectorfield-anchor-mode');
+      if (savedMode && ['current', 'random', 'alt-components'].indexOf(savedMode) >= 0) {
+        anchorMode = savedMode;
+      }
+      var savedCount = parseInt(sessionStorage.getItem('tags-vectorfield-anchor-count') || '', 10);
+      if (Number.isFinite(savedCount)) {
+        anchorCount = Math.max(0, Math.min(MAX_ANCHOR_CANDIDATES, savedCount));
+      }
+    } catch (e) {}
+    syncNoiseUi();
+    syncAnchorsUi();
+    syncCompensationXUi();
+    syncAnchorModeUi();
+    syncAnchorCountUi();
+  }
+
+  function stableHash(str) {
+    var h = 2166136261;
+    for (var i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  function hashToUnit(seed) {
+    return ((seed >>> 0) % 1000000) / 500000 - 1;
+  }
+
+  function randomAnchor2D(name) {
+    var base = stableHash(name || '');
+    return [hashToUnit(base ^ 0x9e3779b9), hashToUnit(base ^ 0x85ebca6b)];
+  }
+
+  function getEmbVectors2D(emb, key) {
+    var current = emb.mapCurrent[key] || emb.mapLegacy[key];
+    var alt = emb.mapAlt[key] || current;
+    var dir = emb.mapDir[key] || current || alt;
+    return { current: current, alt: alt, dir: dir };
+  }
+
+  function rebuildAnchorsFromCache() {
+    if (!lastTagRows || !lastEmb) return;
+    buildAnchorsFromEmb(lastTagRows, lastEmb);
+    layoutParticles();
+  }
+
   function fieldAt(x, y, t) {
-    var fx = noise2(y, x * 0.5, t) * 0.55;
-    var fy = noise2(x, y + 3, t + 1) * 0.55;
+    var fx = noise2(y, x * 0.5, t) * noiseStrength;
+    var fy = noise2(x, y + 3, t + 1) * noiseStrength;
     var sx = 0;
     var sy = 0;
     var sw = 0;
@@ -205,9 +328,10 @@
       sw += ww;
     }
     if (sw > 1e-8) {
-      fx += sx / sw;
-      fy += sy / sw;
+      fx += (sx / sw) * anchorsStrength;
+      fy += (sy / sw) * anchorsStrength;
     }
+    fx += compensationX;
     return { x: fx, y: fy };
   }
 
@@ -264,7 +388,7 @@
         line.style.setProperty('--vf-anchor-line-length', len.toFixed(1) + 'px');
         line.style.setProperty(
           '--vf-anchor-line-angle',
-          (Math.atan2(a.dy || 0, a.dx || 0) * 180 / Math.PI).toFixed(2) + 'deg'
+          (Math.atan2(-(a.dy || 0), a.dx || 0) * 180 / Math.PI).toFixed(2) + 'deg'
         );
       }
       var h = items[i].querySelector('.vf-anchor-handle');
@@ -536,7 +660,7 @@
     sorted.sort(function (a, b) {
       return b.count - a.count;
     });
-    sorted = sorted.slice(0, MAX_TAGS);
+    sorted = sorted.slice(0, MAX_ANCHOR_CANDIDATES);
 
     if (!emb || !emb.ok || !emb.words || !emb.vectors2d) {
       statusEl.textContent =
@@ -545,30 +669,96 @@
       return;
     }
 
-    var map = Object.create(null);
+    var mapLegacy = Object.create(null);
+    var mapCurrent = Object.create(null);
+    var mapAlt = Object.create(null);
+    var mapDir = Object.create(null);
+    var hasCurrent =
+      Array.isArray(emb.vectors2d_current) && emb.vectors2d_current.length === emb.words.length;
+    var hasAlt =
+      Array.isArray(emb.vectors2d_alt) && emb.vectors2d_alt.length === emb.words.length;
+    var hasDir =
+      Array.isArray(emb.directions2d) && emb.directions2d.length === emb.words.length;
     for (var e = 0; e < emb.words.length; e++) {
-      map[normTag(emb.words[e])] = emb.vectors2d[e];
+      var k = normTag(emb.words[e]);
+      mapLegacy[k] = emb.vectors2d[e];
+      if (hasCurrent) mapCurrent[k] = emb.vectors2d_current[e];
+      if (hasAlt) mapAlt[k] = emb.vectors2d_alt[e];
+      if (hasDir) mapDir[k] = emb.directions2d[e];
     }
+    emb.mapLegacy = mapLegacy;
+    emb.mapCurrent = mapCurrent;
+    emb.mapAlt = mapAlt;
+    emb.mapDir = mapDir;
 
     var allPts = [];
-    for (var j = 0; j < emb.vectors2d.length; j++) {
-      var vv = emb.vectors2d[j];
-      if (vv && vv.length >= 2) allPts.push([vv[0], vv[1]]);
+    var allDirs = [];
+    if (anchorMode !== 'random') {
+      for (var j = 0; j < sorted.length; j++) {
+        var rowKey = normTag(sorted[j].name);
+        var vecs = getEmbVectors2D(emb, rowKey);
+        var vv = anchorMode === 'alt-components' ? vecs.alt : vecs.current;
+        if (vv && vv.length >= 2) allPts.push([Number(vv[0]), Number(vv[1])]);
+        if (vecs.dir && vecs.dir.length >= 2) {
+          allDirs.push([Number(vecs.dir[0]), Number(vecs.dir[1])]);
+        }
+      }
+    } else {
+      for (var j = 0; j < sorted.length; j++) {
+        var rowKeyRandom = normTag(sorted[j].name);
+        var dirRandom = getEmbVectors2D(emb, rowKeyRandom).dir;
+        if (dirRandom && dirRandom.length >= 2) {
+          allDirs.push([Number(dirRandom[0]), Number(dirRandom[1])]);
+        }
+      }
     }
     var nrm =
       allPts.length > 0 ? embeddingMinMaxNormalizer(allPts) : null;
+    var dirMeanX = 0;
+    var dirMeanY = 0;
+    if (allDirs.length > 0) {
+      for (var di = 0; di < allDirs.length; di++) {
+        dirMeanX += Number(allDirs[di][0]) || 0;
+        dirMeanY += Number(allDirs[di][1]) || 0;
+      }
+      dirMeanX /= allDirs.length;
+      dirMeanY /= allDirs.length;
+    }
+    var centeredDirs = [];
+    for (var dc = 0; dc < allDirs.length; dc++) {
+      centeredDirs.push([
+        (Number(allDirs[dc][0]) || 0) - dirMeanX,
+        (Number(allDirs[dc][1]) || 0) - dirMeanY,
+      ]);
+    }
+    var dirNrm =
+      centeredDirs.length > 0 ? embeddingMinMaxNormalizer(centeredDirs) : null;
 
     var scaleX = worldW * 0.48;
     var scaleY = worldH * 0.48;
     var legacyScale = worldW * 0.42;
 
-    for (var i = 0; i < sorted.length; i++) {
+    var activeLimit = Math.max(0, Math.min(MAX_ANCHOR_CANDIDATES, anchorCount, sorted.length));
+    for (var i = 0; i < sorted.length && anchors.length < activeLimit; i++) {
       var row = sorted[i];
       var nm = normTag(row.name);
-      var v = map[nm];
-      if (!v || v.length < 2) continue;
-      var ex = Number(v[0]);
-      var ey = Number(v[1]);
+      var vecs = getEmbVectors2D(emb, nm);
+      var pos = anchorMode === 'random'
+        ? randomAnchor2D(row.name)
+        : (anchorMode === 'alt-components' ? vecs.alt : vecs.current);
+      var dir = vecs.dir;
+      if (!pos || pos.length < 2) continue;
+      var ex = Number(pos[0]);
+      var ey = Number(pos[1]);
+      var rawDx = dir && dir.length >= 2 ? Number(dir[0]) : ex;
+      var rawDy = dir && dir.length >= 2 ? Number(dir[1]) : ey;
+      rawDx -= dirMeanX;
+      rawDy -= dirMeanY;
+      if (dirNrm) {
+        var dn = dirNrm.toNorm(rawDx, rawDy);
+        rawDx = dn[0];
+        rawDy = dn[1];
+      }
       var nx;
       var ny;
       var px;
@@ -581,23 +771,23 @@
         ny = nn[1];
         px = nx * scaleX;
         py = ny * scaleY;
-        var lenN = Math.sqrt(nx * nx + ny * ny);
-        if (lenN > 1e-6) {
-          dx = nx / lenN;
-          dy = ny / lenN;
+        var lenD = Math.sqrt(rawDx * rawDx + rawDy * rawDy);
+        if (lenD > 1e-6) {
+          dx = rawDx / lenD;
+          dy = rawDy / lenD;
         } else {
           var lenR = Math.sqrt(ex * ex + ey * ey) + 1e-6;
           dx = ex / lenR;
           dy = ey / lenR;
         }
       } else {
-        nx = 0;
-        ny = 0;
+        nx = ex;
+        ny = ey;
         px = ex * legacyScale;
         py = ey * legacyScale;
-        var lenL = Math.sqrt(ex * ex + ey * ey) + 1e-6;
-        dx = ex / lenL;
-        dy = ey / lenL;
+        var lenL = Math.sqrt(rawDx * rawDx + rawDy * rawDy) + 1e-6;
+        dx = rawDx / lenL;
+        dy = rawDy / lenL;
       }
       var countWeight = Math.sqrt(row.count + 1);
       anchors.push({
@@ -618,7 +808,9 @@
       effectiveParticles +
       ' pts · ' +
       anchors.length +
-      ' anchors · emb₂D → [-1,1] min/max · world';
+      ' anchors · mode ' +
+      anchorMode +
+      ' · world';
     if (showAnchorLabels) rebuildAnchorLabels();
   }
 
@@ -626,7 +818,7 @@
     return fetch(EMB_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ words: names, max_words: MAX_TAGS, min_sim: 0.35, max_links: 100 }),
+      body: JSON.stringify({ words: names, max_words: MAX_ANCHOR_CANDIDATES, min_sim: 0.35, max_links: 100 }),
     })
       .then(function (r) {
         return r.json();
@@ -657,10 +849,12 @@
           return;
         }
         statusEl.textContent = 'Loading embeddings…';
+        lastTagRows = res.b;
         var names = res.b.map(function (row) {
           return String(row.name || '');
         }).filter(Boolean);
         return fetchEmb(names).then(function (emb) {
+          lastEmb = emb;
           buildAnchorsFromEmb(res.b, emb);
           layoutParticles();
         });
@@ -704,6 +898,55 @@
       resize();
       layoutParticles();
       reloadData();
+    });
+  }
+
+  loadSliderPrefs();
+  if (noiseSel) {
+    noiseSel.addEventListener('input', function () {
+      noiseStrength = Math.max(0, Math.min(NOISE_BASE * 3, parseFloat(noiseSel.value) || 0));
+      syncNoiseUi();
+      try {
+        sessionStorage.setItem('tags-vectorfield-noise', String(noiseStrength));
+      } catch (e) {}
+    });
+  }
+  if (anchorsSel) {
+    anchorsSel.addEventListener('input', function () {
+      anchorsStrength = Math.max(0, Math.min(8, parseFloat(anchorsSel.value) || 0));
+      syncAnchorsUi();
+      try {
+        sessionStorage.setItem('tags-vectorfield-anchors', String(anchorsStrength));
+      } catch (e) {}
+    });
+  }
+  if (compensationXSel) {
+    compensationXSel.addEventListener('input', function () {
+      compensationX = Math.max(-4, Math.min(4, parseFloat(compensationXSel.value) || 0));
+      syncCompensationXUi();
+      try {
+        sessionStorage.setItem('tags-vectorfield-compensation-x', String(compensationX));
+      } catch (e) {}
+    });
+  }
+  if (anchorModeSel) {
+    anchorModeSel.addEventListener('change', function () {
+      anchorMode = anchorModeSel.value || 'current';
+      syncAnchorModeUi();
+      try {
+        sessionStorage.setItem('tags-vectorfield-anchor-mode', anchorMode);
+      } catch (e) {}
+      rebuildAnchorsFromCache();
+    });
+  }
+  if (anchorCountSel) {
+    anchorCountSel.addEventListener('input', function () {
+      anchorCount = Math.max(0, Math.min(MAX_ANCHOR_CANDIDATES, parseInt(anchorCountSel.value || '0', 10) || 0));
+      syncAnchorCountUi();
+      try {
+        sessionStorage.setItem('tags-vectorfield-anchor-count', String(anchorCount));
+      } catch (e) {}
+      rebuildAnchorsFromCache();
     });
   }
 

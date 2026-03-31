@@ -30,6 +30,24 @@
     <option value="med">Med</option>
     <option value="high">High</option>
   </select>
+  <label class="tags-vis-density-label" for="vf3-noise">Noise value</label>
+  <input id="vf3-noise" class="tags-vis-select" type="range" min="0" max="1.26" step="0.01" value="0.42" aria-label="Noise value">
+  <span class="tags-vis-status" id="vf3-noise-value">0.42</span>
+  <label class="tags-vis-density-label" for="vf3-anchors">Anchors value</label>
+  <input id="vf3-anchors" class="tags-vis-select" type="range" min="0" max="8" step="0.1" value="1" aria-label="Anchors value">
+  <span class="tags-vis-status" id="vf3-anchors-value">1.0</span>
+  <label class="tags-vis-density-label" for="vf3-compensation-x">CompensationX</label>
+  <input id="vf3-compensation-x" class="tags-vis-select" type="range" min="-4" max="4" step="0.01" value="0" aria-label="CompensationX">
+  <span class="tags-vis-status" id="vf3-compensation-x-value">0.00</span>
+  <label class="tags-vis-density-label" for="vf3-anchor-mode">Anchor mode</label>
+  <select id="vf3-anchor-mode" class="tags-vis-select" aria-label="Anchor mode">
+    <option value="current">Current</option>
+    <option value="random">Random</option>
+    <option value="alt-components">Alt vectors</option>
+  </select>
+  <label class="tags-vis-density-label" for="vf3-anchor-count">Count anchors</label>
+  <input id="vf3-anchor-count" class="tags-vis-select" type="range" min="0" max="256" step="1" value="32" aria-label="Count anchors">
+  <span class="tags-vis-status" id="vf3-anchor-count-value">32</span>
   <button type="button" class="tags-vis-btn" id="btn-anchor-labels" aria-pressed="false" title="Show tag labels (projected; 3D view only — no drag)">Anchor labels</button>
   <button type="button" class="tags-vis-btn" id="btn-show-vectors" aria-pressed="false" title="Sample field direction on a coarse 3D grid">Field vectors</button>
   <button type="button" class="tags-vis-btn" id="btn-freeze">Freeze</button>
@@ -61,7 +79,11 @@
 
   var effectiveParticles = MAX_PARTICLES_CAPACITY;
   var MAX_TAGS = 48;
+  var MAX_ANCHOR_CANDIDATES = 256;
+  var DEFAULT_ANCHOR_COUNT = 32;
   var MAX_DPR = 2;
+  var NOISE_BASE = 0.42;
+  var ANCHORS_BASE = 1.0;
   var animSlow = 1;
   var reduceMotionPreferred = false;
 
@@ -69,6 +91,20 @@
   var banner = document.getElementById('api-error');
   var canvas = document.getElementById('vf3');
   var densitySel = document.getElementById('vf3-density');
+  var noiseSel = document.getElementById('vf3-noise');
+  var anchorsSel = document.getElementById('vf3-anchors');
+  var compensationXSel = document.getElementById('vf3-compensation-x');
+  var anchorModeSel = document.getElementById('vf3-anchor-mode');
+  var anchorCountSel = document.getElementById('vf3-anchor-count');
+  var noiseValueEl = document.getElementById('vf3-noise-value');
+  var anchorsValueEl = document.getElementById('vf3-anchors-value');
+  var compensationXValueEl = document.getElementById('vf3-compensation-x-value');
+  var anchorCountValueEl = document.getElementById('vf3-anchor-count-value');
+  var noiseStrength = NOISE_BASE;
+  var anchorsStrength = ANCHORS_BASE;
+  var compensationX = 0;
+  var anchorMode = 'current';
+  var anchorCount = DEFAULT_ANCHOR_COUNT;
 
   var renderer, scene, camera, controls, points, geom, posAttr;
   var anchors = [];
@@ -86,6 +122,8 @@
   var GRID3_Z = 5;
   var _projV = new THREE.Vector3();
   var _projDir = new THREE.Vector3();
+  var lastTagRows = null;
+  var lastEmb = null;
 
   function getDensityPref() {
     if (densitySel && densitySel.value) return densitySel.value;
@@ -181,10 +219,101 @@
     );
   }
 
+  function syncNoiseUi() {
+    if (noiseSel) noiseSel.value = String(noiseStrength);
+    if (noiseValueEl) noiseValueEl.textContent = Number(noiseStrength).toFixed(2);
+  }
+
+  function syncAnchorsUi() {
+    if (anchorsSel) anchorsSel.value = String(anchorsStrength);
+    if (anchorsValueEl) anchorsValueEl.textContent = Number(anchorsStrength).toFixed(1);
+  }
+
+  function syncCompensationXUi() {
+    if (compensationXSel) compensationXSel.value = String(compensationX);
+    if (compensationXValueEl) compensationXValueEl.textContent = Number(compensationX).toFixed(2);
+  }
+
+  function syncAnchorModeUi() {
+    if (anchorModeSel) anchorModeSel.value = anchorMode;
+  }
+
+  function syncAnchorCountUi() {
+    if (anchorCountSel) anchorCountSel.value = String(anchorCount);
+    if (anchorCountValueEl) anchorCountValueEl.textContent = String(anchorCount);
+  }
+
+  function loadSliderPrefs() {
+    try {
+      var savedNoise = parseFloat(sessionStorage.getItem('tags-vectorfield-3d-noise'));
+      if (Number.isFinite(savedNoise)) {
+        noiseStrength = Math.max(0, Math.min(NOISE_BASE * 3, savedNoise));
+      }
+      var savedAnchors = parseFloat(sessionStorage.getItem('tags-vectorfield-3d-anchors'));
+      if (Number.isFinite(savedAnchors)) {
+        anchorsStrength = Math.max(0, Math.min(8, savedAnchors));
+      }
+      var savedCompensationX = parseFloat(sessionStorage.getItem('tags-vectorfield-3d-compensation-x'));
+      if (Number.isFinite(savedCompensationX)) {
+        compensationX = Math.max(-4, Math.min(4, savedCompensationX));
+      }
+      var savedMode = sessionStorage.getItem('tags-vectorfield-3d-anchor-mode');
+      if (savedMode && ['current', 'random', 'alt-components'].indexOf(savedMode) >= 0) {
+        anchorMode = savedMode;
+      }
+      var savedCount = parseInt(sessionStorage.getItem('tags-vectorfield-3d-anchor-count') || '', 10);
+      if (Number.isFinite(savedCount)) {
+        anchorCount = Math.max(0, Math.min(MAX_ANCHOR_CANDIDATES, savedCount));
+      }
+    } catch (e) {}
+    syncNoiseUi();
+    syncAnchorsUi();
+    syncCompensationXUi();
+    syncAnchorModeUi();
+    syncAnchorCountUi();
+  }
+
+  function stableHash(str) {
+    var h = 2166136261;
+    for (var i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  function hashToUnit(seed) {
+    return ((seed >>> 0) % 1000000) / 500000 - 1;
+  }
+
+  function randomAnchor3D(name) {
+    var base = stableHash(name || '');
+    return [
+      hashToUnit(base ^ 0x9e3779b9),
+      hashToUnit(base ^ 0x85ebca6b),
+      hashToUnit(base ^ 0xc2b2ae35)
+    ];
+  }
+
+  function getEmbVectors3D(emb, key) {
+    var current2 = emb.map2Current[key] || emb.map2Legacy[key];
+    var current3 = emb.map3Current[key] || emb.map3Legacy[key];
+    var alt2 = emb.map2Alt[key] || current2;
+    var alt3 = emb.map3Alt[key] || current3 || (alt2 ? [alt2[0], alt2[1], fallbackZFrom2D(alt2[0], alt2[1])] : null);
+    var dir3 = emb.mapDir3[key] || current3 || alt3;
+    return { current2: current2, current3: current3, alt2: alt2, alt3: alt3, dir3: dir3 };
+  }
+
+  function rebuildAnchorsFromCache() {
+    if (!lastTagRows || !lastEmb) return;
+    buildAnchorsFromEmb(lastTagRows, lastEmb);
+    layoutParticles();
+  }
+
   function fieldAt3(x, y, z, t) {
-    var fx = noise3(y, z, x, t) * 0.42;
-    var fy = noise3(z, x, y, t + 0.7) * 0.42;
-    var fz = noise3(x, y, z, t + 1.4) * 0.42;
+    var fx = noise3(y, z, x, t) * noiseStrength;
+    var fy = noise3(z, x, y, t + 0.7) * noiseStrength;
+    var fz = noise3(x, y, z, t + 1.4) * noiseStrength;
     var sx = 0;
     var sy = 0;
     var sz = 0;
@@ -204,10 +333,11 @@
       sw += ww;
     }
     if (sw > 1e-8) {
-      fx += sx / sw;
-      fy += sy / sw;
-      fz += sz / sw;
+      fx += (sx / sw) * anchorsStrength;
+      fy += (sy / sw) * anchorsStrength;
+      fz += (sz / sw) * anchorsStrength;
     }
+    fx += compensationX;
     return { x: fx, y: fy, z: fz };
   }
 
@@ -487,7 +617,7 @@
     sorted.sort(function (a, b) {
       return b.count - a.count;
     });
-    sorted = sorted.slice(0, MAX_TAGS);
+    sorted = sorted.slice(0, MAX_ANCHOR_CANDIDATES);
 
     if (!emb || !emb.ok || !emb.words || !emb.vectors2d) {
       statusEl.textContent =
@@ -496,46 +626,110 @@
       return;
     }
 
-    var map2 = Object.create(null);
-    var map3 = Object.create(null);
-    var has3 =
-      Array.isArray(emb.vectors3d) && emb.vectors3d.length === emb.words.length;
+    var map2Legacy = Object.create(null);
+    var map3Legacy = Object.create(null);
+    var map2Current = Object.create(null);
+    var map3Current = Object.create(null);
+    var map2Alt = Object.create(null);
+    var map3Alt = Object.create(null);
+    var mapDir3 = Object.create(null);
+    var has3 = Array.isArray(emb.vectors3d) && emb.vectors3d.length === emb.words.length;
+    var hasCurrent2 = Array.isArray(emb.vectors2d_current) && emb.vectors2d_current.length === emb.words.length;
+    var hasCurrent3 = Array.isArray(emb.vectors3d_current) && emb.vectors3d_current.length === emb.words.length;
+    var hasAlt2 = Array.isArray(emb.vectors2d_alt) && emb.vectors2d_alt.length === emb.words.length;
+    var hasAlt3 = Array.isArray(emb.vectors3d_alt) && emb.vectors3d_alt.length === emb.words.length;
+    var hasDir3 = Array.isArray(emb.directions3d) && emb.directions3d.length === emb.words.length;
     for (var e = 0; e < emb.words.length; e++) {
       var k = normTag(emb.words[e]);
-      map2[k] = emb.vectors2d[e];
-      if (has3) map3[k] = emb.vectors3d[e];
+      map2Legacy[k] = emb.vectors2d[e];
+      if (has3) map3Legacy[k] = emb.vectors3d[e];
+      if (hasCurrent2) map2Current[k] = emb.vectors2d_current[e];
+      if (hasCurrent3) map3Current[k] = emb.vectors3d_current[e];
+      if (hasAlt2) map2Alt[k] = emb.vectors2d_alt[e];
+      if (hasAlt3) map3Alt[k] = emb.vectors3d_alt[e];
+      if (hasDir3) mapDir3[k] = emb.directions3d[e];
     }
+    emb.map2Legacy = map2Legacy;
+    emb.map3Legacy = map3Legacy;
+    emb.map2Current = map2Current;
+    emb.map3Current = map3Current;
+    emb.map2Alt = map2Alt;
+    emb.map3Alt = map3Alt;
+    emb.mapDir3 = mapDir3;
 
     var allPts = [];
-    for (var j = 0; j < emb.words.length; j++) {
-      var v2 = emb.vectors2d[j];
-      if (!v2 || v2.length < 2) continue;
-      var ex = Number(v2[0]);
-      var ey = Number(v2[1]);
-      var v3 = has3 ? emb.vectors3d[j] : null;
-      if (v3 && v3.length >= 3) {
-        allPts.push([Number(v3[0]), Number(v3[1]), Number(v3[2])]);
-      } else {
-        allPts.push([ex, ey, fallbackZFrom2D(ex, ey)]);
+    var allDirs = [];
+    if (anchorMode !== 'random') {
+      for (var j = 0; j < sorted.length; j++) {
+        var rowKey = normTag(sorted[j].name);
+        var vecs = getEmbVectors3D(emb, rowKey);
+        var raw3 = anchorMode === 'alt-components' ? vecs.alt3 : vecs.current3;
+        if (raw3 && raw3.length >= 3) {
+          allPts.push([Number(raw3[0]), Number(raw3[1]), Number(raw3[2])]);
+        }
+        if (vecs.dir3 && vecs.dir3.length >= 3) {
+          allDirs.push([Number(vecs.dir3[0]), Number(vecs.dir3[1]), Number(vecs.dir3[2])]);
+        }
+      }
+    } else {
+      for (var j = 0; j < sorted.length; j++) {
+        var rowKeyRandom = normTag(sorted[j].name);
+        var dirRandom = getEmbVectors3D(emb, rowKeyRandom).dir3;
+        if (dirRandom && dirRandom.length >= 3) {
+          allDirs.push([Number(dirRandom[0]), Number(dirRandom[1]), Number(dirRandom[2])]);
+        }
       }
     }
 
     var nrm = allPts.length > 0 ? embeddingMinMaxNormalizer3D(allPts) : null;
+    var dirMeanX = 0;
+    var dirMeanY = 0;
+    var dirMeanZ = 0;
+    if (allDirs.length > 0) {
+      for (var di = 0; di < allDirs.length; di++) {
+        dirMeanX += Number(allDirs[di][0]) || 0;
+        dirMeanY += Number(allDirs[di][1]) || 0;
+        dirMeanZ += Number(allDirs[di][2]) || 0;
+      }
+      dirMeanX /= allDirs.length;
+      dirMeanY /= allDirs.length;
+      dirMeanZ /= allDirs.length;
+    }
+    var centeredDirs = [];
+    for (var dc = 0; dc < allDirs.length; dc++) {
+      centeredDirs.push([
+        (Number(allDirs[dc][0]) || 0) - dirMeanX,
+        (Number(allDirs[dc][1]) || 0) - dirMeanY,
+        (Number(allDirs[dc][2]) || 0) - dirMeanZ,
+      ]);
+    }
+    var dirNrm = centeredDirs.length > 0 ? embeddingMinMaxNormalizer3D(centeredDirs) : null;
     var scale = WORLD_HALF * 0.48;
 
-    for (var i = 0; i < sorted.length; i++) {
+    var activeLimit = Math.max(0, Math.min(MAX_ANCHOR_CANDIDATES, anchorCount, sorted.length));
+    for (var i = 0; i < sorted.length && anchors.length < activeLimit; i++) {
       var row = sorted[i];
       var nm = normTag(row.name);
-      var v2 = map2[nm];
-      if (!v2 || v2.length < 2) continue;
-      var ex = Number(v2[0]);
-      var ey = Number(v2[1]);
-      var raw3;
-      var v3r = map3[nm];
-      if (v3r && v3r.length >= 3) {
-        raw3 = [Number(v3r[0]), Number(v3r[1]), Number(v3r[2])];
-      } else {
-        raw3 = [ex, ey, fallbackZFrom2D(ex, ey)];
+      var vecs = getEmbVectors3D(emb, nm);
+      var current2 = vecs.current2;
+      if (!current2 || current2.length < 2) continue;
+      var ex = Number(current2[0]);
+      var ey = Number(current2[1]);
+      var raw3 = anchorMode === 'random' ? randomAnchor3D(row.name) : (anchorMode === 'alt-components' ? vecs.alt3 : vecs.current3);
+      if (!raw3 || raw3.length < 3) continue;
+      raw3 = [Number(raw3[0]), Number(raw3[1]), Number(raw3[2])];
+      var dir3 = vecs.dir3;
+      var rawDx = dir3 && dir3.length >= 3 ? Number(dir3[0]) : raw3[0];
+      var rawDy = dir3 && dir3.length >= 3 ? Number(dir3[1]) : raw3[1];
+      var rawDz = dir3 && dir3.length >= 3 ? Number(dir3[2]) : raw3[2];
+      rawDx -= dirMeanX;
+      rawDy -= dirMeanY;
+      rawDz -= dirMeanZ;
+      if (dirNrm) {
+        var dn = dirNrm.toNorm(rawDx, rawDy, rawDz);
+        rawDx = dn[0];
+        rawDy = dn[1];
+        rawDz = dn[2];
       }
       var nx;
       var ny;
@@ -554,11 +748,11 @@
         px = nx * scale;
         py = ny * scale;
         pz = nz * scale;
-        var lenN = Math.sqrt(nx * nx + ny * ny + nz * nz);
-        if (lenN > 1e-6) {
-          dx = nx / lenN;
-          dy = ny / lenN;
-          dz = nz / lenN;
+        var lenD = Math.sqrt(rawDx * rawDx + rawDy * rawDy + rawDz * rawDz);
+        if (lenD > 1e-6) {
+          dx = rawDx / lenD;
+          dy = rawDy / lenD;
+          dz = rawDz / lenD;
         } else {
           var lenR =
             Math.sqrt(raw3[0] * raw3[0] + raw3[1] * raw3[1] + raw3[2] * raw3[2]) +
@@ -568,15 +762,17 @@
           dz = raw3[2] / lenR;
         }
       } else {
-        nx = ny = nz = 0;
-        px = ex * scale;
-        py = ey * scale;
+        nx = raw3[0];
+        ny = raw3[1];
+        nz = raw3[2];
+        px = raw3[0] * scale;
+        py = raw3[1] * scale;
         pz = raw3[2] * scale;
         var lenL =
-          Math.sqrt(ex * ex + ey * ey + raw3[2] * raw3[2]) + 1e-6;
-        dx = ex / lenL;
-        dy = ey / lenL;
-        dz = raw3[2] / lenL;
+          Math.sqrt(rawDx * rawDx + rawDy * rawDy + rawDz * rawDz) + 1e-6;
+        dx = rawDx / lenL;
+        dy = rawDy / lenL;
+        dz = rawDz / lenL;
       }
       var countWeight = Math.sqrt(row.count + 1);
       anchors.push({
@@ -610,7 +806,8 @@
       anchors.length +
       ' anchors · ' +
       src +
-      ' · [-1,1]³';
+      ' · mode ' +
+      anchorMode;
     if (showAnchorLabels) rebuildAnchorLabels();
   }
 
@@ -618,7 +815,7 @@
     return fetch(EMB_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ words: names, max_words: MAX_TAGS, min_sim: 0.35, max_links: 100 }),
+      body: JSON.stringify({ words: names, max_words: MAX_ANCHOR_CANDIDATES, min_sim: 0.35, max_links: 100 }),
     })
       .then(function (r) {
         return r.json();
@@ -649,10 +846,12 @@
           return;
         }
         statusEl.textContent = 'Loading embeddings…';
+        lastTagRows = res.b;
         var names = res.b.map(function (row) {
           return String(row.name || '');
         }).filter(Boolean);
         return fetchEmb(names).then(function (emb) {
+          lastEmb = emb;
           buildAnchorsFromEmb(res.b, emb);
           layoutParticles();
         });
@@ -696,6 +895,55 @@
       resize();
       layoutParticles();
       reloadData();
+    });
+  }
+
+  loadSliderPrefs();
+  if (noiseSel) {
+    noiseSel.addEventListener('input', function () {
+      noiseStrength = Math.max(0, Math.min(NOISE_BASE * 3, parseFloat(noiseSel.value) || 0));
+      syncNoiseUi();
+      try {
+        sessionStorage.setItem('tags-vectorfield-3d-noise', String(noiseStrength));
+      } catch (e) {}
+    });
+  }
+  if (anchorsSel) {
+    anchorsSel.addEventListener('input', function () {
+      anchorsStrength = Math.max(0, Math.min(8, parseFloat(anchorsSel.value) || 0));
+      syncAnchorsUi();
+      try {
+        sessionStorage.setItem('tags-vectorfield-3d-anchors', String(anchorsStrength));
+      } catch (e) {}
+    });
+  }
+  if (compensationXSel) {
+    compensationXSel.addEventListener('input', function () {
+      compensationX = Math.max(-4, Math.min(4, parseFloat(compensationXSel.value) || 0));
+      syncCompensationXUi();
+      try {
+        sessionStorage.setItem('tags-vectorfield-3d-compensation-x', String(compensationX));
+      } catch (e) {}
+    });
+  }
+  if (anchorModeSel) {
+    anchorModeSel.addEventListener('change', function () {
+      anchorMode = anchorModeSel.value || 'current';
+      syncAnchorModeUi();
+      try {
+        sessionStorage.setItem('tags-vectorfield-3d-anchor-mode', anchorMode);
+      } catch (e) {}
+      rebuildAnchorsFromCache();
+    });
+  }
+  if (anchorCountSel) {
+    anchorCountSel.addEventListener('input', function () {
+      anchorCount = Math.max(0, Math.min(MAX_ANCHOR_CANDIDATES, parseInt(anchorCountSel.value || '0', 10) || 0));
+      syncAnchorCountUi();
+      try {
+        sessionStorage.setItem('tags-vectorfield-3d-anchor-count', String(anchorCount));
+      } catch (e) {}
+      rebuildAnchorsFromCache();
     });
   }
 

@@ -158,16 +158,22 @@ body.tags-vis-body {
   flex-direction: column;
   align-items: center;
   gap: 5px;
+  min-width: 12px;
+  min-height: 12px;
 }
 
 .vf-anchor-line {
+  position: absolute;
+  left: 6px;
+  top: 6px;
   width: var(--vf-anchor-line-length, 28px);
   height: 2px;
   border-radius: 999px;
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.1), rgba(255, 48, 48, 0.95));
   transform-origin: left center;
-  transform: rotate(var(--vf-anchor-line-angle, 0deg));
+  transform: translateY(-50%) rotate(var(--vf-anchor-line-angle, 0deg));
   box-shadow: 0 0 12px rgba(255, 48, 48, 0.18);
+  pointer-events: none;
 }
 
 .vf-anchor-line::after {
@@ -183,6 +189,8 @@ body.tags-vis-body {
 }
 
 .vf-anchor-handle {
+  position: relative;
+  z-index: 1;
   pointer-events: auto;
   width: 12px;
   height: 12px;
@@ -207,6 +215,7 @@ body.tags-vis-body {
 
 .vf-anchor-label {
   position: relative;
+  z-index: 1;
   font-size: 10px;
   line-height: 1.25;
   color: var(--tags-vis-accent);
@@ -221,6 +230,7 @@ body.tags-vis-body {
   text-overflow: ellipsis;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   text-align: center;
+  margin-top: 10px;
 }
 
 .tags-vis-canvas-host canvas {
