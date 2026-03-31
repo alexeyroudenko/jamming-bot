@@ -7,5 +7,6 @@
   "quickadd",
   "cursor-bridge",
   "cursor-integration",
-  "table-editor-obsidian"
+  "table-editor-obsidian",
+  "dataview"
 ]
