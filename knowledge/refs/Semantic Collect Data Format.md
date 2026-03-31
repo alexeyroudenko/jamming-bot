@@ -1,5 +1,18 @@
+---
+title: Semantic Collect Data Format
+note_type: ref
+tags:
+  - ref
+  - semantic
+  - data
+  - format
+---
 
-# Берем за основу:
+# Semantic Collect Data Format
+
+Рабочая заметка о формате семантических данных и промежуточных структур, используемых при анализе текста.
+
+## Берем за основу:
 ```
 Jammingbot is a fantasy about a post-apocalyptic future, when the main functions of the Internet and assistant bots are defeated and only one self-replicating bot remains, aimlessly plowing the Internet. This is a bot that has no goal, only a path.
 
@@ -138,12 +151,16 @@ Entities [{'PERSON': 'Jammingbot'}, {'CARDINAL': 'only one'}]
 
 ```
 
-### В пвпке
+### В папке
 ```
 Z:\YandexDisk\Projects\2025\2025-Jamming_bot\AV\TD_JammingBot_AV\TD_JammingBot_AV\Data\03_Semantic
 ```
 
-### Есть такое
+## В Jamming Bot
+
+Эта заметка фиксирует пример формата для noun phrases, verbs, entities, keywords и dependency-связей, которые затем могут использоваться в [[jamming-bot/Jamming Bot|Jamming Bot]] как входные данные для визуализации и семантической обработки.
+
+## Есть такое
 ```
 Jammingbot>is
 is>is

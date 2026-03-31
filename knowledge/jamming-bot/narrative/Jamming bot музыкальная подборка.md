@@ -3,7 +3,7 @@ title: Jamming Bot Музыкальная подборка
 aliases:
   - Jamming bot музыкальная подборка
 note_type: narrative
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 tags:
   - soundtrack
   - narrative

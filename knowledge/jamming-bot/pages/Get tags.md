@@ -2,7 +2,7 @@
 title: Get tags
 note_type: web_entry
 web_type: api
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 parent: "[[web/API|Jamming Bot API Index]]"
 url: https://jamming-bot.arthew0.online/api/tags/get/
 tags:

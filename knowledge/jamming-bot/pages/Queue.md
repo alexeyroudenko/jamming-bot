@@ -2,7 +2,7 @@
 title: Queue
 note_type: web_entry
 web_type: private
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 parent: "[[web/Ops|Jamming Bot Ops Index]]"
 url: https://jamming-bot.arthew0.online/queue/
 tags:

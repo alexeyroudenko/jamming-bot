@@ -1,7 +1,7 @@
 ---
 title: Scene 2. Dependency Parsing
 note_type: scene
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 order: 2
 tags:
   - scene

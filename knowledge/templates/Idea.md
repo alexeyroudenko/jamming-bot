@@ -1,5 +1,5 @@
 ---
-type: idea
+note_type: idea
 status: init | active | finished
 title: {{title}}
 tags: [idea, {{topic}}]

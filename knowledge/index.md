@@ -14,24 +14,25 @@ tags:
 
 ## Проекты
 
-- [[Jamming Bot]]
+- [[jamming-bot/Jamming Bot]]
 
 ## Разделы vault
 
-- [[concepts/Идеи - Карта пути|concepts]]
+- [[concepts/_index|concepts]]
+- [[refs/_index|refs]]
+- [[journal/_index|journal]]
 - [[exhibitions/_index|exhibitions]]
-- [[media]]
 - [[arthew0]]
 
 ## Журнал
 
-- `journal/` — датированные заметки и черновики
+- [[journal/_index|journal]] — датированные заметки и черновики
 - `templates/` — шаблоны для новых заметок
 - `scripts/` — служебные скрипты для поддержки vault
 
 ## Что внутри Jamming Bot
 
-- Карточка проекта: [[Jamming Bot]]
+- Карточка проекта: [[jamming-bot/Jamming Bot]]
 - Карта содержания: [[Jamming Bot MOC]]
 - Web surface: [[Jamming bot web|Jamming Bot Web]]
 - Разработка: [[dev/_index|Jamming Bot Dev Index]]

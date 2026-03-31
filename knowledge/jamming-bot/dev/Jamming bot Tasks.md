@@ -3,7 +3,7 @@ title: Jamming Bot Tasks
 aliases:
   - Jamming bot Tasks
 note_type: task
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 dev_area: tasks
 kanban-plugin: board
 tags:

@@ -1,7 +1,7 @@
 ---
 title: Jamming Bot v1.0
 note_type: archive
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 status: archived
 period: 2023-11
 owner:
@@ -26,7 +26,7 @@ source_repo: https://github.com/alexeyroudenko/jamming_bot
 
 ## Контекст
 
-- Актуальная карточка проекта: [[Jamming Bot]]
+- Актуальная карточка проекта: [[jamming-bot/Jamming Bot]]
 - Карта содержания: [[Jamming Bot MOC]]
 - Версия выставки: [[Jamming Bot v1.0.0]]
 

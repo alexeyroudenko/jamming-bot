@@ -1,7 +1,7 @@
 ---
 title: Scene 4. Geo
 note_type: scene
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 order: 4
 tags:
   - scene

@@ -1,7 +1,7 @@
 ---
 title: Scene 1. Path
 note_type: scene
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 order: 1
 tags:
   - scene

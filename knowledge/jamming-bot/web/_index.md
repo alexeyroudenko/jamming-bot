@@ -1,7 +1,7 @@
 ---
 title: Jamming Bot Web Index
 note_type: moc
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 parent: "[[Jamming bot web|Jamming Bot Web]]"
 tags:
   - moc
@@ -11,7 +11,7 @@ tags:
 
 # Jamming Bot Web Index
 
-Вторичный MOC для web surface проекта. Разделяет публичные страницы, API и внутренние интерфейсы.
+Вторичный MOC для web surface проекта. Эта заметка не дублирует обзорный [[Jamming bot web|Jamming Bot Web]], а служит навигационным индексом по дочерним разделам.
 
 ## Карты разделов
 

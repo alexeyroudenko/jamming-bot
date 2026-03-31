@@ -3,7 +3,7 @@ title: Jamming Bot Dev Index
 aliases:
   - Jamming Bot Dev
 note_type: moc
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 tags:
   - moc
   - dev

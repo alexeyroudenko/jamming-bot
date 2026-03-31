@@ -1,7 +1,7 @@
 ---
 title: Jamming Bot API Index
 note_type: moc
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 parent: "[[web/_index|Jamming Bot Web Index]]"
 tags:
   - moc

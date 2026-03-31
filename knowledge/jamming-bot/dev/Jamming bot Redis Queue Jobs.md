@@ -3,7 +3,7 @@ title: Jamming Bot Redis Queue Jobs
 aliases:
   - Jamming bot Redis Queue Jobs
 note_type: dev
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 dev_area: infra
 tags:
   - dev

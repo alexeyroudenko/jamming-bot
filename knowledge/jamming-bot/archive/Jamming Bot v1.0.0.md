@@ -1,9 +1,9 @@
 ---
 title: Jamming Bot v1.0.0
 note_type: archive
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 status: archived
-version: "1.0.0"
+version: 1.0.0
 year: 2023
 tags:
   - project
@@ -18,7 +18,7 @@ tags:
 
 ## Контекст
 
-- Проект: [[Jamming Bot]]
+- Проект: [[jamming-bot/Jamming Bot]]
 - Карта содержания: [[Jamming Bot MOC]]
 - Выставки: [[exhibitions/_index|Выставки]]
 

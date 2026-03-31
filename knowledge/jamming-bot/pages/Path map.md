@@ -2,7 +2,7 @@
 title: Path map
 note_type: web_entry
 web_type: page
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 parent: "[[pages/_index|Jamming Bot Pages Index]]"
 url: https://jamming-bot.arthew0.online/path/map/
 tags:

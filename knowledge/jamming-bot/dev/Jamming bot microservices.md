@@ -3,7 +3,7 @@ title: Jamming Bot Microservices
 aliases:
   - Jamming bot microservices
 note_type: dev
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 dev_area: architecture
 tags:
   - dev

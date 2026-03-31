@@ -1,3 +1,32 @@
-Alexey Roudenko (arthew0) is a media artist and physicist who works with the latest computer technology. In his works, Alexey combines modern technology with visionary ideas of Kandinsky, Malevich, Skryabin, and the traditions of the Russian avant-garde. His interests lie in the field of sound synthesis, studies of forms and motions by means of computer vision, and simulations of synaesthesia.
+---
+title: arthew0
+aliases:
+  - Alexey Roudenko
+note_type: person
+tags:
+  - person
+  - artist
+  - author
+---
 
-arthew0 sees his creative career as a continuing experiment, only a small part of which emerges in the view of the public. Some steps are divided by a gap several years long, some remain private, and others lead into deadlock.
+# arthew0
+
+Alexey Roudenko (arthew0) is a media artist and physicist who works with contemporary computer technologies. In his practice, he combines technical systems with visionary and avant-garde traditions.
+
+## Интересы
+
+- sound synthesis;
+- computer vision;
+- motion and form studies;
+- simulations of synaesthesia;
+- generative and media art.
+
+## В контексте этого vault
+
+`arthew0` — автор и владелец проекта [[jamming-bot/Jamming Bot|Jamming Bot]] и связанных заметок.
+
+## См. также
+
+- [[jamming-bot/Jamming Bot|Jamming Bot]]
+- [[TouchDesigner]]
+- [[Computer vision]]

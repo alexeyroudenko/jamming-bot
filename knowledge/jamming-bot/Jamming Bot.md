@@ -43,18 +43,20 @@ tags:
 ## Концепция
 
 В настоящее время [[пауки]], [[краулеры]] и боты несут сервисную цель. Они выступают в роли поисковиков, собирают информацию и автоматизируют инфраструктуры интернета. Jamming Bot - это фантазия на тему постапокалиптического будущего, когда основные функции интернета и ботов-помощников будут повержены и останется лишь один самовоспроизводящийся бот, бесцельно бороздящий просторы интернета и, возможно, изучающий в обрывках смыслов на страницах интернета общее настроение человечества. Это [[бот]], у которого нет цели, а только путь.
+[[Jamming bot экспликация]]
 
 ## Быстрые входы
 
 - [[Jamming Bot MOC]] - полная карта содержимого проекта
 - [[Jamming bot web|Jamming Bot Web]] - карта веб-поверхности и интерфейсов
 - [[dev/_index|Jamming Bot Dev Index]] - архитектура, инфраструктура, задачи и исследования
+- [[Jamming Bot - Theory Context]] - теоретическая рамка проекта
 - [[exhibitions/_index|Выставки]] - материалы показов и экспликаций
 
 ## Ключевые блоки проекта
 
 - Сцены: [[Scene 1. Path]], [[Scene 2. Dependency Parsing]], [[Scene 3. Texts]], [[Scene 4. Geo]], [[Scene 5. Cloud]], [[Scene 6. Embedings|Scene 6. Embeddings]]
-- Нарратив: [[Jamming bot scenes]], [[Jamming bot scenes (кратко)]], [[jamming_bot_en]]
+- Нарратив: [[Jamming bot экспликация]], [[Jamming bot scenes]], [[jamming_bot_en]]
 - Разработка: [[Jamming bot Dev project|Jamming Bot Dev Project]], [[Jamming bot microservices|Jamming Bot Microservices]], [[Jamming bot Tasks|Jamming Bot Tasks]]
 - Архив: [[Jamming Bot v1.0.0]], [[Jamming_bot_v1.0]]
 

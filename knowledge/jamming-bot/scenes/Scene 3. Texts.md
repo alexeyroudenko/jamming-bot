@@ -1,7 +1,7 @@
 ---
 title: Scene 3. Texts
 note_type: scene
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 order: 3
 tags:
   - scene

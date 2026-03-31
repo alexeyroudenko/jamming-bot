@@ -3,7 +3,7 @@ title: Scene 6. Embeddings
 aliases:
   - Scene 6. Embedings
 note_type: scene
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 order: 6
 tags:
   - scene

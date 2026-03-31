@@ -3,7 +3,7 @@ title: Jamming Bot Dev Project
 aliases:
   - Jamming bot Dev project
 note_type: dev
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 dev_area: infra
 tags:
   - dev
@@ -17,7 +17,7 @@ tags:
 
 ## Связанные заметки
 
-- [[Jamming Bot]]
+- [[jamming-bot/Jamming Bot]]
 - [[Jamming Bot MOC]]
 - [[Jamming bot Tasks]]
 - [[Jamming bot Redis Queue Jobs]]

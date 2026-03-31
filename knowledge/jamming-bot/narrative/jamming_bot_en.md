@@ -1,7 +1,7 @@
 ---
 title: Jamming Bot EN
 note_type: narrative
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 language: en
 tags:
   - narrative

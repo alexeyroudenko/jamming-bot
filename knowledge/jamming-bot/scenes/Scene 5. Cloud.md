@@ -1,7 +1,7 @@
 ---
 title: Scene 5. Cloud
 note_type: scene
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 order: 5
 tags:
   - scene

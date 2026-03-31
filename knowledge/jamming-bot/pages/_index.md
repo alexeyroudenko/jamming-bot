@@ -1,7 +1,7 @@
 ---
 title: Jamming Bot Pages Index
 note_type: moc
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 parent: "[[web/_index|Jamming Bot Web Index]]"
 tags:
   - moc
@@ -17,6 +17,7 @@ tags:
 ## Main entry
 
 - [[Home]]
+- [[React UI]]
 
 ## Tag and language visualizations
 

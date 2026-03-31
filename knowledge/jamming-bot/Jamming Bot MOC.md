@@ -9,12 +9,13 @@ description: Карта содержания проекта Jamming Bot в vault
 
 ## Входные точки
 - [[index]] — верхний уровень vault
-- [[Jamming Bot]] — каноническая карточка проекта
+- [[jamming-bot/Jamming Bot]] — каноническая карточка проекта
 - [[Jamming bot web|Jamming Bot Web]] — карта web surface проекта
 - [[Jamming_bot_v1.0]] — ранний конспект / v1
 - [[Jamming Bot v1.0.0]] — версия выставки
 
 ## Сцены и нарратив
+- [[Scene 0. Desert]]
 - [[Scene 1. Path]]
 - [[Scene 2. Dependency Parsing]]
 - [[Scene 3. Texts]]
@@ -22,7 +23,6 @@ description: Карта содержания проекта Jamming Bot в vault
 - [[Scene 5. Cloud]]
 - [[Scene 6. Embedings|Scene 6. Embeddings]]
 - [[Jamming bot scenes]]
-- [[Jamming bot scenes (кратко)]]
 - [[jamming_bot_en]]
 - [[Jamming Bot Развитие мысли]]
 - [[Jamming Bot Размышления]]
@@ -46,6 +46,7 @@ description: Карта содержания проекта Jamming Bot в vault
 ## Web surface
 - [[web/_index|Jamming Bot Web Index]]
 - [[Home]]
+- [[React UI]]
 - [[Tag cloud]]
 - [[3D cloud]]
 - [[Constellation]]
@@ -57,6 +58,8 @@ description: Карта содержания проекта Jamming Bot в vault
 
 ## Мысль и контекст
 - [[Семантическая свёртка]]
+- [[Jamming Bot - Theory Context]]
+- [[Анализ проекта Jamming Bot]]
 
 ## Концепты (связанные заметки)
 - [[Идеи - Карта пути]]
@@ -67,6 +70,11 @@ description: Карта содержания проекта Jamming Bot в vault
 
 ## Стек (refs)
 - [[Docker]] · [[Portainer]] · [[Spacy]] · [[D3]] · [[TouchDesigner]] · [[socket.io]]
+
+## Теория искусства и медиа
+- [[Data-Driven Art]]
+- [[Generative Art]]
+- [[Web Art]]
 
 ## Выставки
 - [[exhibitions/_index]]

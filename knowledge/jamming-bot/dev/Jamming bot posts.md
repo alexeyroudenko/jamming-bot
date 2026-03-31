@@ -3,7 +3,7 @@ title: Jamming Bot Posts
 aliases:
   - Jamming bot posts
 note_type: dev
-project: "[[Jamming Bot]]"
+project: "[[jamming-bot/Jamming Bot]]"
 dev_area: research
 tags:
   - dev
