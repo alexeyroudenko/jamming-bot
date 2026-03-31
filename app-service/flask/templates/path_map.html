@@ -30,8 +30,38 @@
     }
 
     .path-map-dot.ok {
-      background: #fafafa;
-      box-shadow: 0 0 10px rgba(250, 250, 250, 0.45);
+      background: #000000;
+      box-shadow: 0 0 0 1px rgba(250, 250, 250, 0.12);
+    }
+
+    .path-map-mode-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 10px;
+      border: 1px solid var(--tags-vis-border);
+      border-radius: 10px;
+      background: rgba(24, 24, 27, 0.84);
+      color: var(--tags-vis-muted);
+      font-size: 11px;
+      font-family: ui-monospace, monospace;
+      flex-wrap: wrap;
+    }
+
+    .path-map-mode-title {
+      color: var(--tags-vis-text);
+      opacity: 0.9;
+    }
+
+    .path-map-mode-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+
+    .path-map-mode-label input {
+      accent-color: var(--tags-vis-accent);
     }
 
     .path-map-tooltip {
@@ -65,6 +95,17 @@
 
     .path-map-tooltip-row {
       margin-top: 4px;
+    }
+
+    .path-map-tooltip-image {
+      display: block;
+      width: 220px;
+      max-width: 100%;
+      margin-top: 10px;
+      border-radius: 6px;
+      border: 1px solid var(--tags-vis-border);
+      background: #000;
+      object-fit: cover;
     }
 
     .path-map-tooltip-label {
@@ -131,7 +172,8 @@
 <nav class="tags-vis-nav" aria-label="Subpages">
   <div>
     <span class="tags-vis-title">Path map</span>
-    <a href="/">← home</a>
+    <a href="https://jamming-bot.arthew0.online/">← home</a>
+    <a href="https://jamming-bot.arthew0.online/" target="_blank" rel="noreferrer">main site</a>
     <a href="/tags/vectorfield/">vector field</a>
     <a href="/geo/">geo globe</a>
     <a href="/screenshots/">screenshots</a>
@@ -141,6 +183,14 @@
 <div class="tags-vis-toolbar path-map-toolbar">
   <button type="button" class="tags-vis-btn" id="btn-auto" aria-pressed="false">Auto</button>
   <button type="button" class="tags-vis-btn" id="btn-refresh">Refresh</button>
+  <fieldset class="path-map-mode-group" id="mode-group">
+    <legend style="display:none">Display mode</legend>
+    <span class="path-map-mode-title">Mode</span>
+    <label class="path-map-mode-label"><input type="radio" name="display-mode" value="text-length">text length</label>
+    <label class="path-map-mode-label"><input type="radio" name="display-mode" value="status" checked>status code</label>
+    <label class="path-map-mode-label"><input type="radio" name="display-mode" value="screenshot">screenshots</label>
+    <label class="path-map-mode-label"><input type="radio" name="display-mode" value="delta-time">delta time</label>
+  </fieldset>
   <span class="path-map-status" id="path-map-status">Loading…</span>
 </div>
 
@@ -151,9 +201,9 @@
 </div>
 <div id="path-map-tooltip" class="path-map-tooltip" role="status" aria-live="polite"></div>
 <div id="path-map-auto-cursor" class="path-map-auto-cursor" aria-hidden="true"></div>
-<p class="tags-vis-hint">Latest 3000 steps. Grid flows left-to-right, then top-to-bottom. White = all non-4xx, red = 4xx.</p>
-<div class="path-map-legend">
-  <span><span class="path-map-swatch" style="background:#fafafa"></span>non-4xx</span>
+<p class="tags-vis-hint" id="path-map-hint">Latest 3000 steps. Grid flows left-to-right, then top-to-bottom. Black = all non-4xx, red = 4xx.</p>
+<div class="path-map-legend" id="path-map-legend">
+  <span><span class="path-map-swatch" style="background:#000000;border:1px solid rgba(250,250,250,0.2)"></span>non-4xx</span>
   <span><span class="path-map-swatch" style="background:#ef4444"></span>4xx</span>
 </div>
 
@@ -162,6 +212,7 @@
 (function () {
   var STORAGE_API = '/api/storage_latest/';
   var MAX_STEPS = 3000;
+  var MODE_STORAGE_KEY = 'path-map-display-mode';
   var canvas = document.getElementById('path-map');
   var ctx = canvas.getContext('2d', { alpha: false });
   var banner = document.getElementById('api-error');
@@ -170,6 +221,9 @@
   var autoCursorEl = document.getElementById('path-map-auto-cursor');
   var autoBtn = document.getElementById('btn-auto');
   var refreshBtn = document.getElementById('btn-refresh');
+  var hintEl = document.getElementById('path-map-hint');
+  var legendEl = document.getElementById('path-map-legend');
+  var modeInputs = Array.prototype.slice.call(document.querySelectorAll('input[name="display-mode"]'));
 
   var dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
   var steps = [];
@@ -181,12 +235,23 @@
   var originX = 0;
   var originY = 0;
   var hoveredIndex = -1;
+  var displayMode = 'status';
   var autoMode = false;
   var autoTarget = null;
   var autoTimer = null;
   var syncTimer = null;
+  var autoAnimationFrame = null;
+  var autoState = { x: 0, y: 0, targetX: 0, targetY: 0, vx: 0, vy: 0, currentIndex: -1 };
   var latestStepNumber = -1;
   var reconnectSocket = null;
+  var renderStats = {
+    textMin: 0,
+    textMax: 1,
+    deltaMin: 0,
+    deltaMax: 1,
+    deltaP10: 0,
+    deltaP90: 1
+  };
 
   function showErr(msg) {
     banner.textContent = msg;
@@ -198,7 +263,7 @@
   }
 
   function statusColor(code) {
-    return code >= 400 && code < 500 ? '#ef4444' : '#fafafa';
+    return code >= 400 && code < 500 ? '#ef4444' : '#000000';
   }
 
   function parseStepNumber(v) {
@@ -210,6 +275,35 @@
     return String(v == null ? '' : v).trim();
   }
 
+  function parseTimestamp(raw) {
+    if (raw == null || raw === '') return NaN;
+    var s = String(raw).trim();
+    var parsed = Date.parse(s);
+    if (!Number.isNaN(parsed)) return parsed;
+    var num = parseFloat(s);
+    if (!Number.isFinite(num)) return NaN;
+    return num < 1e12 ? num * 1000 : num;
+  }
+
+  function toGray(value) {
+    var v = clamp(Math.round(value), 0, 255);
+    return 'rgb(' + v + ',' + v + ',' + v + ')';
+  }
+
+  function scaleToGray(value, minValue, maxValue) {
+    if (!Number.isFinite(value)) return toGray(32);
+    if (!Number.isFinite(minValue) || !Number.isFinite(maxValue) || maxValue <= minValue) {
+      return toGray(180);
+    }
+    return toGray(255 * ((value - minValue) / (maxValue - minValue)));
+  }
+
+  function percentile(sortedValues, ratio) {
+    if (!sortedValues.length) return NaN;
+    var idx = clamp(Math.round((sortedValues.length - 1) * ratio), 0, sortedValues.length - 1);
+    return sortedValues[idx];
+  }
+
   function normalizeRow(row, fallbackIndex) {
     if (!row || typeof row !== 'object') {
       return {
@@ -218,7 +312,9 @@
         url: '',
         src: '',
         timestamp: '',
-        error: ''
+        error: '',
+        screenshot_url: '',
+        _ts: NaN
       };
     }
     var n = parseStepNumber(row.number != null ? row.number : row.id);
@@ -231,7 +327,9 @@
       timestamp: trimText(row.timestamp),
       error: trimText(row.error),
       ip: trimText(row.ip),
-      text_length: parseInt(String(row.text_length == null ? '' : row.text_length), 10) || 0
+      text_length: parseInt(String(row.text_length == null ? '' : row.text_length), 10) || 0,
+      screenshot_url: trimText(row.screenshot_url),
+      _ts: parseTimestamp(row.timestamp)
     };
   }
 
@@ -244,8 +342,41 @@
     if (nextSteps.length > MAX_STEPS) {
       nextSteps = nextSteps.slice(nextSteps.length - MAX_STEPS);
     }
+    updateDerivedStats(nextSteps);
     latestStepNumber = nextSteps.length ? nextSteps[nextSteps.length - 1]._n : -1;
     return nextSteps;
+  }
+
+  function updateDerivedStats(nextSteps) {
+    var textMin = Infinity;
+    var textMax = -Infinity;
+    var deltaMin = Infinity;
+    var deltaMax = -Infinity;
+    var deltas = [];
+    var prevTs = NaN;
+    for (var i = 0; i < nextSteps.length; i++) {
+      var step = nextSteps[i];
+      var len = Number.isFinite(step.text_length) ? step.text_length : 0;
+      textMin = Math.min(textMin, len);
+      textMax = Math.max(textMax, len);
+      var ts = step._ts;
+      var delta = NaN;
+      if (Number.isFinite(ts) && Number.isFinite(prevTs)) {
+        delta = Math.max(0, ts - prevTs);
+        deltaMin = Math.min(deltaMin, delta);
+        deltaMax = Math.max(deltaMax, delta);
+        deltas.push(delta);
+      }
+      step._delta_ms = delta;
+      prevTs = Number.isFinite(ts) ? ts : prevTs;
+    }
+    renderStats.textMin = Number.isFinite(textMin) ? textMin : 0;
+    renderStats.textMax = Number.isFinite(textMax) ? textMax : 1;
+    renderStats.deltaMin = Number.isFinite(deltaMin) ? deltaMin : 0;
+    renderStats.deltaMax = Number.isFinite(deltaMax) ? deltaMax : 1;
+    deltas.sort(function (a, b) { return a - b; });
+    renderStats.deltaP10 = Number.isFinite(percentile(deltas, 0.10)) ? percentile(deltas, 0.10) : renderStats.deltaMin;
+    renderStats.deltaP90 = Number.isFinite(percentile(deltas, 0.90)) ? percentile(deltas, 0.90) : renderStats.deltaMax;
   }
 
   function mergeStep(step) {
@@ -271,6 +402,56 @@
     gridHeight = rows * cellSize;
     originX = Math.floor((width - gridWidth) / 2);
     originY = Math.floor((height - gridHeight) / 2);
+  }
+
+  function getModeLabel() {
+    if (displayMode === 'text-length') return 'text length';
+    if (displayMode === 'screenshot') return 'screenshots';
+    if (displayMode === 'delta-time') return 'delta time';
+    return 'status code';
+  }
+
+  function applyStoredMode() {
+    var saved = null;
+    try {
+      saved = sessionStorage.getItem(MODE_STORAGE_KEY);
+    } catch (e) {}
+    if (!saved) return;
+    for (var i = 0; i < modeInputs.length; i++) {
+      if (modeInputs[i].value === saved) {
+        modeInputs[i].checked = true;
+        displayMode = saved;
+        return;
+      }
+    }
+  }
+
+  function updateLegend() {
+    if (displayMode === 'text-length') {
+      hintEl.textContent = 'Latest 3000 steps. White = more text, black = less text.';
+      legendEl.innerHTML =
+        '<span><span class="path-map-swatch" style="background:#000"></span>short</span>' +
+        '<span><span class="path-map-swatch" style="background:#fff;border:1px solid rgba(0,0,0,0.25)"></span>long</span>';
+      return;
+    }
+    if (displayMode === 'screenshot') {
+      hintEl.textContent = 'Latest 3000 steps. White = screenshot exists, black = no screenshot. Tooltip shows thumbnail.';
+      legendEl.innerHTML =
+        '<span><span class="path-map-swatch" style="background:#000"></span>no screenshot</span>' +
+        '<span><span class="path-map-swatch" style="background:#fff;border:1px solid rgba(0,0,0,0.25)"></span>has screenshot</span>';
+      return;
+    }
+    if (displayMode === 'delta-time') {
+      hintEl.textContent = 'Latest 3000 steps. White = smaller time gap from previous step, black = larger gap.';
+      legendEl.innerHTML =
+        '<span><span class="path-map-swatch" style="background:#fff;border:1px solid rgba(0,0,0,0.25)"></span>fast change</span>' +
+        '<span><span class="path-map-swatch" style="background:#000"></span>slow change</span>';
+      return;
+    }
+    hintEl.textContent = 'Latest 3000 steps. Grid flows left-to-right, then top-to-bottom. Black = all non-4xx, red = 4xx.';
+    legendEl.innerHTML =
+      '<span><span class="path-map-swatch" style="background:#000000;border:1px solid rgba(250,250,250,0.2)"></span>non-4xx</span>' +
+      '<span><span class="path-map-swatch" style="background:#ef4444"></span>4xx</span>';
   }
 
   function resizeCanvas() {
@@ -314,7 +495,7 @@
       var x = originX + col * cellSize;
       var y = originY + row * cellSize;
       var step = steps[i];
-      ctx.fillStyle = statusColor(step.status_code);
+      ctx.fillStyle = stepFill(step);
       ctx.fillRect(x, y, cellSize, cellSize);
     }
 
@@ -324,6 +505,26 @@
       ctx.lineWidth = 1;
       ctx.strokeRect(point.x - 1, point.y - 1, point.w + 2, point.h + 2);
     }
+  }
+
+  function stepFill(step) {
+    if (displayMode === 'text-length') {
+      return scaleToGray(step.text_length, renderStats.textMin, renderStats.textMax);
+    }
+    if (displayMode === 'screenshot') {
+      return step.screenshot_url ? '#ffffff' : '#000000';
+    }
+    if (displayMode === 'delta-time') {
+      if (!Number.isFinite(step._delta_ms)) return '#000000';
+      var minGap = renderStats.deltaP10;
+      var maxGap = renderStats.deltaP90;
+      if (!Number.isFinite(maxGap) || !Number.isFinite(minGap) || maxGap <= minGap) return '#c0c0c0';
+      var clipped = clamp(step._delta_ms, minGap, maxGap);
+      var normalized = (clipped - minGap) / (maxGap - minGap);
+      normalized = Math.pow(normalized, 0.75);
+      return toGray(235 * (1 - normalized));
+    }
+    return statusColor(step.status_code);
   }
 
   function getPointRect(index) {
@@ -348,6 +549,7 @@
     }
     var label = steps.length + ' / ' + MAX_STEPS + ' visible';
     if (steps.length) label += ' · latest step ' + latestStepNumber;
+    label += ' · mode ' + getModeLabel();
     label += ' · 4xx ' + redCount;
     statusEl.textContent = label;
   }
@@ -374,14 +576,23 @@
 
   function renderTooltip(step) {
     var dotClass = step.status_code >= 400 && step.status_code < 500 ? 'path-map-dot' : 'path-map-dot ok';
+    var screenshotHtml = '';
+    if (displayMode === 'screenshot' && step.screenshot_url) {
+      screenshotHtml =
+        '<img class="path-map-tooltip-image" src="' + escapeHtml(step.screenshot_url) + '" alt="step screenshot">';
+    }
     tooltipEl.innerHTML =
       '<div class="path-map-tooltip-row"><span class="' + dotClass + '"></span> step <code>' + escapeHtml(step._n) + '</code></div>' +
       '<div class="path-map-tooltip-row"><span class="path-map-tooltip-label">status</span><code>' + escapeHtml(step.status_code || 0) + '</code></div>' +
       '<div class="path-map-tooltip-row"><span class="path-map-tooltip-label">url</span><code>' + escapeHtml(step.url || '—') + '</code></div>' +
       '<div class="path-map-tooltip-row"><span class="path-map-tooltip-label">src</span><code>' + escapeHtml(step.src || '—') + '</code></div>' +
       '<div class="path-map-tooltip-row"><span class="path-map-tooltip-label">time</span><code>' + escapeHtml(step.timestamp || '—') + '</code></div>' +
+      '<div class="path-map-tooltip-row"><span class="path-map-tooltip-label">text_length</span><code>' + escapeHtml(step.text_length || 0) + '</code></div>' +
+      '<div class="path-map-tooltip-row"><span class="path-map-tooltip-label">delta_ms</span><code>' + escapeHtml(Number.isFinite(step._delta_ms) ? Math.round(step._delta_ms) : '—') + '</code></div>' +
+      '<div class="path-map-tooltip-row"><span class="path-map-tooltip-label">screenshot</span><code>' + escapeHtml(step.screenshot_url || '—') + '</code></div>' +
       '<div class="path-map-tooltip-row"><span class="path-map-tooltip-label">ip</span><code>' + escapeHtml(step.ip || '—') + '</code></div>' +
-      '<div class="path-map-tooltip-row"><span class="path-map-tooltip-label">error</span><code>' + escapeHtml(step.error || '—') + '</code></div>';
+      '<div class="path-map-tooltip-row"><span class="path-map-tooltip-label">error</span><code>' + escapeHtml(step.error || '—') + '</code></div>' +
+      screenshotHtml;
   }
 
   function showTooltipForIndex(index, fromPointer, clientX, clientY) {
@@ -396,8 +607,6 @@
     var py = typeof clientY === 'number' ? clientY : rect.y + rect.h / 2;
     setTooltipPosition(px, py);
     if (!fromPointer && autoMode) {
-      autoCursorEl.style.left = px + 'px';
-      autoCursorEl.style.top = py + 'px';
       autoCursorEl.classList.add('visible');
     }
   }
@@ -434,6 +643,33 @@
     return Math.floor(Math.random() * steps.length);
   }
 
+  function centerForIndex(index) {
+    var rect = getPointRect(index);
+    return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+  }
+
+  function syncAutoTooltip() {
+    if (!autoMode || !steps.length) return;
+    var index = pointIndexFromClient(autoState.x, autoState.y);
+    if (index < 0) index = clamp(autoTarget == null ? 0 : autoTarget, 0, steps.length - 1);
+    autoState.currentIndex = index;
+    autoCursorEl.style.left = autoState.x + 'px';
+    autoCursorEl.style.top = autoState.y + 'px';
+    showTooltipForIndex(index, false, autoState.x, autoState.y);
+  }
+
+  function animateAuto() {
+    if (!autoMode) return;
+    autoState.vx += (autoState.targetX - autoState.x) * 0.018;
+    autoState.vy += (autoState.targetY - autoState.y) * 0.018;
+    autoState.vx *= 0.86;
+    autoState.vy *= 0.86;
+    autoState.x += autoState.vx;
+    autoState.y += autoState.vy;
+    syncAutoTooltip();
+    autoAnimationFrame = window.requestAnimationFrame(animateAuto);
+  }
+
   function stopAuto() {
     autoMode = false;
     autoBtn.setAttribute('aria-pressed', 'false');
@@ -441,6 +677,10 @@
     if (autoTimer) {
       window.clearInterval(autoTimer);
       autoTimer = null;
+    }
+    if (autoAnimationFrame) {
+      window.cancelAnimationFrame(autoAnimationFrame);
+      autoAnimationFrame = null;
     }
     autoTarget = null;
     autoCursorEl.classList.remove('visible');
@@ -451,14 +691,13 @@
     if (autoTarget == null || autoTarget >= steps.length) {
       autoTarget = pickAutoTarget();
     } else {
-      var drift = Math.floor((Math.random() * 11) - 5);
+      var drift = Math.floor((Math.random() * 37) - 18);
       autoTarget = clamp(autoTarget + drift, 0, steps.length - 1);
       if (Math.random() < 0.18) autoTarget = pickAutoTarget();
     }
-    var rect = getPointRect(autoTarget);
-    var cx = rect.x + rect.w / 2;
-    var cy = rect.y + rect.h / 2;
-    showTooltipForIndex(autoTarget, false, cx, cy);
+    var nextPoint = centerForIndex(autoTarget);
+    autoState.targetX = nextPoint.x;
+    autoState.targetY = nextPoint.y;
   }
 
   function startAuto() {
@@ -467,8 +706,34 @@
     autoBtn.setAttribute('aria-pressed', 'true');
     autoBtn.textContent = 'Auto: on';
     autoTarget = pickAutoTarget();
+    var startPoint = centerForIndex(autoTarget || 0);
+    autoState.x = startPoint.x;
+    autoState.y = startPoint.y;
+    autoState.targetX = startPoint.x;
+    autoState.targetY = startPoint.y;
+    autoState.vx = 0;
+    autoState.vy = 0;
     tickAuto();
-    autoTimer = window.setInterval(tickAuto, 900);
+    if (autoAnimationFrame) window.cancelAnimationFrame(autoAnimationFrame);
+    autoAnimationFrame = window.requestAnimationFrame(animateAuto);
+    autoTimer = window.setInterval(tickAuto, 1500);
+  }
+
+  function setDisplayMode(nextMode) {
+    displayMode = nextMode;
+    try {
+      sessionStorage.setItem(MODE_STORAGE_KEY, nextMode);
+    } catch (e) {}
+    updateLegend();
+    updateStatus();
+    render();
+    if (hoveredIndex >= 0 && hoveredIndex < steps.length) {
+      if (autoMode) {
+        syncAutoTooltip();
+      } else {
+        showTooltipForIndex(hoveredIndex, true);
+      }
+    }
   }
 
   function toggleAuto() {
@@ -529,13 +794,20 @@
 
   refreshBtn.addEventListener('click', loadInitial);
   autoBtn.addEventListener('click', toggleAuto);
+  modeInputs.forEach(function (input) {
+    input.addEventListener('change', function (event) {
+      if (event.target.checked) setDisplayMode(event.target.value);
+    });
+  });
   window.addEventListener('resize', resizeCanvas);
   window.addEventListener('mousemove', onPointerMove);
   window.addEventListener('mouseleave', function () {
     if (!autoMode) hideTooltip();
   });
 
+  applyStoredMode();
   resizeCanvas();
+  updateLegend();
   loadInitial();
   scheduleSync();
   initSocket();
