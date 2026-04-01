@@ -228,7 +228,7 @@ body, html, button {
     user-select: all;
     font-size: 13px;
     line-height: 1.55;
-    display: none;
+    display: block;
 }
 
 code {
@@ -1274,7 +1274,6 @@ return length
         log_line = data['event'] + " - " + deltaTime
         log_page = log_page + "\n" + log_line
         $('#log_events').html("<code>" + log_page + "</code>");
-        $('#log_text').html(counter);
         event_time = (new Date).getTime()
     })
 
