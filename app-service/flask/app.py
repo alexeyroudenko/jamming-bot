@@ -213,6 +213,8 @@ def _cors_headers_on_all_responses(response):
     return response
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet", manage_session=False)
+viewers_lock = threading.Lock()
+active_viewers = {}
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -236,6 +238,7 @@ PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
                    "/api/tags/sentiment-vortex/", "/api/tags/embeddings/", "/api/tags/add/",
                    "/api/step/", "/api/steps", "/api/storage_step/", "/api/storage_latest/",
                    "/api/rq/workers/",
+                   "/api/socket/viewers/",
                    "/api/storage_ids/",
                    "/api/storage_geo/")
 
@@ -456,12 +459,12 @@ def _read_backfill_status():
     return status
 
 
-def _format_worker_heartbeat_age(last_heartbeat):
-    if not last_heartbeat:
+def _format_relative_age(timestamp):
+    if not timestamp:
         return None
-    if getattr(last_heartbeat, "tzinfo", None) is None:
-        last_heartbeat = last_heartbeat.replace(tzinfo=timezone.utc)
-    delta = max(0, int((datetime.now(timezone.utc) - last_heartbeat).total_seconds()))
+    if getattr(timestamp, "tzinfo", None) is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    delta = max(0, int((datetime.now(timezone.utc) - timestamp).total_seconds()))
     if delta < 60:
         return f"{delta}s"
     if delta < 3600:
@@ -491,11 +494,86 @@ def _get_rq_workers_snapshot():
             "queues": queues,
             "current_job_id": current_job,
             "last_heartbeat": last_heartbeat.isoformat() if last_heartbeat else None,
-            "heartbeat_age": _format_worker_heartbeat_age(last_heartbeat),
+            "heartbeat_age": _format_relative_age(last_heartbeat),
             "is_busy": bool(current_job) or getattr(worker, "state", "") == "busy",
         })
     workers.sort(key=lambda item: (not item["is_busy"], item["name"]))
     return workers
+
+
+def _short_user_agent(user_agent: str, limit: int = 72):
+    value = (user_agent or "").strip()
+    if not value:
+        return "—"
+    if len(value) <= limit:
+        return value
+    return value[: max(0, limit - 1)].rstrip() + "…"
+
+
+def _capture_viewer_snapshot():
+    connected_at = datetime.now(timezone.utc)
+    role = "admin" if session.get("logged_in") else "guest"
+    headers = request.headers or {}
+    environ = getattr(request, "environ", {}) or {}
+    transport = environ.get("asgi.scope", {}).get("type") if isinstance(environ.get("asgi.scope"), dict) else None
+    if not transport:
+        transport = (
+            environ.get("socketio.transport")
+            or headers.get("X-SocketIO-Transport")
+            or request.args.get("transport")
+            or "unknown"
+        )
+    return {
+        "sid": request.sid,
+        "role": role,
+        "connected_at": connected_at,
+        "last_seen": connected_at,
+        "ip": request.remote_addr or "—",
+        "origin": headers.get("Origin") or "—",
+        "transport": transport,
+        "user_agent": headers.get("User-Agent") or "",
+    }
+
+
+def _get_viewers_snapshot():
+    now = datetime.now(timezone.utc)
+    with viewers_lock:
+        raw_viewers = list(active_viewers.values())
+
+    viewers = []
+    admins = 0
+    guests = 0
+    for viewer in raw_viewers:
+        connected_at = viewer.get("connected_at")
+        last_seen = viewer.get("last_seen")
+        role = viewer.get("role") or "guest"
+        if role == "admin":
+            admins += 1
+        else:
+            guests += 1
+        viewers.append({
+            "sid": viewer.get("sid") or "—",
+            "role": role,
+            "connected_at": connected_at.isoformat() if connected_at else None,
+            "connected_age": _format_relative_age(connected_at),
+            "last_seen": last_seen.isoformat() if last_seen else None,
+            "last_seen_age": _format_relative_age(last_seen),
+            "ip": viewer.get("ip") or "—",
+            "origin": viewer.get("origin") or "—",
+            "transport": viewer.get("transport") or "unknown",
+            "user_agent": viewer.get("user_agent") or "",
+            "user_agent_short": _short_user_agent(viewer.get("user_agent") or ""),
+            "is_admin": role == "admin",
+            "is_stale": bool(last_seen and (now - last_seen).total_seconds() > 15),
+        })
+
+    viewers.sort(key=lambda item: (not item["is_admin"], item["connected_at"] or "", item["sid"]))
+    return {
+        "viewers": viewers,
+        "count": len(viewers),
+        "admins": admins,
+        "guests": guests,
+    }
 
 
 def _patch_storage(step_key, data):
@@ -634,6 +712,25 @@ def rq_workers():
         return jsonify({
             "workers": [],
             "count": 0,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "error": str(e),
+        }), 503
+
+
+@app.route("/api/socket/viewers/", methods=["GET"])
+def socket_viewers():
+    try:
+        payload = _get_viewers_snapshot()
+        payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+        payload["error"] = None
+        return jsonify(payload)
+    except Exception as e:
+        logger.warning("socket viewers unavailable: %s", e)
+        return jsonify({
+            "viewers": [],
+            "count": 0,
+            "admins": 0,
+            "guests": 0,
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "error": str(e),
         }), 503
@@ -1574,11 +1671,17 @@ def semantic_ent():
 
 @socketio.on('connect')
 def handle_connect():
-    print('Client connected')
+    viewer = _capture_viewer_snapshot()
+    with viewers_lock:
+        active_viewers[viewer["sid"]] = viewer
+    logger.info("Client connected sid=%s role=%s ip=%s", viewer["sid"], viewer["role"], viewer["ip"])
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    print('Client disconnected')
+    sid = getattr(request, "sid", None)
+    with viewers_lock:
+        viewer = active_viewers.pop(sid, None)
+    logger.info("Client disconnected sid=%s role=%s", sid, (viewer or {}).get("role", "unknown"))
 
 @socketio.on('message')
 def handle_message(data):
@@ -1674,7 +1777,12 @@ def handle_bot_log_events(value):
 
 @socketio.event
 def my_ping():
-    socketio.emit('my_pong')
+    sid = getattr(request, "sid", None)
+    with viewers_lock:
+        viewer = active_viewers.get(sid)
+        if viewer:
+            viewer["last_seen"] = datetime.now(timezone.utc)
+    emit('my_pong')
 
 
 # =========================================================================

@@ -229,6 +229,13 @@ body, html, button {
     display: block;
 }
 
+#log_text .phrase-highlight {
+    background: rgba(220, 38, 38, 0.88);
+    color: #fff;
+    border-radius: 3px;
+    padding: 0 2px;
+}
+
 code {
     font-family: monospace;
     /* font-size:14px; */
@@ -717,6 +724,38 @@ body.is-move-mode .bot-move-target.is-move-selected {
     overflow: hidden;
 }
 
+.bot-viewers-panel {
+    position: fixed;
+    left: 50%;
+    bottom: 316px;
+    transform: translateX(-50%);
+    z-index: 203;
+    width: min(1120px, calc(100vw - 160px));
+    max-height: 190px;
+    padding: 10px 12px;
+    background: rgba(5, 7, 10, 0.76);
+    border: 1px solid var(--bot-border);
+    box-shadow: var(--bot-shadow);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+}
+
+.bot-logs-panel {
+    position: fixed;
+    left: 50%;
+    bottom: 518px;
+    transform: translateX(-50%);
+    z-index: 202;
+    width: min(1120px, calc(100vw - 160px));
+    max-height: 230px;
+    padding: 10px 12px;
+    background: rgba(5, 7, 10, 0.76);
+    border: 1px solid var(--bot-border);
+    box-shadow: var(--bot-shadow);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+}
+
 .bot-workers-head {
     display: flex;
     align-items: center;
@@ -840,6 +879,144 @@ body.is-move-mode .bot-move-target.is-move-selected {
 .bot-workers-age {
     color: var(--bot-muted);
     text-align: right;
+}
+
+.bot-viewers-table {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 136px;
+    overflow: auto;
+}
+
+.bot-viewers-row,
+.bot-viewers-empty {
+    display: grid;
+    grid-template-columns: minmax(120px, 1.1fr) minmax(56px, 0.55fr) minmax(56px, 0.55fr) minmax(56px, 0.55fr) minmax(120px, 0.9fr) minmax(72px, 0.6fr) minmax(120px, 1fr) minmax(220px, 1.6fr);
+    gap: 8px;
+    align-items: center;
+    padding: 4px 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    line-height: 1.25;
+}
+
+.bot-viewers-row.is-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding-top: 0;
+    background: rgba(5, 7, 10, 0.95);
+    color: var(--bot-muted);
+    text-transform: uppercase;
+}
+
+.bot-viewers-empty {
+    grid-template-columns: 1fr;
+    color: var(--bot-muted);
+}
+
+.bot-viewers-sid,
+.bot-viewers-ip,
+.bot-viewers-origin,
+.bot-viewers-ua {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bot-viewers-role {
+    color: var(--bot-text);
+}
+
+.bot-viewers-role.is-admin {
+    color: #bbf7d0;
+}
+
+.bot-viewers-role.is-guest {
+    color: var(--bot-muted);
+}
+
+.bot-viewers-seen.is-stale {
+    color: #fca5a5;
+}
+
+.bot-logs-table {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 176px;
+    overflow: auto;
+}
+
+.bot-logs-row,
+.bot-logs-empty {
+    display: grid;
+    grid-template-columns: minmax(66px, 0.55fr) minmax(96px, 0.8fr) minmax(110px, 0.9fr) minmax(0, 2.8fr);
+    gap: 8px;
+    align-items: start;
+    padding: 4px 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    line-height: 1.25;
+}
+
+.bot-logs-row.is-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding-top: 0;
+    background: rgba(5, 7, 10, 0.95);
+    color: var(--bot-muted);
+    text-transform: uppercase;
+}
+
+.bot-logs-empty {
+    grid-template-columns: 1fr;
+    color: var(--bot-muted);
+}
+
+.bot-logs-type,
+.bot-logs-event {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bot-logs-type {
+    color: var(--bot-text);
+}
+
+.bot-logs-type.type-bot {
+    color: #fca5a5;
+}
+
+.bot-logs-type.type-analyzer {
+    color: #93c5fd;
+}
+
+.bot-logs-type.type-screenshoter {
+    color: #fcd34d;
+}
+
+.bot-logs-type.type-geo {
+    color: #86efac;
+}
+
+.bot-logs-type.type-controls {
+    color: #c4b5fd;
+}
+
+.bot-logs-type.type-system {
+    color: var(--bot-muted);
+}
+
+.bot-logs-summary {
+    min-width: 0;
+    color: var(--bot-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 button.bot-action {
@@ -1009,6 +1186,24 @@ body.is-admin .guest-only {
         width: auto;
     }
 
+    .bot-viewers-panel {
+        left: 10px;
+        right: 10px;
+        bottom: 338px;
+        transform: none;
+        width: auto;
+        max-height: 176px;
+    }
+
+    .bot-logs-panel {
+        left: 10px;
+        right: 10px;
+        bottom: 522px;
+        transform: none;
+        width: auto;
+        max-height: 180px;
+    }
+
     .bot-backfill-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -1025,6 +1220,22 @@ body.is-admin .guest-only {
 
     .bot-workers-age {
         text-align: left;
+    }
+
+    .bot-viewers-row,
+    .bot-viewers-empty {
+        grid-template-columns: minmax(84px, 1fr) minmax(48px, 0.6fr) minmax(48px, 0.6fr) minmax(48px, 0.6fr) minmax(78px, 0.9fr);
+    }
+
+    .bot-viewers-transport,
+    .bot-viewers-origin,
+    .bot-viewers-ua {
+        display: none;
+    }
+
+    .bot-logs-row,
+    .bot-logs-empty {
+        grid-template-columns: minmax(54px, 0.55fr) minmax(70px, 0.75fr) minmax(76px, 0.85fr) minmax(0, 2fr);
     }
 
     .bot-status-grid,
@@ -1331,6 +1542,24 @@ body.is-admin .guest-only {
         </div>
         <div id="backfill-detail" class="bot-backfill-detail">No data yet</div>
       </section>
+      <section id="viewers-panel" class="bot-panel bot-viewers-panel admin-only" aria-live="polite">
+        <div class="bot-workers-head">
+          <span class="bot-section-label">Viewers</span>
+          <span id="viewers-meta" class="bot-workers-meta">loading</span>
+        </div>
+        <div id="viewers-list" class="bot-viewers-table">
+          <div class="bot-viewers-empty">Loading viewers...</div>
+        </div>
+      </section>
+      <section id="logs-panel" class="bot-panel bot-logs-panel admin-only" aria-live="polite">
+        <div class="bot-workers-head">
+          <span class="bot-section-label">Logs</span>
+          <span id="logs-meta" class="bot-workers-meta">0 events</span>
+        </div>
+        <div id="logs-list" class="bot-logs-table">
+          <div class="bot-logs-empty">Waiting for socket events...</div>
+        </div>
+      </section>
     </div>
   </div>
 
@@ -1450,6 +1679,8 @@ function updateAdminUI() {
     if (loginBadge) {
         loginBadge.textContent = admin ? 'admin' : 'guest';
     }
+    renderLogs();
+    syncViewersPolling();
     syncWorkersPolling();
     syncBackfillPolling();
 }
@@ -1513,6 +1744,10 @@ var counter = 0
 var tag = 0
 var imgs = 0
 var currentPalette = []
+var currentNounPhrases = []
+var logsBuffer = []
+var MAX_LOG_EVENTS = 200
+var viewersRefreshTimer = null
 var workersRefreshTimer = null
 var backfillRefreshTimer = null
 var moveMode = false
@@ -1521,6 +1756,8 @@ var activeMoveDrag = null
 var MOVE_TARGET_SELECTOR = [
     '#debug',
     '.bot-side-column',
+    '#logs-panel',
+    '#viewers-panel',
     '#workers-panel',
     '#backfill-panel',
     '#log_url',
@@ -1564,6 +1801,87 @@ function setCodeText(containerId, value) {
         return;
     }
     codeElement.textContent = String(value == null ? '' : value);
+}
+
+function normalizeHighlightPhrases(phrases) {
+    if (!Array.isArray(phrases)) {
+        return [];
+    }
+    return phrases
+        .map(function(phrase) {
+            return String(phrase == null ? '' : phrase).trim();
+        })
+        .filter(Boolean)
+        .sort(function(a, b) {
+            return b.length - a.length;
+        });
+}
+
+function renderHighlightedLogText(value, phrases) {
+    var codeElement = getOrCreateCodeElement('log_text');
+    if (!codeElement) {
+        return;
+    }
+
+    var textValue = String(value == null ? '' : value);
+    var normalizedPhrases = normalizeHighlightPhrases(phrases);
+    if (!normalizedPhrases.length || !textValue) {
+        codeElement.textContent = textValue;
+        return;
+    }
+
+    var lowerTextValue = textValue.toLocaleLowerCase();
+    var matches = [];
+    normalizedPhrases.forEach(function(phrase) {
+        var lowerPhrase = phrase.toLocaleLowerCase();
+        var searchIndex = 0;
+        while (searchIndex < lowerTextValue.length) {
+            var startIndex = lowerTextValue.indexOf(lowerPhrase, searchIndex);
+            if (startIndex === -1) {
+                break;
+            }
+            matches.push({
+                start: startIndex,
+                end: startIndex + phrase.length
+            });
+            searchIndex = startIndex + 1;
+        }
+    });
+
+    if (!matches.length) {
+        codeElement.textContent = textValue;
+        return;
+    }
+
+    matches.sort(function(a, b) {
+        if (a.start !== b.start) {
+            return a.start - b.start;
+        }
+        return b.end - a.end;
+    });
+
+    var filteredMatches = [];
+    matches.forEach(function(match) {
+        var previousMatch = filteredMatches[filteredMatches.length - 1];
+        if (!previousMatch || match.start >= previousMatch.end) {
+            filteredMatches.push(match);
+        }
+    });
+
+    var html = '';
+    var cursor = 0;
+    filteredMatches.forEach(function(match) {
+        if (cursor < match.start) {
+            html += escapeHtml(textValue.slice(cursor, match.start));
+        }
+        html += '<span class="phrase-highlight">' + escapeHtml(textValue.slice(match.start, match.end)) + '</span>';
+        cursor = match.end;
+    });
+    if (cursor < textValue.length) {
+        html += escapeHtml(textValue.slice(cursor));
+    }
+
+    codeElement.innerHTML = html;
 }
 
 function initializeMoveTargets() {
@@ -1769,6 +2087,218 @@ function renderWorkers(payload) {
     }).join('');
 }
 
+function classifySocketEvent(eventName) {
+    switch (eventName) {
+    case 'event':
+    case 'step':
+    case 'sublink':
+    case 'clear':
+    case 'steps_forwards':
+        return 'bot';
+    case 'analyzed':
+    case 'tags_updated':
+        return 'analyzer';
+    case 'screenshot':
+    case 'image_analyzed':
+        return 'screenshoter';
+    case 'location':
+        return 'geo';
+    case 'set':
+    case 'set_values':
+        return 'controls';
+    default:
+        return 'system';
+    }
+}
+
+function summarizeSocketEvent(eventName, payload) {
+    if (eventName === 'connect') return 'socket connected';
+    if (eventName === 'disconnect') return 'socket disconnected';
+    if (eventName === 'clear') return 'clear state';
+    if (eventName === 'my_pong') return 'latency ' + String(payload && payload.latency_ms != null ? payload.latency_ms : '—') + 'ms';
+    if (eventName === 'event') return String((payload && payload.event) || 'event');
+    if (eventName === 'steps_forwards') return 'steps ' + String(payload && payload.value != null ? payload.value : payload);
+    if (eventName === 'sublink') return String((payload && payload.url) || 'sublink');
+    if (eventName === 'step') {
+        return '#' + String(payload && payload.step != null ? payload.step : '—') + ' ' +
+            String((payload && payload.status_code) || '—') + ' ' +
+            String((payload && payload.url) || '');
+    }
+    if (eventName === 'analyzed') {
+        var wordsCount = Array.isArray(payload && payload.words) ? payload.words.length : 0;
+        var phraseCount = Array.isArray(payload && payload.noun_phrases) ? payload.noun_phrases.length : 0;
+        return 'words=' + String(wordsCount) + ' noun_phrases=' + String(phraseCount);
+    }
+    if (eventName === 'screenshot') {
+        return payload && payload.screenshot_url ? String(payload.screenshot_url) : 'screenshot ready';
+    }
+    if (eventName === 'image_analyzed') {
+        var paletteCount = Array.isArray(payload && payload.palette) ? payload.palette.length : 0;
+        return 'palette=' + String(paletteCount);
+    }
+    if (eventName === 'set_values' || eventName === 'set') {
+        if (!payload || typeof payload !== 'object') return 'values updated';
+        var keys = Object.keys(payload).slice(0, 3);
+        return keys.length ? keys.map(function(key) {
+            return key + '=' + String(payload[key]);
+        }).join(' ') : 'values updated';
+    }
+    if (eventName === 'location') {
+        if (!payload || typeof payload !== 'object') return 'geo resolved';
+        return String(payload.country || payload.city || payload.ip || 'geo resolved');
+    }
+    if (eventName === 'tags_updated') return 'tags refreshed';
+    if (eventName === 'response') return String((payload && payload.message) || 'response');
+    return typeof payload === 'string' ? payload : eventName;
+}
+
+function pushSocketLog(eventName, payload, forcedType) {
+    var entry = {
+        time: new Date(),
+        type: forcedType || classifySocketEvent(eventName),
+        event: eventName,
+        summary: summarizeSocketEvent(eventName, payload),
+        payload: payload
+    };
+    logsBuffer.unshift(entry);
+    if (logsBuffer.length > MAX_LOG_EVENTS) {
+        logsBuffer.length = MAX_LOG_EVENTS;
+    }
+    renderLogs();
+}
+
+function formatLogTime(value) {
+    if (!(value instanceof Date)) {
+        return '--:--:--';
+    }
+    return value.toLocaleTimeString([], { hour12: false });
+}
+
+function payloadPreview(payload) {
+    if (payload == null) return '';
+    if (typeof payload === 'string') return payload;
+    try {
+        var raw = JSON.stringify(payload);
+        return raw.length > 280 ? raw.slice(0, 277) + '...' : raw;
+    } catch (error) {
+        return '[payload]';
+    }
+}
+
+function renderLogs() {
+    var listEl = document.getElementById('logs-list');
+    var metaEl = document.getElementById('logs-meta');
+    if (!listEl || !metaEl) return;
+
+    metaEl.textContent = String(logsBuffer.length) + ' events';
+
+    if (!admin) {
+        listEl.innerHTML = '<div class="bot-logs-empty">Logs are available for admin only</div>';
+        return;
+    }
+
+    if (!logsBuffer.length) {
+        listEl.innerHTML = '<div class="bot-logs-empty">Waiting for socket events...</div>';
+        return;
+    }
+
+    var head = [
+        '<div class="bot-logs-row is-head">',
+        '<span>time</span>',
+        '<span>type</span>',
+        '<span>event</span>',
+        '<span>summary</span>',
+        '</div>'
+    ].join('');
+
+    var rows = logsBuffer.map(function(entry) {
+        var time = escapeHtml(formatLogTime(entry.time));
+        var type = escapeHtml(entry.type || 'system');
+        var event = escapeHtml(entry.event || 'event');
+        var summary = escapeHtml(entry.summary || '');
+        var preview = escapeHtml(payloadPreview(entry.payload));
+        return [
+            '<div class="bot-logs-row" title="' + preview + '">',
+            '<span>' + time + '</span>',
+            '<span class="bot-logs-type type-' + type + '">' + type + '</span>',
+            '<span class="bot-logs-event">' + event + '</span>',
+            '<span class="bot-logs-summary">' + summary + '</span>',
+            '</div>'
+        ].join('');
+    }).join('');
+
+    listEl.innerHTML = head + rows;
+}
+
+function renderViewers(payload) {
+    const listEl = document.getElementById('viewers-list');
+    const metaEl = document.getElementById('viewers-meta');
+    if (!listEl || !metaEl) return;
+
+    if (!payload) {
+        metaEl.textContent = 'unavailable';
+        listEl.innerHTML = '<div class="bot-viewers-empty">Viewers unavailable</div>';
+        return;
+    }
+
+    const viewers = Array.isArray(payload.viewers) ? payload.viewers : [];
+    const error = payload.error || null;
+    const admins = Number(payload.admins || 0);
+    const guests = Number(payload.guests || 0);
+    metaEl.textContent = error ? 'error' : (viewers.length + ' online • ' + admins + ' admin • ' + guests + ' guest');
+
+    if (error) {
+        listEl.innerHTML = '<div class="bot-viewers-empty">Socket viewers unavailable: ' + escapeHtml(error) + '</div>';
+        return;
+    }
+
+    if (!viewers.length) {
+        listEl.innerHTML = '<div class="bot-viewers-empty">No active viewers</div>';
+        return;
+    }
+
+    const head = [
+        '<div class="bot-viewers-row is-head">',
+        '<span>sid</span>',
+        '<span>role</span>',
+        '<span>live</span>',
+        '<span>seen</span>',
+        '<span>ip</span>',
+        '<span class="bot-viewers-transport">transport</span>',
+        '<span class="bot-viewers-origin">origin</span>',
+        '<span class="bot-viewers-ua">user-agent</span>',
+        '</div>'
+    ].join('');
+
+    const rows = viewers.map(function(viewer) {
+        const sid = escapeHtml(viewer.sid || '—');
+        const role = escapeHtml(viewer.role || 'guest');
+        const connected = escapeHtml(viewer.connected_age || '—');
+        const seen = escapeHtml(viewer.last_seen_age || '—');
+        const ip = escapeHtml(viewer.ip || '—');
+        const transport = escapeHtml(viewer.transport || 'unknown');
+        const origin = escapeHtml(viewer.origin || '—');
+        const userAgent = escapeHtml(viewer.user_agent || '');
+        const userAgentShort = escapeHtml(viewer.user_agent_short || '—');
+        const roleClass = role === 'admin' ? 'is-admin' : 'is-guest';
+        const seenClass = viewer.is_stale ? ' is-stale' : '';
+        return [
+            '<div class="bot-viewers-row">',
+            '<span class="bot-viewers-sid" title="' + sid + '">' + sid + '</span>',
+            '<span class="bot-viewers-role ' + roleClass + '">' + role + '</span>',
+            '<span>' + connected + '</span>',
+            '<span class="bot-viewers-seen' + seenClass + '">' + seen + '</span>',
+            '<span class="bot-viewers-ip" title="' + ip + '">' + ip + '</span>',
+            '<span class="bot-viewers-transport">' + transport + '</span>',
+            '<span class="bot-viewers-origin" title="' + origin + '">' + origin + '</span>',
+            '<span class="bot-viewers-ua" title="' + userAgent + '">' + userAgentShort + '</span>',
+            '</div>'
+        ].join('');
+    }).join('');
+
+    listEl.innerHTML = head + rows;
+}
+
 function renderBackfill(payload) {
     const metaEl = document.getElementById('backfill-meta');
     const stateEl = document.getElementById('backfill-state');
@@ -1820,6 +2350,27 @@ async function refreshWorkers() {
     }
 }
 
+async function refreshViewers() {
+    if (!admin) return;
+    try {
+        const response = await fetch('/api/socket/viewers/', { cache: 'no-store', credentials: 'same-origin' });
+        const payload = await response.json();
+        renderViewers(payload);
+    } catch (error) {
+        renderViewers({ viewers: [], admins: 0, guests: 0, error: 'fetch failed' });
+    }
+}
+
+function syncViewersPolling() {
+    if (viewersRefreshTimer) {
+        clearInterval(viewersRefreshTimer);
+        viewersRefreshTimer = null;
+    }
+    if (!admin) return;
+    refreshViewers();
+    viewersRefreshTimer = setInterval(refreshViewers, 8000);
+}
+
 function syncWorkersPolling() {
     if (workersRefreshTimer) {
         clearInterval(workersRefreshTimer);
@@ -1854,12 +2405,33 @@ function syncBackfillPolling() {
 var start_time = (new Date).getTime()   
 socket.on('connect', function() {  
     console.log("on connect")
+    pushSocketLog('connect', { sid: socket.id }, 'system');
     window.setInterval(function () {
         counter += 1
         start_time = (new Date).getTime();
         //console.log("semd my_ping")
         socket.emit('my_ping');
     }, 250);
+});
+
+socket.on('response', function(data) {
+    pushSocketLog('response', data, 'system');
+});
+
+socket.on('set', function(data) {
+    pushSocketLog('set', data, 'controls');
+});
+
+socket.on('steps_forwards', function(data) {
+    pushSocketLog('steps_forwards', { value: data }, 'bot');
+});
+
+socket.on('tags_updated', function(data) {
+    pushSocketLog('tags_updated', data || {}, 'analyzer');
+});
+
+socket.on('location', function(data) {
+    pushSocketLog('location', data, 'geo');
 });
 
 
@@ -1883,6 +2455,7 @@ return length
     let last_event = "";
     var event_time = (new Date).getTime()
     socket.on('event', function(data) {                
+        pushSocketLog('event', data, 'bot');
         if (data['event'] == "retrieve_next_url") {
             log_page = ""
             event_time = (new Date).getTime()
@@ -1920,6 +2493,7 @@ return length
         }, SUBLINK_RENDER_INTERVAL_MS);
     }
     socket.on('sublink', function(data) {        
+        pushSocketLog('sublink', data, 'bot');
         const log_sub_line = data['url']
         if (!log_sub_line) {
             return;
@@ -1936,11 +2510,15 @@ return length
 
 
     socket.on('clear', function(data){
+        pushSocketLog('clear', data, 'bot');
         console.log("clear")
         url = ""
-        text = ""    
+        text = ""
+        currentNounPhrases = []
         log_sub_lines = []
         setCodeText('log_sub', '')
+        renderHighlightedLogText('', [])
+        setCodeText('log_phrases', '')
         graph.removeAllNodes()
         graph.removeallLinks()
         const screenshotElement = document.getElementById('log_screenshot');
@@ -1963,6 +2541,7 @@ return length
     let timeoutId = -1;
     let last_added = "";
     socket.on('step', function(data) {
+        pushSocketLog('step', data, 'bot');
         clearTimeout(timeoutId);
         console.log(data)
         step = data['step']
@@ -2025,13 +2604,13 @@ return length
         if (textLength < 2048) {
             textLength = text.length
         }
+        currentNounPhrases = []
         let delay = 4
         let index = 0;
         function animateText() {            
-            const element = document.getElementById( "log_text")
             if (text)
                 if (index < text.length) {              
-                    element.innerHTML = "<code>"+text.slice(0, index)+"</code>";
+                    renderHighlightedLogText(text.slice(0, index), currentNounPhrases);
                     var rng = document.createRange();
                     rng.setStartBefore( document.getElementById('s1') );
                     rng.setEndAfter( document.getElementById('s2') );
@@ -2039,8 +2618,12 @@ return length
                     index+=10;
                     timeoutId = setTimeout(animateText, delay);
                 } else {
+                    renderHighlightedLogText(text, currentNounPhrases);
                     clearTimeout(timeoutId);
                 }
+            else {
+                renderHighlightedLogText('', currentNounPhrases);
+            }
         }    
         animateText();
             
@@ -2087,6 +2670,7 @@ return length
     }); // socket on step
 
     socket.on('screenshot', function(data) {
+        pushSocketLog('screenshot', data, 'screenshoter');
         if (!data || !data.screenshot_url) return;
 
         const shotWidth = 90;
@@ -2120,6 +2704,7 @@ return length
     }
 
     socket.on('image_analyzed', function(data) {
+        pushSocketLog('image_analyzed', data, 'screenshoter');
         if (!data || !Array.isArray(data.palette)) return;
         renderPalette(data.palette);
     });
@@ -2164,6 +2749,7 @@ return length
 
 
     socket.on('set_values', function(data) {
+        pushSocketLog('set_values', data, 'controls');
         // console.log('set_values', data);
         graph.setValues(data)        
         $('#value').html(data['v1']);
@@ -2180,6 +2766,7 @@ return length
     //
     words_all = ""
     socket.on('analyzed', function(data) {
+        pushSocketLog('analyzed', data, 'analyzer');
         if (!data) return;
         let wordsSrc = data['words_str'] || (Array.isArray(data['words']) ? data['words'].join(' ') : '');
         let words = (wordsSrc || '').split(" ").filter(Boolean);
@@ -2203,6 +2790,8 @@ return length
 
         // Animate log_phrases for analyzed data
         let nounPhrases = data['noun_phrases'] || [];
+        currentNounPhrases = normalizeHighlightPhrases(nounPhrases);
+        renderHighlightedLogText(text, currentNounPhrases);
         let analyzedPhrases = "<h3>noun_phrases</h3>" + nounPhrases.join('<br>');
         let analyzedPhrasesIndex = 0;
         let analyzedPhrasesTimeoutId = -1;
@@ -2242,6 +2831,7 @@ return length
     });
 
     socket.on('disconnect', function() {
+        pushSocketLog('disconnect', { sid: socket.id }, 'system');
         console.log('Disconnected from server');
     });
 
