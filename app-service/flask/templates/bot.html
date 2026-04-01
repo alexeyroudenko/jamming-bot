@@ -645,6 +645,100 @@ button {
     margin-right: 2px;
 }
 
+.bot-workers-panel {
+    position: fixed;
+    left: 50%;
+    bottom: 20px;
+    transform: translateX(-50%);
+    z-index: 205;
+    width: min(640px, calc(100vw - 320px));
+    max-height: 180px;
+    padding: 10px 12px;
+    background: rgba(5, 7, 10, 0.76);
+    border: 1px solid var(--bot-border);
+    box-shadow: var(--bot-shadow);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+}
+
+.bot-workers-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.bot-workers-meta {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: var(--bot-muted);
+}
+
+.bot-workers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 126px;
+    overflow-y: auto;
+}
+
+.bot-workers-row,
+.bot-workers-empty {
+    display: grid;
+    grid-template-columns: minmax(130px, 1.4fr) minmax(64px, 0.7fr) minmax(130px, 1.2fr) minmax(110px, 1fr) minmax(56px, 0.5fr);
+    gap: 8px;
+    align-items: center;
+    padding: 4px 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.25;
+}
+
+.bot-workers-empty {
+    grid-template-columns: 1fr;
+    color: var(--bot-muted);
+}
+
+.bot-workers-name,
+.bot-workers-queues,
+.bot-workers-job {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bot-workers-state {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    color: var(--bot-text);
+}
+
+.bot-workers-state::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    margin-right: 6px;
+    border-radius: 999px;
+    background: var(--bot-muted);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+}
+
+.bot-workers-row.is-busy .bot-workers-state::before {
+    background: var(--bot-accent);
+    box-shadow: 0 0 12px rgba(255, 0, 0, 0.55);
+}
+
+.bot-workers-row.is-idle .bot-workers-state::before {
+    background: #6b7280;
+}
+
+.bot-workers-age {
+    color: var(--bot-muted);
+    text-align: right;
+}
+
 button.bot-action {
     appearance: none;
     -webkit-appearance: none;
@@ -793,6 +887,29 @@ body.is-admin .guest-only {
         align-items: flex-start;
         flex-wrap: wrap;
         white-space: normal;
+    }
+
+    .bot-workers-panel {
+        left: 10px;
+        right: 10px;
+        bottom: 72px;
+        transform: none;
+        width: auto;
+        max-height: 160px;
+    }
+
+    .bot-workers-row,
+    .bot-workers-empty {
+        grid-template-columns: minmax(90px, 1fr) minmax(56px, 0.7fr) minmax(88px, 1fr);
+    }
+
+    .bot-workers-job,
+    .bot-workers-queues {
+        display: none;
+    }
+
+    .bot-workers-age {
+        text-align: left;
     }
 
     .bot-status-grid,
@@ -1056,6 +1173,16 @@ body.is-admin .guest-only {
           </div>
         </section>
       </div>
+
+      <section id="workers-panel" class="bot-panel bot-workers-panel admin-only" aria-live="polite">
+        <div class="bot-workers-head">
+          <span class="bot-section-label">Workers</span>
+          <span id="workers-meta" class="bot-workers-meta">loading</span>
+        </div>
+        <div id="workers-list" class="bot-workers-list">
+          <div class="bot-workers-empty">Loading workers...</div>
+        </div>
+      </section>
     </div>
   </div>
 
@@ -1175,6 +1302,7 @@ function updateAdminUI() {
     if (loginBadge) {
         loginBadge.textContent = admin ? 'admin' : 'guest';
     }
+    syncWorkersPolling();
 }
 
 // Allow login with Enter key
@@ -1233,6 +1361,81 @@ var counter = 0
 var tag = 0
 var imgs = 0
 var currentPalette = []
+var workersRefreshTimer = null
+
+function escapeHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function renderWorkers(payload) {
+    const listEl = document.getElementById('workers-list');
+    const metaEl = document.getElementById('workers-meta');
+    if (!listEl || !metaEl) return;
+
+    if (!payload) {
+        metaEl.textContent = 'unavailable';
+        listEl.innerHTML = '<div class="bot-workers-empty">Workers unavailable</div>';
+        return;
+    }
+
+    const workers = Array.isArray(payload.workers) ? payload.workers : [];
+    const error = payload.error || null;
+    metaEl.textContent = error ? 'error' : (workers.length ? workers.length + ' online' : '0 online');
+
+    if (error) {
+        listEl.innerHTML = '<div class="bot-workers-empty">RQ unavailable: ' + error + '</div>';
+        return;
+    }
+
+    if (!workers.length) {
+        listEl.innerHTML = '<div class="bot-workers-empty">No active workers</div>';
+        return;
+    }
+
+    listEl.innerHTML = workers.map(function(worker) {
+        const workerName = escapeHtml(worker.name || 'worker');
+        const state = escapeHtml(worker.state || 'unknown');
+        const stateClass = worker.is_busy ? 'is-busy' : 'is-idle';
+        const currentJob = escapeHtml(worker.current_job_id || '—');
+        const queues = escapeHtml(Array.isArray(worker.queues) && worker.queues.length ? worker.queues.join(', ') : 'default');
+        const heartbeat = escapeHtml(worker.heartbeat_age || '—');
+        return [
+            '<div class="bot-workers-row ' + stateClass + '">',
+            '<span class="bot-workers-name" title="' + workerName + '">' + workerName + '</span>',
+            '<span class="bot-workers-state">' + state + '</span>',
+            '<span class="bot-workers-job" title="' + currentJob + '">' + currentJob + '</span>',
+            '<span class="bot-workers-queues" title="' + queues + '">' + queues + '</span>',
+            '<span class="bot-workers-age">' + heartbeat + '</span>',
+            '</div>'
+        ].join('');
+    }).join('');
+}
+
+async function refreshWorkers() {
+    if (!admin) return;
+    try {
+        const response = await fetch('/api/rq/workers/', { cache: 'no-store', credentials: 'same-origin' });
+        const payload = await response.json();
+        renderWorkers(payload);
+    } catch (error) {
+        renderWorkers({ workers: [], error: 'fetch failed' });
+    }
+}
+
+function syncWorkersPolling() {
+    if (workersRefreshTimer) {
+        clearInterval(workersRefreshTimer);
+        workersRefreshTimer = null;
+    }
+    if (!admin) return;
+    refreshWorkers();
+    workersRefreshTimer = setInterval(refreshWorkers, 8000);
+}
 
 var start_time = (new Date).getTime()   
 socket.on('connect', function() {  

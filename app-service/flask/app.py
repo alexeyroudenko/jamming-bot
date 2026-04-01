@@ -7,8 +7,10 @@ import logging
 import threading
 import tempfile
 import requests
+from datetime import datetime, timezone
 
 import yaml
+from rq import Worker
 
 from functools import wraps
 from flask import Flask, Response, Blueprint, jsonify, request, redirect, render_template, session, url_for
@@ -232,6 +234,7 @@ PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
                    "/tags/", "/geo/", "/screenshots/", "/api/tags/get/", "/api/tags/combine/",
                    "/api/tags/sentiment-vortex/", "/api/tags/embeddings/", "/api/tags/add/",
                    "/api/step/", "/api/steps", "/api/storage_step/", "/api/storage_latest/",
+                   "/api/rq/workers/",
                    "/api/storage_ids/",
                    "/api/storage_geo/")
 
@@ -415,6 +418,48 @@ def _read_step_hash(step_key):
     return result
 
 
+def _format_worker_heartbeat_age(last_heartbeat):
+    if not last_heartbeat:
+        return None
+    if getattr(last_heartbeat, "tzinfo", None) is None:
+        last_heartbeat = last_heartbeat.replace(tzinfo=timezone.utc)
+    delta = max(0, int((datetime.now(timezone.utc) - last_heartbeat).total_seconds()))
+    if delta < 60:
+        return f"{delta}s"
+    if delta < 3600:
+        return f"{delta // 60}m"
+    return f"{delta // 3600}h"
+
+
+def _get_rq_workers_snapshot():
+    workers = []
+    raw_workers = Worker.all(connection=redis_connection)
+    for worker in raw_workers:
+        queues = []
+        try:
+            queues = [q.name for q in (worker.queues or [])]
+        except Exception:
+            queues = []
+        current_job = None
+        try:
+            job = worker.get_current_job()
+            current_job = job.id if job else None
+        except Exception:
+            current_job = None
+        last_heartbeat = getattr(worker, "last_heartbeat", None)
+        workers.append({
+            "name": worker.name,
+            "state": getattr(worker, "state", "unknown"),
+            "queues": queues,
+            "current_job_id": current_job,
+            "last_heartbeat": last_heartbeat.isoformat() if last_heartbeat else None,
+            "heartbeat_age": _format_worker_heartbeat_age(last_heartbeat),
+            "is_busy": bool(current_job) or getattr(worker, "state", "") == "busy",
+        })
+    workers.sort(key=lambda item: (not item["is_busy"], item["name"]))
+    return workers
+
+
 def _patch_storage(step_key, data):
     """Send incremental update to storage-service via PATCH."""
     number = step_key.split(":")[-1] if step_key else None
@@ -534,6 +579,26 @@ def bot():
 @app.route('/status')
 def status():
     return jsonify({"status": "ok"})
+
+
+@app.route("/api/rq/workers/", methods=["GET"])
+def rq_workers():
+    try:
+        workers = _get_rq_workers_snapshot()
+        return jsonify({
+            "workers": workers,
+            "count": len(workers),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "error": None,
+        })
+    except Exception as e:
+        logger.warning("rq workers unavailable: %s", e)
+        return jsonify({
+            "workers": [],
+            "count": 0,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "error": str(e),
+        }), 503
 
 
 @app.route('/screenshots/')
