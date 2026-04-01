@@ -599,6 +599,85 @@ button {
     accent-color: var(--bot-accent);
 }
 
+.bot-visibility-panel {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 220;
+    width: 85px;
+    height: 768px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: rgba(5, 7, 10, 0.76);
+    border: 1px solid var(--bot-border);
+    box-shadow: var(--bot-shadow);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+}
+
+.bot-visibility-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.bot-visibility-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.bot-visibility-actions .bot-action {
+    padding: 0;
+    min-height: auto;
+    opacity: 0.78;
+}
+
+.bot-visibility-actions .bot-action:hover {
+    opacity: 1;
+}
+
+.bot-visibility-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    align-content: start;
+    overflow: auto;
+    padding-right: 2px;
+}
+
+.bot-visibility-panel-toggles {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+}
+
+.bot-visibility-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 18px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.1;
+    color: var(--bot-text);
+    cursor: pointer;
+    opacity: 0.78;
+    user-select: none;
+}
+
+.bot-visibility-toggle:hover {
+    opacity: 1;
+}
+
+.bot-visibility-toggle input {
+    margin: 0;
+    accent-color: var(--bot-accent);
+}
+
 body.is-move-mode {
     cursor: crosshair;
 }
@@ -743,11 +822,105 @@ body.is-move-mode .bot-move-target.is-move-selected {
 .bot-logs-panel {
     position: fixed;
     left: 50%;
-    bottom: 518px;
+    bottom: 612px;
     transform: translateX(-50%);
     z-index: 202;
     width: min(1120px, calc(100vw - 160px));
     max-height: 230px;
+    padding: 10px 12px;
+    background: rgba(5, 7, 10, 0.76);
+    border: 1px solid var(--bot-border);
+    box-shadow: var(--bot-shadow);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+    display: none;
+}
+
+.bot-panel-quick-toggle {
+    position: fixed;
+    z-index: 206;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    line-height: 1;
+    color: var(--bot-text);
+    background: rgba(5, 7, 10, 0.82);
+    border: 1px solid var(--bot-border);
+    box-shadow: var(--bot-shadow);
+    backdrop-filter: blur(10px);
+    opacity: 0.82;
+    user-select: none;
+}
+
+.bot-panel-quick-toggle:hover {
+    opacity: 1;
+}
+
+.bot-panel-quick-toggle input {
+    margin: 0;
+    accent-color: var(--bot-accent);
+}
+
+.bot-visibility-panel .bot-panel-quick-toggle,
+.bot-visibility-panel .bot-panel-quick-toggle-workers,
+.bot-visibility-panel .bot-panel-quick-toggle-backfill,
+.bot-visibility-panel .bot-panel-quick-toggle-viewers,
+.bot-visibility-panel .bot-panel-quick-toggle-timeline,
+.bot-visibility-panel .bot-panel-quick-toggle-logs {
+    position: static;
+    left: auto;
+    bottom: auto;
+    transform: none;
+    z-index: auto;
+    width: 100%;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+    opacity: 0.78;
+}
+
+.bot-panel-quick-toggle-workers {
+    left: 50%;
+    bottom: 92px;
+    transform: translateX(-50%);
+}
+
+.bot-panel-quick-toggle-backfill {
+    left: 50%;
+    bottom: 184px;
+    transform: translateX(-50%);
+}
+
+.bot-panel-quick-toggle-viewers {
+    left: 50%;
+    bottom: 288px;
+    transform: translateX(-50%);
+}
+
+.bot-panel-quick-toggle-timeline {
+    left: 50%;
+    bottom: 490px;
+    transform: translateX(-50%);
+}
+
+.bot-panel-quick-toggle-logs {
+    left: 50%;
+    bottom: 584px;
+    transform: translateX(-50%);
+}
+
+.bot-step-timeline-panel {
+    position: fixed;
+    left: 50%;
+    bottom: 518px;
+    transform: translateX(-50%);
+    z-index: 202;
+    width: min(1120px, calc(100vw - 160px));
     padding: 10px 12px;
     background: rgba(5, 7, 10, 0.76);
     border: 1px solid var(--bot-border);
@@ -1011,6 +1184,77 @@ body.is-move-mode .bot-move-target.is-move-selected {
     color: var(--bot-muted);
 }
 
+.bot-step-timeline-track {
+    position: relative;
+    height: 52px;
+    width: 100%;
+    overflow: hidden;
+    background:
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 20% 100%,
+        rgba(255, 255, 255, 0.035);
+}
+
+.bot-step-timeline-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: var(--bot-muted);
+    pointer-events: none;
+    justify-content: center;
+}
+
+.bot-step-timeline-segment {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    min-width: 4px;
+    border: 1px solid #000;
+    box-sizing: border-box;
+    opacity: 0.92;
+}
+
+.bot-step-timeline-segment.type-bot {
+    background: #b7b7b7;
+}
+
+.bot-step-timeline-segment.type-analyzer {
+    background: #8f8f8f;
+}
+
+.bot-step-timeline-segment.type-screenshoter {
+    background: #d5d5d5;
+}
+
+.bot-step-timeline-segment.type-geo {
+    background: #6f6f6f;
+}
+
+.bot-step-timeline-segment.type-controls {
+    background: #f0f0f0;
+}
+
+.bot-step-timeline-segment.type-system {
+    background: #555555;
+}
+
+.bot-step-timeline-segment.is-overflow {
+    box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.8);
+}
+
+.bot-step-timeline-cursor {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: #ff3b30;
+    pointer-events: none;
+    z-index: 3;
+}
+
 .bot-logs-summary {
     min-width: 0;
     color: var(--bot-text);
@@ -1198,10 +1442,18 @@ body.is-admin .guest-only {
     .bot-logs-panel {
         left: 10px;
         right: 10px;
-        bottom: 522px;
+        bottom: 616px;
         transform: none;
         width: auto;
         max-height: 180px;
+    }
+
+    .bot-step-timeline-panel {
+        left: 10px;
+        right: 10px;
+        bottom: 522px;
+        transform: none;
+        width: auto;
     }
 
     .bot-backfill-grid {
@@ -1560,8 +1812,49 @@ body.is-admin .guest-only {
           <div class="bot-logs-empty">Waiting for socket events...</div>
         </div>
       </section>
+      <section id="step-timeline-panel" class="bot-panel bot-step-timeline-panel admin-only" aria-live="polite">
+        <div id="step-timeline-track" class="bot-step-timeline-track">
+          <div class="bot-step-timeline-empty">Waiting for step...</div>
+          <div id="step-timeline-cursor" class="bot-step-timeline-cursor" hidden></div>
+        </div>
+        <div id="step-timeline-meta" hidden>Waiting for step...</div>
+        <div id="step-timeline-caption" hidden></div>
+        <div class="bot-section-label" hidden>Step timeline</div>
+      </section>
     </div>
   </div>
+
+  <section id="visibility-panel" class="bot-visibility-panel admin-only" aria-live="polite">
+    <div class="bot-visibility-head">
+      <span class="bot-section-label">Visibility</span>
+      <div class="bot-visibility-actions">
+        <button class="bot-action bot-action-danger" onclick="handleLogout()">logout</button>
+      </div>
+    </div>
+    <div class="bot-visibility-panel-toggles">
+      <label class="bot-panel-quick-toggle bot-panel-quick-toggle-logs admin-only" for="quick-toggle-logs-panel">
+        <input type="checkbox" id="quick-toggle-logs-panel" data-target-selector="#logs-panel" checked>
+        <span>logs</span>
+      </label>
+      <label class="bot-panel-quick-toggle bot-panel-quick-toggle-timeline admin-only" for="quick-toggle-step-timeline-panel">
+        <input type="checkbox" id="quick-toggle-step-timeline-panel" data-target-selector="#step-timeline-panel" checked>
+        <span>timeline</span>
+      </label>
+      <label class="bot-panel-quick-toggle bot-panel-quick-toggle-viewers admin-only" for="quick-toggle-viewers-panel">
+        <input type="checkbox" id="quick-toggle-viewers-panel" data-target-selector="#viewers-panel" checked>
+        <span>viewers</span>
+      </label>
+      <label class="bot-panel-quick-toggle bot-panel-quick-toggle-workers admin-only" for="quick-toggle-workers-panel">
+        <input type="checkbox" id="quick-toggle-workers-panel" data-target-selector="#workers-panel" checked>
+        <span>workers</span>
+      </label>
+      <label class="bot-panel-quick-toggle bot-panel-quick-toggle-backfill admin-only" for="quick-toggle-backfill-panel">
+        <input type="checkbox" id="quick-toggle-backfill-panel" data-target-selector="#backfill-panel" checked>
+        <span>backfill</span>
+      </label>
+    </div>
+    <div id="visibility-toggles" class="bot-visibility-grid"></div>
+  </section>
 
   <div id="log"></div>
 
@@ -1716,7 +2009,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     initializeMoveTargets();
+    initializeBlockVisibilityControls();
+    initializeQuickPanelToggles();
     bindMoveModeControls();
+    startStepTimelineCursorLoop();
 });
 
 
@@ -1747,16 +2043,25 @@ var currentPalette = []
 var currentNounPhrases = []
 var logsBuffer = []
 var MAX_LOG_EVENTS = 200
+var STEP_TIMELINE_DURATION_MS = 10000
+var stepTimelineState = {
+    step: null,
+    startedAt: null,
+    events: []
+}
+var stepTimelineCursorFrame = null
 var viewersRefreshTimer = null
 var workersRefreshTimer = null
 var backfillRefreshTimer = null
 var moveMode = false
 var selectedMoveElement = null
 var activeMoveDrag = null
+var BLOCK_VISIBILITY_STORAGE_KEY = 'bot-block-visibility'
 var MOVE_TARGET_SELECTOR = [
     '#debug',
     '.bot-side-column',
     '#logs-panel',
+    '#step-timeline-panel',
     '#viewers-panel',
     '#workers-panel',
     '#backfill-panel',
@@ -1771,6 +2076,20 @@ var MOVE_TARGET_SELECTOR = [
     '#log_urls',
     '#log_words'
 ].join(', ')
+var BLOCK_VISIBILITY_TARGETS = [
+    { selector: '#debug', label: 'debug' },
+    { selector: '.bot-side-column', label: 'controls' },
+    { selector: '#log_url', label: 'url' },
+    { selector: '#log_text', label: 'text' },
+    { selector: '#log_phrases', label: 'phrases' },
+    { selector: '#log_sub', label: 'sub' },
+    { selector: '#log_events', label: 'events' },
+    { selector: '#log_headers', label: 'headers' },
+    { selector: '#log_screenshot', label: 'shot' },
+    { selector: '#log_palette', label: 'palette' },
+    { selector: '#log_urls', label: 'urls' },
+    { selector: '#log_words', label: 'words' }
+]
 
 function escapeHtml(value) {
     return String(value == null ? '' : value)
@@ -1890,6 +2209,122 @@ function initializeMoveTargets() {
     });
 }
 
+function loadBlockVisibilityState() {
+    try {
+        return JSON.parse(localStorage.getItem(BLOCK_VISIBILITY_STORAGE_KEY) || '{}');
+    } catch (error) {
+        return {};
+    }
+}
+
+function saveBlockVisibilityState(state) {
+    try {
+        localStorage.setItem(BLOCK_VISIBILITY_STORAGE_KEY, JSON.stringify(state));
+    } catch (error) {
+    }
+}
+
+function syncBlockVisibilityInputs(selector, visible) {
+    document.querySelectorAll('[data-target-selector="' + selector + '"]').forEach(function(input) {
+        if (input.checked !== visible) {
+            input.checked = visible;
+        }
+    });
+}
+
+function setBlockVisibility(selector, visible, options) {
+    var element = document.querySelector(selector);
+    if (!element) {
+        return;
+    }
+    var nextVisible = visible !== false;
+    element.hidden = !nextVisible;
+    syncBlockVisibilityInputs(selector, nextVisible);
+    if (!nextVisible && selectedMoveElement === element) {
+        stopMoveDrag();
+        setSelectedMoveElement(null);
+    }
+    if (options && options.persist === false) {
+        return;
+    }
+    var state = loadBlockVisibilityState();
+    state[selector] = nextVisible;
+    saveBlockVisibilityState(state);
+}
+
+function initializeBlockVisibilityControls() {
+    var container = document.getElementById('visibility-toggles');
+    if (!container) {
+        return;
+    }
+
+    var state = loadBlockVisibilityState();
+    container.textContent = '';
+
+    BLOCK_VISIBILITY_TARGETS.forEach(function(target) {
+        var element = document.querySelector(target.selector);
+        if (!element) {
+            return;
+        }
+
+        var visible = state[target.selector];
+        if (typeof visible !== 'boolean') {
+            visible = !element.hidden;
+        }
+        setBlockVisibility(target.selector, visible, { persist: false });
+
+        var label = document.createElement('label');
+        label.className = 'bot-visibility-toggle';
+
+        var input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = visible;
+        input.dataset.targetSelector = target.selector;
+        input.addEventListener('change', function(event) {
+            setBlockVisibility(target.selector, event.target.checked);
+        });
+
+        var text = document.createElement('span');
+        text.textContent = target.label;
+
+        label.appendChild(input);
+        label.appendChild(text);
+        container.appendChild(label);
+    });
+}
+
+function initializeQuickPanelToggles() {
+    document.querySelectorAll('#visibility-panel input[data-target-selector]').forEach(function(input) {
+        var selector = input.dataset.targetSelector;
+        if (!selector) {
+            return;
+        }
+        var targetElement = document.querySelector(selector);
+        if (targetElement) {
+            input.checked = !targetElement.hidden;
+        }
+    });
+
+    var visibilityPanel = document.getElementById('visibility-panel');
+    if (!visibilityPanel || visibilityPanel.dataset.visibilityBound === 'true') {
+        return;
+    }
+
+    visibilityPanel.addEventListener('change', function(event) {
+        var target = event.target;
+        if (!(target instanceof HTMLInputElement)) {
+            return;
+        }
+        var selector = target.dataset.targetSelector;
+        if (!selector) {
+            return;
+        }
+        setBlockVisibility(selector, target.checked);
+    });
+
+    visibilityPanel.dataset.visibilityBound = 'true';
+}
+
 function getMoveToggleElement() {
     return document.getElementById('move-mode-toggle');
 }
@@ -1995,7 +2430,7 @@ function bindMoveModeControls() {
         if (event.button !== undefined && event.button !== 0) {
             return;
         }
-        if (event.target && event.target.closest('#move-mode-toggle')) {
+        if (event.target && event.target.closest('.bot-move-toggle, #visibility-panel')) {
             return;
         }
         var target = getMoveTarget(event.target);
@@ -2152,9 +2587,116 @@ function summarizeSocketEvent(eventName, payload) {
     return typeof payload === 'string' ? payload : eventName;
 }
 
+function renderStepTimeline() {
+    var trackEl = document.getElementById('step-timeline-track');
+    var cursorEl = document.getElementById('step-timeline-cursor');
+    var metaEl = document.getElementById('step-timeline-meta');
+    var captionEl = document.getElementById('step-timeline-caption');
+    if (!trackEl || !cursorEl || !metaEl || !captionEl) return;
+
+    if (stepTimelineState.step == null || !stepTimelineState.startedAt) {
+        metaEl.textContent = 'Waiting for step...';
+        trackEl.innerHTML = '<div class="bot-step-timeline-empty">Waiting for step...</div><div id="step-timeline-cursor" class="bot-step-timeline-cursor" hidden></div>';
+        captionEl.innerHTML = '<span>step -</span><span>0 events</span>';
+        updateStepTimelineCursor();
+        return;
+    }
+
+    metaEl.textContent = 'step #' + String(stepTimelineState.step) + ' • 10s window';
+    captionEl.textContent = 'step ' + String(stepTimelineState.step) + ' • ' + String(stepTimelineState.events.length) + ' events';
+
+    if (!stepTimelineState.events.length) {
+        trackEl.innerHTML = '<div class="bot-step-timeline-empty">Waiting for events inside the current 10s step window...</div><div id="step-timeline-cursor" class="bot-step-timeline-cursor" hidden></div>';
+        updateStepTimelineCursor();
+        return;
+    }
+
+    var segmentsHtml = stepTimelineState.events.map(function(entry, index) {
+        var summary = escapeHtml(entry.summary || entry.event || 'event');
+        var eventName = escapeHtml(entry.event || 'event');
+        var typeName = escapeHtml(entry.type || 'system');
+        var elapsedMs = Math.max(0, Math.round(entry.elapsedMs || 0));
+        var title = eventName + ' • ' + elapsedMs + 'ms • ' + summary;
+        var classes = 'bot-step-timeline-segment type-' + typeName + (entry.overflow ? ' is-overflow' : '');
+        var previousEntry = stepTimelineState.events[index - 1] || null;
+        var startLeft = previousEntry ? previousEntry.left : 0;
+        var width = Math.max(entry.left - startLeft, entry.width || 0.35);
+        return '<span class="' + classes + '" style="left:' + startLeft + '%;width:' + width + '%" title="' + escapeHtml(title) + '"></span>';
+    }).join('');
+    trackEl.innerHTML = segmentsHtml + '<div id="step-timeline-cursor" class="bot-step-timeline-cursor" hidden></div>';
+    updateStepTimelineCursor();
+}
+
+function updateStepTimelineCursor() {
+    var cursorEl = document.getElementById('step-timeline-cursor');
+    if (!cursorEl) {
+        return;
+    }
+    if (stepTimelineState.step == null || !stepTimelineState.startedAt) {
+        cursorEl.hidden = true;
+        return;
+    }
+    var elapsedMs = Math.max(0, Date.now() - stepTimelineState.startedAt);
+    var clampedMs = Math.min(elapsedMs, STEP_TIMELINE_DURATION_MS);
+    var left = (clampedMs / STEP_TIMELINE_DURATION_MS) * 100;
+    cursorEl.hidden = false;
+    cursorEl.style.left = left + '%';
+}
+
+function startStepTimelineCursorLoop() {
+    if (stepTimelineCursorFrame !== null) {
+        cancelAnimationFrame(stepTimelineCursorFrame);
+    }
+    function tick() {
+        updateStepTimelineCursor();
+        stepTimelineCursorFrame = requestAnimationFrame(tick);
+    }
+    stepTimelineCursorFrame = requestAnimationFrame(tick);
+}
+
+function resetStepTimeline(stepNumber, startedAt) {
+    stepTimelineState.step = stepNumber == null ? null : stepNumber;
+    stepTimelineState.startedAt = startedAt || Date.now();
+    stepTimelineState.events = [];
+    renderStepTimeline();
+}
+
+function clearStepTimeline() {
+    stepTimelineState.step = null;
+    stepTimelineState.startedAt = null;
+    stepTimelineState.events = [];
+    renderStepTimeline();
+}
+
+function appendTimelineEvent(eventName, payload, forcedType, eventTime) {
+    if (eventName === 'step' || !stepTimelineState.startedAt) {
+        return;
+    }
+
+    var timestamp = typeof eventTime === 'number' ? eventTime : Date.now();
+    var elapsedMs = Math.max(0, timestamp - stepTimelineState.startedAt);
+    var clampedMs = Math.min(elapsedMs, STEP_TIMELINE_DURATION_MS);
+    var left = (clampedMs / STEP_TIMELINE_DURATION_MS) * 100;
+    var width = 0.35;
+    var maxLeft = Math.max(100 - width, 0);
+    var timelineType = forcedType || classifySocketEvent(eventName);
+
+    stepTimelineState.events.push({
+        event: eventName,
+        type: timelineType,
+        summary: summarizeSocketEvent(eventName, payload),
+        elapsedMs: elapsedMs,
+        left: Math.min(left, maxLeft),
+        width: width,
+        overflow: elapsedMs > STEP_TIMELINE_DURATION_MS
+    });
+    renderStepTimeline();
+}
+
 function pushSocketLog(eventName, payload, forcedType) {
+    var eventTime = Date.now();
     var entry = {
-        time: new Date(),
+        time: new Date(eventTime),
         type: forcedType || classifySocketEvent(eventName),
         event: eventName,
         summary: summarizeSocketEvent(eventName, payload),
@@ -2165,6 +2707,7 @@ function pushSocketLog(eventName, payload, forcedType) {
         logsBuffer.length = MAX_LOG_EVENTS;
     }
     renderLogs();
+    appendTimelineEvent(eventName, payload, forcedType, eventTime);
 }
 
 function formatLogTime(value) {
@@ -2526,6 +3069,7 @@ return length
             screenshotElement.innerHTML = "";
         }
         renderPalette([]);
+        clearStepTimeline();
     })
 
 
@@ -2545,6 +3089,7 @@ return length
         clearTimeout(timeoutId);
         console.log(data)
         step = data['step']
+        resetStepTimeline(step, Date.now());
         url = data['url'];
         from_url = data['src_url'];    
         struct_text = data['struct_text']
@@ -2788,11 +3333,11 @@ return length
         }    
         sanimateText();
 
-        // Animate log_phrases for analyzed data
-        let nounPhrases = data['noun_phrases'] || [];
+        // Animate noun_phrases as plain text, one phrase per line
+        let nounPhrases = Array.isArray(data['noun_phrases']) ? data['noun_phrases'] : [];
         currentNounPhrases = normalizeHighlightPhrases(nounPhrases);
         renderHighlightedLogText(text, currentNounPhrases);
-        let analyzedPhrases = "<h3>noun_phrases</h3>" + nounPhrases.join('<br>');
+        let analyzedPhrases = nounPhrases.join('\n');
         let analyzedPhrasesIndex = 0;
         let analyzedPhrasesTimeoutId = -1;
         // Calculate delay to show all text in 2 seconds (2000ms)
@@ -2803,10 +3348,11 @@ return length
             const phrasesElement = document.getElementById("log_phrases");
             if (!phrasesElement) return;
             if (analyzedPhrasesIndex < analyzedPhrases.length) {
-                phrasesElement.innerHTML = "<code>" + analyzedPhrases.slice(0, analyzedPhrasesIndex) + "</code>";
+                setCodeText("log_phrases", analyzedPhrases.slice(0, analyzedPhrasesIndex));
                 analyzedPhrasesIndex += 10;
                 analyzedPhrasesTimeoutId = setTimeout(animateAnalyzedPhrases, analyzedPhrasesDelay);
             } else {
+                setCodeText("log_phrases", analyzedPhrases);
                 clearTimeout(analyzedPhrasesTimeoutId);
             }
         }
