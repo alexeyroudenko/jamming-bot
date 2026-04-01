@@ -43,6 +43,7 @@ STORAGE_SERVICE_URL = os.getenv('STORAGE_SERVICE_URL', 'http://storage_service:7
 
 cfg = getConfig()
 redis = getRedis()
+BACKFILL_STATUS_KEY = os.getenv("BACKFILL_STATUS_KEY", "backfill:status")
 
 # ---------------------------------------------------------------------------
 # Sentry
@@ -418,6 +419,43 @@ def _read_step_hash(step_key):
     return result
 
 
+def _read_backfill_status():
+    status = {
+        "exists": False,
+        "state": "idle",
+        "started_at": "",
+        "finished_at": "",
+        "current_page": 0,
+        "total_pages": 0,
+        "processed": 0,
+        "skipped": 0,
+        "last_id": "",
+        "last_url": "",
+        "last_error": "",
+        "updated_at": "",
+    }
+    try:
+        raw = _read_step_hash(BACKFILL_STATUS_KEY)
+    except Exception as exc:
+        logger.warning("_read_backfill_status: %s", exc)
+        status["error"] = str(exc)
+        return status
+
+    if not raw:
+        return status
+
+    status["exists"] = True
+    for key in ("state", "started_at", "finished_at", "last_id", "last_url", "last_error", "updated_at"):
+        if key in raw and raw[key] is not None:
+            status[key] = str(raw[key])
+    for key in ("current_page", "total_pages", "processed", "skipped"):
+        try:
+            status[key] = int(float(raw.get(key) or 0))
+        except (ValueError, TypeError):
+            status[key] = 0
+    return status
+
+
 def _format_worker_heartbeat_age(last_heartbeat):
     if not last_heartbeat:
         return None
@@ -599,6 +637,14 @@ def rq_workers():
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "error": str(e),
         }), 503
+
+
+@app.route("/api/backfill/status/", methods=["GET"])
+def backfill_status():
+    payload = _read_backfill_status()
+    if "error" not in payload:
+        payload["error"] = None
+    return jsonify(payload)
 
 
 @app.route('/screenshots/')

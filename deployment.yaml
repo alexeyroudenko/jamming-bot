@@ -1815,6 +1815,10 @@ spec:
           value: "http://storage-service"
         - name: APP_SERVICE_URL
           value: "http://app-service"
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
         - name: BATCH_SIZE
           value: "100"
         - name: SLEEP_BETWEEN
