@@ -1,81 +1,136 @@
-﻿## TD server socket.IO 🧦
+## TouchDesigner bridge
 
-`ES`
-Template + componente para comunicar una aplicacion web o un servidor web con [TouchDesigner](https://derivative.ca/download) via [WebSockets](https://developer.mozilla.org/es/docs/Web/API/WebSockets_API). El protocolo que se usa para establecer esta comunicación es [Socket.IO](https://socket.io/).
-El componente en este repositorio sirve para escuchar eventos desde TouchDesigner como también para emitir eventos. Está pensando para ser usado con una interfaz web que busque comunicarse con TouchDesigner pero sus casos de uso pueden ser varias.
-Como TouchDesigner utiliza Socket.IO v2 es necesario instalar esta version en Node.js.
+В этой папке лежит простой внешний bridge для `Jamming Bot`:
 
-### Rápida instalación con Node.js y npm 🚩
+- читает `Socket.IO` события с `https://jamming-bot.arthew0.online`
+- пересылает их в `TouchDesigner` по `OSC`
+- не требует ставить `python-socketio` внутрь embedded Python самого TD
 
-Para usar este respositorio es necesario descargar [Node.js](https://nodejs.org/es/).
+### Файлы
 
-1. Descargar o clonar el repositorio en tu computadora.
+- `socketio_to_osc.py` - bridge `Socket.IO -> OSC`
+- `requirements.txt` - Python-зависимости для внешнего запуска
+- `td_osc_event_handler.py` - пример `Text DAT` callback для приема `/jb/event`
 
-2. Instalar las dependencias en la carpeta de destino ejecutando en la consola `npm i` o manualmente `npm i express socket.io@2.0.1`
+### Зачем так
 
-3. `npm start` para inicilizar la app.
+Сайт использует не raw websocket, а `Socket.IO`, поэтому обычный `WebSocket DAT` в `TouchDesigner` обычно не подходит напрямую. Внешний Python-процесс снимает эту проблему и отдает в TD уже обычный `OSC`.
 
-### Comentarios y comandos 🚏 
+### Установка
 
-Para inicializar en modo *test* (la app se reiniciará cada vez que se haga un cambio en ella) ejecutar en la consola:
+Создай отдельное окружение Python вне TouchDesigner и установи зависимости:
 
-```
-npm test
-```
-> 💡 Nota: para ello es necesario instalar previamente `npm nodemon -g`.
-
-Para utilizar la interfaz gráfica abrir el navegador en:
-
-```
-http://localhost:1111
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r td/requirements.txt
 ```
 
-La carpeta `public` agrupa todos los archivos "estáticos" que se usan para el frontend como los `.html`, `.js`, `.css`, logos, videos, etc.
-Modificar el archivo `index.js` para customizar el backend. En este caso, el archivo `index.html` contiene un minimo frontend para enviar un mensaje via Socket.IO. Todo esto se puede mejorar y embellecer.
+На Windows:
 
-Los eventos "dataToTD" y "dataFromTD" sirven para que los mensajes no entren y salgan en loop. En el caso de que se quiera que los mensajes que salgan también vuelvan a entrar, deberías modificar estos dos nombres de los eventos a un único evento (ej.: "data").
-
-👋 *Si lo usas, si tenés algún tipo de feedback o problema, hacemelo llegar por favor :)*
-
----
-
-
-`EN`
-Template + component to communicate a web application or a web server with [TouchDesigner](https://derivative.ca/download) via [WebSockets](https://developer.mozilla.org/es/docs/Web/API/WebSockets_API). The protocol used to establish this communication is [Socket.IO](https://socket.io/).
-The goal of the component in this repo is to listen for events from TouchDesigner as well as to emit events. The component is intended to be used with a web interface that seeks to communicate with TouchDesigner but its use cases can be several.
-As TouchDesigner uses Socket.IO v2 it is necessary to install this version in Node.js.
-
-### Quick Start with Node.js & npm 🚩
-
-To use this repository you'll need to download [Node.js](https://nodejs.org/es/).
-
-1. Download or clone the repository on your computer.
-
-2. Install the dependencies in the target folder by running `npm i` or manually `npm i express socket.io@2.0.1` in the console.
-
-3. `npm start` to start the app.
-
-### Comments & commands 🚏 
-
-In order to start in *test* mode (the app will be restarted each time a change is made to it):
-
-```
-npm test
-```
-> 💡 Note: it's necessary to install `npm nodemon -g` first.
-
-To use the web UI open the browser:
-
-```
-http://localhost:1111
+```bat
+py -m venv .venv
+.venv\Scripts\activate
+pip install -r td\requirements.txt
 ```
 
-Also, the `public` folder contains all the `static` files used for the frontend such as `.html`, `.js`, `.css`, logos, videos, etc.
-Feel free to modify the `index.js` file to customize your backend. In this case, the `index.html` file contains a minimal frontend to send a message via Socket.IO. It can be enhanced and beautified
+### Запуск
 
-The events "dataToTD" and "dataFromTD" are used to prevent messages from looping in and out. In case you want the outgoing messages to also loop back in, you should modify these two event names to a single event (e.g., "data").
+По умолчанию bridge:
 
-👋 *If you use it or if you have any feedback or problem, please let me know :)*
+- подключается к `https://jamming-bot.arthew0.online`
+- использует путь `'/socket.io'`
+- шлет OSC на `127.0.0.1:7000`
 
+```bash
+python td/socketio_to_osc.py
+```
 
-📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮📮
+Если нужен другой OSC-порт:
+
+```bash
+python td/socketio_to_osc.py --osc-port 5006
+```
+
+Если нужна авторизация через cookie:
+
+```bash
+python td/socketio_to_osc.py --cookie "session=PUT_YOUR_SESSION_COOKIE_HERE"
+```
+
+Если сайт окажется за префиксом `/app`, можно явно задать путь:
+
+```bash
+python td/socketio_to_osc.py --socketio-path /app/socket.io
+```
+
+### Какие события слушаются
+
+По умолчанию bridge подписывается на:
+
+- `step`
+- `analyzed`
+- `screenshot`
+- `image_analyzed`
+- `event`
+- `sublink`
+- `set_values`
+- `clear`
+- `my_pong`
+
+Можно ограничить список:
+
+```bash
+python td/socketio_to_osc.py --event step --event analyzed
+```
+
+### Что прилетает в TouchDesigner
+
+Bridge отправляет OSC-сообщения:
+
+- `/jb/event` - JSON целиком
+- `/jb/event_name` - имя события
+- `/jb/step/number` - номер шага, если есть
+- `/jb/step/url` - URL шага, если есть
+- `/jb/step/src_url` - source URL, если есть
+- `/jb/analyzed/words_count` - `words_count`, если есть
+- `/jb/sublink/url` - URL саблинка
+- `/jb/clear` - `1` при событии `clear`
+
+Самое удобное в TD:
+
+1. Создать `OSC In DAT` или `OSC In CHOP`
+2. Поставить порт `7000` или тот, который передан через `--osc-port`
+3. Читать `/jb/event` как JSON и разбирать дальше уже внутри сети TD
+
+### Пример
+
+```bash
+python td/socketio_to_osc.py --osc-host 127.0.0.1 --osc-port 7000 --event step --event analyzed
+```
+
+### Минимальная сеть в TouchDesigner
+
+Собери такой минимальный набор операторов:
+
+1. `OSC In DAT` на порту `7000`
+2. `Table DAT` с именем `jb_debug`
+3. `Table DAT` с именем `jb_event`
+4. `Table DAT` с именем `jb_data`
+5. `DAT Execute` или callback в `OSC In DAT`, куда вставить код из `td_osc_event_handler.py`
+
+Логика такая:
+
+- `OSC In DAT` принимает `/jb/event`
+- callback разбирает JSON из первого аргумента
+- `jb_event` получает весь envelope события
+- `jb_data` получает только поле `data`
+- `jb_debug` хранит последнее сырое сообщение и статус разбора
+
+Если хочешь просто быстро проверить поток, достаточно смотреть таблицу `jb_debug`.
+
+### Примечания
+
+- Если поток на сайте доступен только после логина, понадобится `session` cookie.
+- Если соединение не поднимается, сначала попробуй `--socketio-path /socket.io`, потом `--socketio-path /app/socket.io`.
+- Для `TouchDesigner Build 2025` этот вариант обычно проще и стабильнее, чем установка `socketio` прямо во встроенный Python TD.

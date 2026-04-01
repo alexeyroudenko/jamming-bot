@@ -568,6 +568,49 @@ button {
     border-color: transparent;
 }
 
+.bot-move-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 18px;
+    padding: 2px 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1;
+    color: var(--bot-text);
+    cursor: pointer;
+    opacity: 0.5;
+    user-select: none;
+}
+
+.bot-move-toggle:hover {
+    opacity: 1;
+}
+
+.bot-move-toggle input {
+    margin: 0;
+    accent-color: var(--bot-accent);
+}
+
+body.is-move-mode {
+    cursor: crosshair;
+}
+
+body.is-move-mode .bot-move-target {
+    touch-action: none;
+}
+
+body.is-move-mode .bot-move-target:hover {
+    outline: 1px dashed rgba(255, 0, 0, 0.45);
+    outline-offset: 2px;
+}
+
+body.is-move-mode .bot-move-target.is-move-selected {
+    outline: 1px solid rgba(255, 0, 0, 0.95);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 1px rgba(255, 0, 0, 0.18);
+}
+
 .bot-link-chip span,
 .bot-login-link span,
 .bot-metric-value {
@@ -1233,6 +1276,10 @@ body.is-admin .guest-only {
             <button class="bot-action" onclick="restart()">restart</button>
             <button class="bot-action bot-action-danger" onclick="handleLogout()">logout</button>
             <button class="bot-action" onclick="do_add()" style="display:none">add</button>
+            <label class="bot-move-toggle" for="move-mode-toggle">
+              <input type="checkbox" id="move-mode-toggle">
+              <span>move</span>
+            </label>
             <a class="bot-link-chip" href="/ctrl/">dashboard <span id="dashboard"></span></a>
             <a class="bot-link-chip" href="/queue/">queue <span id="queue"></span></a>
           </div>
@@ -1436,6 +1483,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Initialize as guest
         updateAdminUI();
     }
+
+    initializeMoveTargets();
+    bindMoveModeControls();
 });
 
 
@@ -1465,6 +1515,25 @@ var imgs = 0
 var currentPalette = []
 var workersRefreshTimer = null
 var backfillRefreshTimer = null
+var moveMode = false
+var selectedMoveElement = null
+var activeMoveDrag = null
+var MOVE_TARGET_SELECTOR = [
+    '#debug',
+    '.bot-side-column',
+    '#workers-panel',
+    '#backfill-panel',
+    '#log_url',
+    '#log_text',
+    '#log_phrases',
+    '#log_sub',
+    '#log_events',
+    '#log_headers',
+    '#log_screenshot',
+    '#log_palette',
+    '#log_urls',
+    '#log_words'
+].join(', ')
 
 function escapeHtml(value) {
     return String(value == null ? '' : value)
@@ -1473,6 +1542,187 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+function getOrCreateCodeElement(containerId) {
+    var container = document.getElementById(containerId);
+    if (!container) {
+        return null;
+    }
+    var codeElement = container.querySelector('code');
+    if (!codeElement) {
+        codeElement = document.createElement('code');
+        container.textContent = '';
+        container.appendChild(codeElement);
+    }
+    return codeElement;
+}
+
+function setCodeText(containerId, value) {
+    var codeElement = getOrCreateCodeElement(containerId);
+    if (!codeElement) {
+        return;
+    }
+    codeElement.textContent = String(value == null ? '' : value);
+}
+
+function initializeMoveTargets() {
+    document.querySelectorAll(MOVE_TARGET_SELECTOR).forEach(function(element) {
+        element.classList.add('bot-move-target');
+    });
+}
+
+function getMoveToggleElement() {
+    return document.getElementById('move-mode-toggle');
+}
+
+function setSelectedMoveElement(element) {
+    if (selectedMoveElement === element) {
+        return;
+    }
+    if (selectedMoveElement) {
+        selectedMoveElement.classList.remove('is-move-selected');
+    }
+    selectedMoveElement = element || null;
+    if (selectedMoveElement) {
+        selectedMoveElement.classList.add('is-move-selected');
+    }
+}
+
+function stopMoveDrag() {
+    if (!activeMoveDrag) {
+        return;
+    }
+    if (activeMoveDrag.element) {
+        activeMoveDrag.element.classList.remove('is-move-dragging');
+    }
+    activeMoveDrag = null;
+}
+
+function setMoveMode(enabled) {
+    moveMode = Boolean(enabled);
+    document.body.classList.toggle('is-move-mode', moveMode);
+    if (!moveMode) {
+        stopMoveDrag();
+        setSelectedMoveElement(null);
+    }
+    var toggle = getMoveToggleElement();
+    if (toggle && toggle.checked !== moveMode) {
+        toggle.checked = moveMode;
+    }
+}
+
+function getMoveTarget(startElement) {
+    if (!(startElement instanceof Element)) {
+        return null;
+    }
+    return startElement.closest(MOVE_TARGET_SELECTOR);
+}
+
+function normalizeMoveTargetPosition(element) {
+    var rect = element.getBoundingClientRect();
+    element.style.position = 'fixed';
+    element.style.left = rect.left + 'px';
+    element.style.top = rect.top + 'px';
+    element.style.right = 'auto';
+    element.style.bottom = 'auto';
+    element.style.transform = 'none';
+    element.style.margin = '0';
+    if (rect.width > 0) {
+        element.style.width = rect.width + 'px';
+    }
+}
+
+function beginMoveDrag(element, event) {
+    normalizeMoveTargetPosition(element);
+    setSelectedMoveElement(element);
+    var rect = element.getBoundingClientRect();
+    activeMoveDrag = {
+        element: element,
+        pointerId: typeof event.pointerId === 'number' ? event.pointerId : null,
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top
+    };
+    element.classList.add('is-move-dragging');
+}
+
+function updateMoveDragPosition(event) {
+    if (!activeMoveDrag) {
+        return;
+    }
+    if (activeMoveDrag.pointerId !== null && event.pointerId !== activeMoveDrag.pointerId) {
+        return;
+    }
+    var element = activeMoveDrag.element;
+    var maxLeft = Math.max(window.innerWidth - element.offsetWidth, 0);
+    var maxTop = Math.max(window.innerHeight - element.offsetHeight, 0);
+    var nextLeft = Math.min(Math.max(event.clientX - activeMoveDrag.offsetX, 0), maxLeft);
+    var nextTop = Math.min(Math.max(event.clientY - activeMoveDrag.offsetY, 0), maxTop);
+    element.style.left = nextLeft + 'px';
+    element.style.top = nextTop + 'px';
+}
+
+function bindMoveModeControls() {
+    var toggle = getMoveToggleElement();
+    if (toggle) {
+        toggle.addEventListener('change', function(event) {
+            setMoveMode(event.target.checked);
+        });
+    }
+
+    document.addEventListener('pointerdown', function(event) {
+        if (!moveMode) {
+            return;
+        }
+        if (event.button !== undefined && event.button !== 0) {
+            return;
+        }
+        if (event.target && event.target.closest('#move-mode-toggle')) {
+            return;
+        }
+        var target = getMoveTarget(event.target);
+        if (!target) {
+            setSelectedMoveElement(null);
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        beginMoveDrag(target, event);
+    }, true);
+
+    document.addEventListener('pointermove', function(event) {
+        if (!activeMoveDrag) {
+            return;
+        }
+        event.preventDefault();
+        updateMoveDragPosition(event);
+    }, { capture: true, passive: false });
+
+    function finishMoveDrag(event) {
+        if (!activeMoveDrag) {
+            return;
+        }
+        if (activeMoveDrag.pointerId !== null && event.pointerId !== activeMoveDrag.pointerId) {
+            return;
+        }
+        stopMoveDrag();
+    }
+
+    document.addEventListener('pointerup', finishMoveDrag, true);
+    document.addEventListener('pointercancel', finishMoveDrag, true);
+
+    document.addEventListener('click', function(event) {
+        if (!moveMode) {
+            return;
+        }
+        if (event.target && event.target.closest('#move-mode-toggle')) {
+            return;
+        }
+        if (getMoveTarget(event.target)) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    }, true);
 }
 
 function renderWorkers(payload) {
@@ -1652,15 +1902,33 @@ return length
     //
     //
     //
-    let log_sub_page = ""
+    const MAX_SUBLINK_LINES = 80;
+    const SUBLINK_RENDER_INTERVAL_MS = 120;
+    let log_sub_lines = []
+    let pendingSubRender = false;
     let last_sub_event_time = -1;
     let last_sub_event = "";
     var event_sub_time = (new Date).getTime()
+    function scheduleSubLinkRender() {
+        if (pendingSubRender) {
+            return;
+        }
+        pendingSubRender = true;
+        window.setTimeout(function() {
+            pendingSubRender = false;
+            setCodeText('log_sub', log_sub_lines.join("\n"));
+        }, SUBLINK_RENDER_INTERVAL_MS);
+    }
     socket.on('sublink', function(data) {        
-        log_sub_line = data['url']
-        log_sub_page = log_sub_line  + "\n" + log_sub_page 
-        log_sub_page.substring(0, 1024);
-        $('#log_sub').html("<code>" + log_sub_page + "</code>");
+        const log_sub_line = data['url']
+        if (!log_sub_line) {
+            return;
+        }
+        log_sub_lines.unshift(log_sub_line);
+        if (log_sub_lines.length > MAX_SUBLINK_LINES) {
+            log_sub_lines.length = MAX_SUBLINK_LINES;
+        }
+        scheduleSubLinkRender();
         //$('#log_text').html(counter);
         event_sub_time = (new Date).getTime()
     })
@@ -1671,6 +1939,8 @@ return length
         console.log("clear")
         url = ""
         text = ""    
+        log_sub_lines = []
+        setCodeText('log_sub', '')
         graph.removeAllNodes()
         graph.removeallLinks()
         const screenshotElement = document.getElementById('log_screenshot');
