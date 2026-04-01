@@ -265,6 +265,25 @@ services:
     networks:
       - app_network          
 
+  steps_service:
+    build: ./steps-service
+    container_name: steps_service
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8007
+    environment:
+      - STEPS_STORAGE_IDS_URL=http://storage_service:7781/get/ids
+      - STEPS_REFRESH_SECONDS=60
+      - STEPS_OUTPUT_DIR=/app/data
+    volumes:
+      - ./steps-service/:/app/
+      - ./steps-service/data:/app/data
+    ports:
+      - "8007:8007"
+    depends_on:
+      - storage_service
+    networks:
+      - app_network
+
 
   data_service:
     build: ./data-service

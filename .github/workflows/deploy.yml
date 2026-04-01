@@ -71,6 +71,7 @@ jobs:
             build_and_import keywords-service     keywords-service:latest
             build_and_import semantic-service      semantic-service:latest
             build_and_import storage-service       storage-service:latest
+            build_and_import steps-service         steps-service:latest
             build_and_import tags-service          tags-service:latest
             build_and_import bot-service           bot-service:latest
             build_and_import ip-service            ip-service:latest
@@ -97,6 +98,7 @@ jobs:
             restart_if_built keywords-service      keywords-service   && WAIT="$WAIT keywords-service"
             restart_if_built semantic-service       semantic-service   && WAIT="$WAIT semantic-service"
             restart_if_built storage-service        storage-service    && WAIT="$WAIT storage-service"
+            restart_if_built steps-service          steps-service      && WAIT="$WAIT steps-service"
             restart_if_built tags-service           tags-service       && WAIT="$WAIT tags-service"
             restart_if_built bot-service            bot-service        && WAIT="$WAIT bot-service"
             restart_if_built ip-service             ip-service         && WAIT="$WAIT ip-service"
