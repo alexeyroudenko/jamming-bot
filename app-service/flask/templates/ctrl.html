@@ -57,6 +57,10 @@
             <label for="do_screenshot">do_screenshot</label>
         </span>
         <span>
+            <input type="checkbox" id="do_image_analyze" name="do_image_analyze" {% if cfg.do_image_analyze == 1 %}checked{% endif %} />
+            <label for="do_image_analyze">do_image_analyze</label>
+        </span>
+        <span>
             <input type="checkbox" id="do_storage" name="do_storage" {% if cfg.do_storage == 1 %}checked{% endif %} />
             <label for="do_storage">do_storage</label>
         </span>
@@ -138,6 +142,11 @@
     const do_screenshot = document.querySelector("#do_screenshot");
     do_screenshot.addEventListener("input", (event) => {
         socket.emit('do_screenshot', (event.target.checked)?1.:0.);
+    });
+
+    const do_image_analyze = document.querySelector("#do_image_analyze");
+    do_image_analyze.addEventListener("input", (event) => {
+        socket.emit('do_image_analyze', (event.target.checked)?1.:0.);
     });
 
     const do_storage = document.querySelector("#do_storage");

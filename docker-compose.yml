@@ -78,6 +78,7 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=app-service
       - BOT_YAML_PATH=/app/bot_config/bot.yaml
+      - IMAGE_ANALYZE_SERVICE_URL=http://image_analyze_service:8006
     volumes:
       - type: bind
         source: ./app-service/flask
@@ -92,6 +93,7 @@ services:
       - redis
       - tags_service
       - jaeger
+      - image_analyze_service
     networks:
       - app_network
     deploy:
@@ -168,6 +170,23 @@ services:
         limits:
           cpus: '0.5'
           memory: 1024M
+
+  image_analyze_service:
+    build: ./image-analyze-service
+    container_name: image_analyze_service
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8006
+    restart: unless-stopped
+    volumes:
+      - ./image-analyze-service/:/app/
+    ports:
+      - 8006:8006
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
   # frontend: (disabled — ./frontend/ directory not present)
   #   build:
@@ -246,6 +265,25 @@ services:
     networks:
       - app_network          
 
+  steps_service:
+    build: ./steps-service
+    container_name: steps_service
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8007
+    environment:
+      - STEPS_STORAGE_IDS_URL=http://storage_service:7781/get/ids
+      - STEPS_REFRESH_SECONDS=60
+      - STEPS_OUTPUT_DIR=/app/data
+    volumes:
+      - ./steps-service/:/app/
+      - ./steps-service/data:/app/data
+    ports:
+      - "8007:8007"
+    depends_on:
+      - storage_service
+    networks:
+      - app_network
+
 
   data_service:
     build: ./data-service
@@ -302,6 +340,7 @@ services:
       - STORAGE_SERVICE_URL=http://storage_service:7781
       - IP_SERVICE_URL=http://ip_service:8004
       - RENDERER_SERVICE_URL=http://html-renderer-service:3000
+      - IMAGE_ANALYZE_SERVICE_URL=http://image_analyze_service:8006
       - OTEL_TRACING_ENABLED=${OTEL_TRACING_ENABLED:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=app-service-worker
@@ -315,6 +354,7 @@ services:
     depends_on:
       - redis
       - jaeger
+      - image_analyze_service
     networks:
       - app_network
     deploy:
@@ -338,6 +378,7 @@ services:
       - STORAGE_SERVICE_URL=http://storage_service:7781
       - IP_SERVICE_URL=http://ip_service:8004
       - RENDERER_SERVICE_URL=http://html-renderer-service:3000
+      - IMAGE_ANALYZE_SERVICE_URL=http://image_analyze_service:8006
       - OTEL_TRACING_ENABLED=${OTEL_TRACING_ENABLED:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=app-service-worker
@@ -351,6 +392,7 @@ services:
     depends_on:
       - redis
       - jaeger
+      - image_analyze_service
     networks:
       - app_network
     deploy:
@@ -375,6 +417,7 @@ services:
       - STORAGE_SERVICE_URL=http://storage_service:7781
       - IP_SERVICE_URL=http://ip_service:8004
       - RENDERER_SERVICE_URL=http://html-renderer-service:3000
+      - IMAGE_ANALYZE_SERVICE_URL=http://image_analyze_service:8006
       - OTEL_TRACING_ENABLED=${OTEL_TRACING_ENABLED:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=app-service-worker
@@ -388,6 +431,7 @@ services:
     depends_on:
       - redis
       - jaeger
+      - image_analyze_service
     networks:
       - app_network
     deploy:

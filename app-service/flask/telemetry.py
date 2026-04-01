@@ -103,6 +103,7 @@ _JOB_TYPE_MAP = {
     "do_geo": "geo",
     "analyze": "analyze",
     "do_screenshot": "screenshot",
+    "image_analyze": "image_analyze",
     "do_storage": "storage",
     "clean_tags": "clean_tags",
     "add_tags": "add_tags",

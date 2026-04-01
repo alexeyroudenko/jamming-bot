@@ -7,8 +7,10 @@ import logging
 import threading
 import tempfile
 import requests
+from datetime import datetime, timezone
 
 import yaml
+from rq import Worker
 
 from functools import wraps
 from flask import Flask, Response, Blueprint, jsonify, request, redirect, render_template, session, url_for
@@ -41,6 +43,7 @@ STORAGE_SERVICE_URL = os.getenv('STORAGE_SERVICE_URL', 'http://storage_service:7
 
 cfg = getConfig()
 redis = getRedis()
+BACKFILL_STATUS_KEY = os.getenv("BACKFILL_STATUS_KEY", "backfill:status")
 
 # ---------------------------------------------------------------------------
 # Sentry
@@ -232,6 +235,7 @@ PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
                    "/tags/", "/geo/", "/screenshots/", "/api/tags/get/", "/api/tags/combine/",
                    "/api/tags/sentiment-vortex/", "/api/tags/embeddings/", "/api/tags/add/",
                    "/api/step/", "/api/steps", "/api/storage_step/", "/api/storage_latest/",
+                   "/api/rq/workers/",
                    "/api/storage_ids/",
                    "/api/storage_geo/")
 
@@ -267,7 +271,7 @@ def _ctrl_log(action: str, source: str):
 def _ensure_redis_defaults():
     defaults = {'value': 0.5, 'do_pass': 0.5, 'do_geo': 0.5,
                 'do_save': 0.5, 'do_analyze': 0.5, 'do_screenshot': 0.5,
-                'do_storage': 0.5, 'sleep_time': 2.0}
+                'do_image_analyze': 1.0, 'do_storage': 0.5, 'sleep_time': 2.0}
     for key, default in defaults.items():
         if not redis.get(key):
             redis.set(key, default)
@@ -384,7 +388,12 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                 if not silent:
                     socketio.emit(event_name, job.result)
                 _save_to_step_hash(step_key, job.result)
-                _patch_storage(step_key, job.result)
+                if event_name == "image_analyzed":
+                    _store_step_analysis(step_key, job.result)
+                else:
+                    _patch_storage(step_key, job.result)
+                if event_name == "screenshot":
+                    _enqueue_image_analysis_followup(step_key, job.result, silent=silent)
                 return
             if job.is_failed:
                 logger.warning(f"Job {job.id} failed for event {event_name}")
@@ -410,6 +419,85 @@ def _read_step_hash(step_key):
     return result
 
 
+def _read_backfill_status():
+    status = {
+        "exists": False,
+        "state": "idle",
+        "started_at": "",
+        "finished_at": "",
+        "current_page": 0,
+        "total_pages": 0,
+        "processed": 0,
+        "skipped": 0,
+        "last_id": "",
+        "last_url": "",
+        "last_error": "",
+        "updated_at": "",
+    }
+    try:
+        raw = _read_step_hash(BACKFILL_STATUS_KEY)
+    except Exception as exc:
+        logger.warning("_read_backfill_status: %s", exc)
+        status["error"] = str(exc)
+        return status
+
+    if not raw:
+        return status
+
+    status["exists"] = True
+    for key in ("state", "started_at", "finished_at", "last_id", "last_url", "last_error", "updated_at"):
+        if key in raw and raw[key] is not None:
+            status[key] = str(raw[key])
+    for key in ("current_page", "total_pages", "processed", "skipped"):
+        try:
+            status[key] = int(float(raw.get(key) or 0))
+        except (ValueError, TypeError):
+            status[key] = 0
+    return status
+
+
+def _format_worker_heartbeat_age(last_heartbeat):
+    if not last_heartbeat:
+        return None
+    if getattr(last_heartbeat, "tzinfo", None) is None:
+        last_heartbeat = last_heartbeat.replace(tzinfo=timezone.utc)
+    delta = max(0, int((datetime.now(timezone.utc) - last_heartbeat).total_seconds()))
+    if delta < 60:
+        return f"{delta}s"
+    if delta < 3600:
+        return f"{delta // 60}m"
+    return f"{delta // 3600}h"
+
+
+def _get_rq_workers_snapshot():
+    workers = []
+    raw_workers = Worker.all(connection=redis_connection)
+    for worker in raw_workers:
+        queues = []
+        try:
+            queues = [q.name for q in (worker.queues or [])]
+        except Exception:
+            queues = []
+        current_job = None
+        try:
+            job = worker.get_current_job()
+            current_job = job.id if job else None
+        except Exception:
+            current_job = None
+        last_heartbeat = getattr(worker, "last_heartbeat", None)
+        workers.append({
+            "name": worker.name,
+            "state": getattr(worker, "state", "unknown"),
+            "queues": queues,
+            "current_job_id": current_job,
+            "last_heartbeat": last_heartbeat.isoformat() if last_heartbeat else None,
+            "heartbeat_age": _format_worker_heartbeat_age(last_heartbeat),
+            "is_busy": bool(current_job) or getattr(worker, "state", "") == "busy",
+        })
+    workers.sort(key=lambda item: (not item["is_busy"], item["name"]))
+    return workers
+
+
 def _patch_storage(step_key, data):
     """Send incremental update to storage-service via PATCH."""
     number = step_key.split(":")[-1] if step_key else None
@@ -423,6 +511,48 @@ def _patch_storage(step_key, data):
         )
     except Exception as e:
         logger.warning(f"_patch_storage({number}): {e}")
+
+
+def _store_step_analysis(step_key, data):
+    number = step_key.split(":")[-1] if step_key else None
+    palette = data.get("palette") if isinstance(data, dict) else None
+    if not number or not isinstance(palette, list):
+        return
+    try:
+        requests.post(
+            f"{STORAGE_SERVICE_URL}/analysis/store",
+            json={"step_number": str(number), "palette": palette},
+            timeout=5,
+        )
+    except Exception as e:
+        logger.warning(f"_store_step_analysis({number}): {e}")
+
+
+def _enqueue_image_analysis_followup(step_key, screenshot_result, silent=False):
+    if float(redis.get("do_image_analyze") or 0) != 1.0:
+        return
+    screenshot_url = (screenshot_result or {}).get("screenshot_url")
+    if not screenshot_url:
+        return
+    merged = _read_step_hash(step_key)
+    payload = {
+        "step": merged.get("number") or merged.get("step") or (screenshot_result or {}).get("step"),
+        "number": merged.get("number") or (screenshot_result or {}).get("step"),
+        "url": merged.get("url") or (screenshot_result or {}).get("url", ""),
+        "screenshot_url": screenshot_url,
+    }
+    try:
+        job = enqueue_with_trace(
+            queue,
+            redis_connection,
+            jobs.image_analyze,
+            payload,
+            timeout=120,
+            result_ttl=270,
+        )
+        _poll_job_and_emit(job, "image_analyzed", timeout=120, step_key=step_key, silent=silent)
+    except Exception as e:
+        logger.warning(f"_enqueue_image_analysis_followup({step_key}): {e}")
 
 
 def _tags_response_json(r):
@@ -487,6 +617,34 @@ def bot():
 @app.route('/status')
 def status():
     return jsonify({"status": "ok"})
+
+
+@app.route("/api/rq/workers/", methods=["GET"])
+def rq_workers():
+    try:
+        workers = _get_rq_workers_snapshot()
+        return jsonify({
+            "workers": workers,
+            "count": len(workers),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "error": None,
+        })
+    except Exception as e:
+        logger.warning("rq workers unavailable: %s", e)
+        return jsonify({
+            "workers": [],
+            "count": 0,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "error": str(e),
+        }), 503
+
+
+@app.route("/api/backfill/status/", methods=["GET"])
+def backfill_status():
+    payload = _read_backfill_status()
+    if "error" not in payload:
+        payload["error"] = None
+    return jsonify(payload)
 
 
 @app.route('/screenshots/')
@@ -1476,6 +1634,10 @@ def handle_do_analyze(value):
 @socketio.on('do_screenshot')
 def handle_do_screenshot(value):
     redis.set('do_screenshot', float(value))
+
+@socketio.on('do_image_analyze')
+def handle_do_image_analyze(value):
+    redis.set('do_image_analyze', float(value))
 
 @socketio.on('do_storage')
 def handle_do_storage(value):

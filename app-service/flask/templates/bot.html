@@ -215,10 +215,8 @@ body, html, button {
     left: 24px;
     z-index: 100;
     width: min(560px, calc(100vw - 48px));
-    height: calc(100vh - 260px);
+    height: 50%;
     padding: 16px;
-    background: rgba(5, 7, 10, 0.62);
-    box-shadow: var(--bot-shadow);
     color: #cbd5e1;
     overflow: hidden;
     opacity: 1;
@@ -228,7 +226,7 @@ body, html, button {
     user-select: all;
     font-size: 13px;
     line-height: 1.55;
-    display: none;
+    display: block;
 }
 
 code {
@@ -324,6 +322,44 @@ code {
     white-space: pre-wrap;
     overflow: hidden;
 }    
+
+#log_screenshot {
+    position: absolute;
+    top: 148px;
+    right: 320px;
+    z-index: 115;
+    width: 90px;
+    height: 160px;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+#log_screenshot img {
+    display: block;
+    width: 90px;
+    height: 160px;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: var(--bot-shadow);
+}
+
+#log_palette {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 120;
+    width: 32px;
+    height: 224px;
+    overflow: hidden;
+    box-shadow: var(--bot-shadow);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.palette-stripe {
+    width: 32px;
+    height: 32px;
+}
 
 #nodes{
     position:absolute;
@@ -532,6 +568,49 @@ button {
     border-color: transparent;
 }
 
+.bot-move-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 18px;
+    padding: 2px 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1;
+    color: var(--bot-text);
+    cursor: pointer;
+    opacity: 0.5;
+    user-select: none;
+}
+
+.bot-move-toggle:hover {
+    opacity: 1;
+}
+
+.bot-move-toggle input {
+    margin: 0;
+    accent-color: var(--bot-accent);
+}
+
+body.is-move-mode {
+    cursor: crosshair;
+}
+
+body.is-move-mode .bot-move-target {
+    touch-action: none;
+}
+
+body.is-move-mode .bot-move-target:hover {
+    outline: 1px dashed rgba(255, 0, 0, 0.45);
+    outline-offset: 2px;
+}
+
+body.is-move-mode .bot-move-target.is-move-selected {
+    outline: 1px solid rgba(255, 0, 0, 0.95);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 1px rgba(255, 0, 0, 0.18);
+}
+
 .bot-link-chip span,
 .bot-login-link span,
 .bot-metric-value {
@@ -605,6 +684,162 @@ button {
 
 .bot-admin-panel .bot-section-label {
     margin-right: 2px;
+}
+
+.bot-workers-panel {
+    position: fixed;
+    left: 50%;
+    bottom: 120px;
+    transform: translateX(-50%);
+    z-index: 205;
+    width: min(640px, calc(100vw - 320px));
+    max-height: 180px;
+    padding: 10px 12px;
+    background: rgba(5, 7, 10, 0.76);
+    border: 1px solid var(--bot-border);
+    box-shadow: var(--bot-shadow);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+}
+
+.bot-backfill-panel {
+    position: fixed;
+    left: 50%;
+    bottom: 212px;
+    transform: translateX(-50%);
+    z-index: 204;
+    width: min(960px, calc(100vw - 240px));
+    padding: 10px 12px;
+    background: rgba(5, 7, 10, 0.76);
+    border: 1px solid var(--bot-border);
+    box-shadow: var(--bot-shadow);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+}
+
+.bot-workers-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.bot-workers-meta {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: var(--bot-muted);
+}
+
+.bot-backfill-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px 10px;
+    margin-bottom: 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+}
+
+.bot-backfill-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.bot-backfill-label {
+    color: var(--bot-muted);
+    font-size: 10px;
+    text-transform: uppercase;
+}
+
+.bot-backfill-value {
+    color: var(--bot-text);
+    min-height: 16px;
+}
+
+.bot-backfill-value.is-running {
+    color: #fca5a5;
+}
+
+.bot-backfill-value.is-finished {
+    color: #bbf7d0;
+}
+
+.bot-backfill-value.is-failed {
+    color: #fca5a5;
+}
+
+.bot-backfill-detail {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: var(--bot-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bot-workers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 126px;
+    overflow-y: auto;
+}
+
+.bot-workers-row,
+.bot-workers-empty {
+    display: grid;
+    grid-template-columns: minmax(130px, 1.4fr) minmax(64px, 0.7fr) minmax(130px, 1.2fr) minmax(110px, 1fr) minmax(56px, 0.5fr);
+    gap: 8px;
+    align-items: center;
+    padding: 4px 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.25;
+}
+
+.bot-workers-empty {
+    grid-template-columns: 1fr;
+    color: var(--bot-muted);
+}
+
+.bot-workers-name,
+.bot-workers-queues,
+.bot-workers-job {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bot-workers-state {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    color: var(--bot-text);
+}
+
+.bot-workers-state::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    margin-right: 6px;
+    border-radius: 999px;
+    background: var(--bot-muted);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+}
+
+.bot-workers-row.is-busy .bot-workers-state::before {
+    background: var(--bot-accent);
+    box-shadow: 0 0 12px rgba(255, 0, 0, 0.55);
+}
+
+.bot-workers-row.is-idle .bot-workers-state::before {
+    background: #6b7280;
+}
+
+.bot-workers-age {
+    color: var(--bot-muted);
+    text-align: right;
 }
 
 button.bot-action {
@@ -757,6 +992,41 @@ body.is-admin .guest-only {
         white-space: normal;
     }
 
+    .bot-workers-panel {
+        left: 10px;
+        right: 10px;
+        bottom: 150px;
+        transform: none;
+        width: auto;
+        max-height: 160px;
+    }
+
+    .bot-backfill-panel {
+        left: 10px;
+        right: 10px;
+        bottom: 244px;
+        transform: none;
+        width: auto;
+    }
+
+    .bot-backfill-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .bot-workers-row,
+    .bot-workers-empty {
+        grid-template-columns: minmax(90px, 1fr) minmax(56px, 0.7fr) minmax(88px, 1fr);
+    }
+
+    .bot-workers-job,
+    .bot-workers-queues {
+        display: none;
+    }
+
+    .bot-workers-age {
+        text-align: left;
+    }
+
     .bot-status-grid,
     .bot-admin-grid,
     .bot-dev-links {
@@ -827,6 +1097,16 @@ body.is-admin .guest-only {
         /* background-color: rgba(0, 0, 0, 0.8); */
         color: #fff !important;
         opacity: .3 !important;
+    }
+
+    #log_screenshot {
+        top: 96px;
+        right: 10px;
+    }
+
+    #log_palette {
+        right: 10px;
+        bottom: 10px;
     }
     
     /* iPhone 14 Pro Max specific (430x932) */
@@ -996,6 +1276,10 @@ body.is-admin .guest-only {
             <button class="bot-action" onclick="restart()">restart</button>
             <button class="bot-action bot-action-danger" onclick="handleLogout()">logout</button>
             <button class="bot-action" onclick="do_add()" style="display:none">add</button>
+            <label class="bot-move-toggle" for="move-mode-toggle">
+              <input type="checkbox" id="move-mode-toggle">
+              <span>move</span>
+            </label>
             <a class="bot-link-chip" href="/ctrl/">dashboard <span id="dashboard"></span></a>
             <a class="bot-link-chip" href="/queue/">queue <span id="queue"></span></a>
           </div>
@@ -1008,6 +1292,45 @@ body.is-admin .guest-only {
           </div>
         </section>
       </div>
+
+      <section id="workers-panel" class="bot-panel bot-workers-panel admin-only" aria-live="polite">
+        <div class="bot-workers-head">
+          <span class="bot-section-label">Workers</span>
+          <span id="workers-meta" class="bot-workers-meta">loading</span>
+        </div>
+        <div id="workers-list" class="bot-workers-list">
+          <div class="bot-workers-empty">Loading workers...</div>
+        </div>
+      </section>
+      <section id="backfill-panel" class="bot-panel bot-backfill-panel admin-only" aria-live="polite">
+        <div class="bot-workers-head">
+          <span class="bot-section-label">Backfill worker</span>
+          <span id="backfill-meta" class="bot-workers-meta">loading</span>
+        </div>
+        <div class="bot-backfill-grid">
+          <div class="bot-backfill-item">
+            <span class="bot-backfill-label">State</span>
+            <span id="backfill-state" class="bot-backfill-value">idle</span>
+          </div>
+          <div class="bot-backfill-item">
+            <span class="bot-backfill-label">Step</span>
+            <span id="backfill-step" class="bot-backfill-value">—</span>
+          </div>
+          <div class="bot-backfill-item">
+            <span class="bot-backfill-label">Page</span>
+            <span id="backfill-page" class="bot-backfill-value">0 / 0</span>
+          </div>
+          <div class="bot-backfill-item">
+            <span class="bot-backfill-label">Processed</span>
+            <span id="backfill-processed" class="bot-backfill-value">0</span>
+          </div>
+          <div class="bot-backfill-item">
+            <span class="bot-backfill-label">Skipped</span>
+            <span id="backfill-skipped" class="bot-backfill-value">0</span>
+          </div>
+        </div>
+        <div id="backfill-detail" class="bot-backfill-detail">No data yet</div>
+      </section>
     </div>
   </div>
 
@@ -1021,6 +1344,8 @@ body.is-admin .guest-only {
     <div id="log_sub" class="text"></div> 
     <div id="log_events" class="text"></div> 
     <div id="log_headers" class="text"></div>  
+    <div id="log_screenshot" class="text"></div>
+    <div id="log_palette" class="text"></div>
     <div id="log_urls" class="text"></div>  
     <div id="log_words" class="text"></div> 
 
@@ -1125,6 +1450,8 @@ function updateAdminUI() {
     if (loginBadge) {
         loginBadge.textContent = admin ? 'admin' : 'guest';
     }
+    syncWorkersPolling();
+    syncBackfillPolling();
 }
 
 // Allow login with Enter key
@@ -1156,6 +1483,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Initialize as guest
         updateAdminUI();
     }
+
+    initializeMoveTargets();
+    bindMoveModeControls();
 });
 
 
@@ -1182,6 +1512,344 @@ height = 600
 var counter = 0
 var tag = 0
 var imgs = 0
+var currentPalette = []
+var workersRefreshTimer = null
+var backfillRefreshTimer = null
+var moveMode = false
+var selectedMoveElement = null
+var activeMoveDrag = null
+var MOVE_TARGET_SELECTOR = [
+    '#debug',
+    '.bot-side-column',
+    '#workers-panel',
+    '#backfill-panel',
+    '#log_url',
+    '#log_text',
+    '#log_phrases',
+    '#log_sub',
+    '#log_events',
+    '#log_headers',
+    '#log_screenshot',
+    '#log_palette',
+    '#log_urls',
+    '#log_words'
+].join(', ')
+
+function escapeHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function getOrCreateCodeElement(containerId) {
+    var container = document.getElementById(containerId);
+    if (!container) {
+        return null;
+    }
+    var codeElement = container.querySelector('code');
+    if (!codeElement) {
+        codeElement = document.createElement('code');
+        container.textContent = '';
+        container.appendChild(codeElement);
+    }
+    return codeElement;
+}
+
+function setCodeText(containerId, value) {
+    var codeElement = getOrCreateCodeElement(containerId);
+    if (!codeElement) {
+        return;
+    }
+    codeElement.textContent = String(value == null ? '' : value);
+}
+
+function initializeMoveTargets() {
+    document.querySelectorAll(MOVE_TARGET_SELECTOR).forEach(function(element) {
+        element.classList.add('bot-move-target');
+    });
+}
+
+function getMoveToggleElement() {
+    return document.getElementById('move-mode-toggle');
+}
+
+function setSelectedMoveElement(element) {
+    if (selectedMoveElement === element) {
+        return;
+    }
+    if (selectedMoveElement) {
+        selectedMoveElement.classList.remove('is-move-selected');
+    }
+    selectedMoveElement = element || null;
+    if (selectedMoveElement) {
+        selectedMoveElement.classList.add('is-move-selected');
+    }
+}
+
+function stopMoveDrag() {
+    if (!activeMoveDrag) {
+        return;
+    }
+    if (activeMoveDrag.element) {
+        activeMoveDrag.element.classList.remove('is-move-dragging');
+    }
+    activeMoveDrag = null;
+}
+
+function setMoveMode(enabled) {
+    moveMode = Boolean(enabled);
+    document.body.classList.toggle('is-move-mode', moveMode);
+    if (!moveMode) {
+        stopMoveDrag();
+        setSelectedMoveElement(null);
+    }
+    var toggle = getMoveToggleElement();
+    if (toggle && toggle.checked !== moveMode) {
+        toggle.checked = moveMode;
+    }
+}
+
+function getMoveTarget(startElement) {
+    if (!(startElement instanceof Element)) {
+        return null;
+    }
+    return startElement.closest(MOVE_TARGET_SELECTOR);
+}
+
+function normalizeMoveTargetPosition(element) {
+    var rect = element.getBoundingClientRect();
+    element.style.position = 'fixed';
+    element.style.left = rect.left + 'px';
+    element.style.top = rect.top + 'px';
+    element.style.right = 'auto';
+    element.style.bottom = 'auto';
+    element.style.transform = 'none';
+    element.style.margin = '0';
+    if (rect.width > 0) {
+        element.style.width = rect.width + 'px';
+    }
+}
+
+function beginMoveDrag(element, event) {
+    normalizeMoveTargetPosition(element);
+    setSelectedMoveElement(element);
+    var rect = element.getBoundingClientRect();
+    activeMoveDrag = {
+        element: element,
+        pointerId: typeof event.pointerId === 'number' ? event.pointerId : null,
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top
+    };
+    element.classList.add('is-move-dragging');
+}
+
+function updateMoveDragPosition(event) {
+    if (!activeMoveDrag) {
+        return;
+    }
+    if (activeMoveDrag.pointerId !== null && event.pointerId !== activeMoveDrag.pointerId) {
+        return;
+    }
+    var element = activeMoveDrag.element;
+    var maxLeft = Math.max(window.innerWidth - element.offsetWidth, 0);
+    var maxTop = Math.max(window.innerHeight - element.offsetHeight, 0);
+    var nextLeft = Math.min(Math.max(event.clientX - activeMoveDrag.offsetX, 0), maxLeft);
+    var nextTop = Math.min(Math.max(event.clientY - activeMoveDrag.offsetY, 0), maxTop);
+    element.style.left = nextLeft + 'px';
+    element.style.top = nextTop + 'px';
+}
+
+function bindMoveModeControls() {
+    var toggle = getMoveToggleElement();
+    if (toggle) {
+        toggle.addEventListener('change', function(event) {
+            setMoveMode(event.target.checked);
+        });
+    }
+
+    document.addEventListener('pointerdown', function(event) {
+        if (!moveMode) {
+            return;
+        }
+        if (event.button !== undefined && event.button !== 0) {
+            return;
+        }
+        if (event.target && event.target.closest('#move-mode-toggle')) {
+            return;
+        }
+        var target = getMoveTarget(event.target);
+        if (!target) {
+            setSelectedMoveElement(null);
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        beginMoveDrag(target, event);
+    }, true);
+
+    document.addEventListener('pointermove', function(event) {
+        if (!activeMoveDrag) {
+            return;
+        }
+        event.preventDefault();
+        updateMoveDragPosition(event);
+    }, { capture: true, passive: false });
+
+    function finishMoveDrag(event) {
+        if (!activeMoveDrag) {
+            return;
+        }
+        if (activeMoveDrag.pointerId !== null && event.pointerId !== activeMoveDrag.pointerId) {
+            return;
+        }
+        stopMoveDrag();
+    }
+
+    document.addEventListener('pointerup', finishMoveDrag, true);
+    document.addEventListener('pointercancel', finishMoveDrag, true);
+
+    document.addEventListener('click', function(event) {
+        if (!moveMode) {
+            return;
+        }
+        if (event.target && event.target.closest('#move-mode-toggle')) {
+            return;
+        }
+        if (getMoveTarget(event.target)) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    }, true);
+}
+
+function renderWorkers(payload) {
+    const listEl = document.getElementById('workers-list');
+    const metaEl = document.getElementById('workers-meta');
+    if (!listEl || !metaEl) return;
+
+    if (!payload) {
+        metaEl.textContent = 'unavailable';
+        listEl.innerHTML = '<div class="bot-workers-empty">Workers unavailable</div>';
+        return;
+    }
+
+    const workers = Array.isArray(payload.workers) ? payload.workers : [];
+    const error = payload.error || null;
+    metaEl.textContent = error ? 'error' : (workers.length ? workers.length + ' online' : '0 online');
+
+    if (error) {
+        listEl.innerHTML = '<div class="bot-workers-empty">RQ unavailable: ' + error + '</div>';
+        return;
+    }
+
+    if (!workers.length) {
+        listEl.innerHTML = '<div class="bot-workers-empty">No active workers</div>';
+        return;
+    }
+
+    listEl.innerHTML = workers.map(function(worker) {
+        const workerName = escapeHtml(worker.name || 'worker');
+        const state = escapeHtml(worker.state || 'unknown');
+        const stateClass = worker.is_busy ? 'is-busy' : 'is-idle';
+        const currentJob = escapeHtml(worker.current_job_id || '—');
+        const queues = escapeHtml(Array.isArray(worker.queues) && worker.queues.length ? worker.queues.join(', ') : 'default');
+        const heartbeat = escapeHtml(worker.heartbeat_age || '—');
+        return [
+            '<div class="bot-workers-row ' + stateClass + '">',
+            '<span class="bot-workers-name" title="' + workerName + '">' + workerName + '</span>',
+            '<span class="bot-workers-state">' + state + '</span>',
+            '<span class="bot-workers-job" title="' + currentJob + '">' + currentJob + '</span>',
+            '<span class="bot-workers-queues" title="' + queues + '">' + queues + '</span>',
+            '<span class="bot-workers-age">' + heartbeat + '</span>',
+            '</div>'
+        ].join('');
+    }).join('');
+}
+
+function renderBackfill(payload) {
+    const metaEl = document.getElementById('backfill-meta');
+    const stateEl = document.getElementById('backfill-state');
+    const stepEl = document.getElementById('backfill-step');
+    const pageEl = document.getElementById('backfill-page');
+    const processedEl = document.getElementById('backfill-processed');
+    const skippedEl = document.getElementById('backfill-skipped');
+    const detailEl = document.getElementById('backfill-detail');
+    if (!metaEl || !stateEl || !stepEl || !pageEl || !processedEl || !skippedEl || !detailEl) return;
+
+    const data = payload || {};
+    const state = String(data.state || 'idle');
+    const stepNumber = data.last_id ? String(data.last_id) : '—';
+    const currentPage = Number(data.current_page || 0);
+    const totalPages = Number(data.total_pages || 0);
+    const processed = Number(data.processed || 0);
+    const skipped = Number(data.skipped || 0);
+    const lastUrl = data.last_url ? escapeHtml(data.last_url) : '—';
+    const lastError = data.last_error ? escapeHtml(data.last_error) : '';
+    const updatedAt = data.updated_at ? escapeHtml(data.updated_at) : 'no data';
+
+    metaEl.textContent = data.error ? 'error' : (data.exists ? updatedAt : 'idle');
+    stateEl.textContent = state;
+    stateEl.className = 'bot-backfill-value is-' + state;
+    stepEl.textContent = stepNumber;
+    pageEl.textContent = currentPage + ' / ' + totalPages;
+    processedEl.textContent = String(processed);
+    skippedEl.textContent = String(skipped);
+
+    if (data.error) {
+        detailEl.textContent = 'Status unavailable: ' + data.error;
+        return;
+    }
+    if (!data.exists) {
+        detailEl.textContent = 'No data yet';
+        return;
+    }
+    detailEl.innerHTML = lastError ? ('Last error: ' + lastError) : ('Last URL: ' + lastUrl);
+}
+
+async function refreshWorkers() {
+    if (!admin) return;
+    try {
+        const response = await fetch('/api/rq/workers/', { cache: 'no-store', credentials: 'same-origin' });
+        const payload = await response.json();
+        renderWorkers(payload);
+    } catch (error) {
+        renderWorkers({ workers: [], error: 'fetch failed' });
+    }
+}
+
+function syncWorkersPolling() {
+    if (workersRefreshTimer) {
+        clearInterval(workersRefreshTimer);
+        workersRefreshTimer = null;
+    }
+    if (!admin) return;
+    refreshWorkers();
+    workersRefreshTimer = setInterval(refreshWorkers, 8000);
+}
+
+async function refreshBackfill() {
+    if (!admin) return;
+    try {
+        const response = await fetch('/api/backfill/status/', { cache: 'no-store', credentials: 'same-origin' });
+        const payload = await response.json();
+        renderBackfill(payload);
+    } catch (error) {
+        renderBackfill({ error: 'fetch failed', exists: false, state: 'idle' });
+    }
+}
+
+function syncBackfillPolling() {
+    if (backfillRefreshTimer) {
+        clearInterval(backfillRefreshTimer);
+        backfillRefreshTimer = null;
+    }
+    if (!admin) return;
+    refreshBackfill();
+    backfillRefreshTimer = setInterval(refreshBackfill, 8000);
+}
 
 var start_time = (new Date).getTime()   
 socket.on('connect', function() {  
@@ -1223,7 +1891,6 @@ return length
         log_line = data['event'] + " - " + deltaTime
         log_page = log_page + "\n" + log_line
         $('#log_events').html("<code>" + log_page + "</code>");
-        $('#log_text').html(counter);
         event_time = (new Date).getTime()
     })
 
@@ -1235,15 +1902,33 @@ return length
     //
     //
     //
-    let log_sub_page = ""
+    const MAX_SUBLINK_LINES = 80;
+    const SUBLINK_RENDER_INTERVAL_MS = 120;
+    let log_sub_lines = []
+    let pendingSubRender = false;
     let last_sub_event_time = -1;
     let last_sub_event = "";
     var event_sub_time = (new Date).getTime()
+    function scheduleSubLinkRender() {
+        if (pendingSubRender) {
+            return;
+        }
+        pendingSubRender = true;
+        window.setTimeout(function() {
+            pendingSubRender = false;
+            setCodeText('log_sub', log_sub_lines.join("\n"));
+        }, SUBLINK_RENDER_INTERVAL_MS);
+    }
     socket.on('sublink', function(data) {        
-        log_sub_line = data['url']
-        log_sub_page = log_sub_line  + "\n" + log_sub_page 
-        log_sub_page.substring(0, 1024);
-        $('#log_sub').html("<code>" + log_sub_page + "</code>");
+        const log_sub_line = data['url']
+        if (!log_sub_line) {
+            return;
+        }
+        log_sub_lines.unshift(log_sub_line);
+        if (log_sub_lines.length > MAX_SUBLINK_LINES) {
+            log_sub_lines.length = MAX_SUBLINK_LINES;
+        }
+        scheduleSubLinkRender();
         //$('#log_text').html(counter);
         event_sub_time = (new Date).getTime()
     })
@@ -1254,8 +1939,15 @@ return length
         console.log("clear")
         url = ""
         text = ""    
+        log_sub_lines = []
+        setCodeText('log_sub', '')
         graph.removeAllNodes()
         graph.removeallLinks()
+        const screenshotElement = document.getElementById('log_screenshot');
+        if (screenshotElement) {
+            screenshotElement.innerHTML = "";
+        }
+        renderPalette([]);
     })
 
 
@@ -1360,6 +2052,9 @@ return length
         if (phrasesElement) {
             phrasesElement.innerHTML = "<code></code>";
         }
+        if (Array.isArray(data.palette)) {
+            renderPalette(data.palette);
+        }
 
         // Animate log_headers letter by letter
         let headersText = data['headers'] || '';
@@ -1390,6 +2085,44 @@ return length
 
 
     }); // socket on step
+
+    socket.on('screenshot', function(data) {
+        if (!data || !data.screenshot_url) return;
+
+        const shotWidth = 90;
+        const shotHeight = 160;
+        const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+        const maxLeft = Math.max(0, viewportWidth - shotWidth);
+        const maxTop = Math.max(0, viewportHeight - shotHeight);
+        const left = Math.random() * maxLeft;
+        const top = Math.random() * maxTop;
+        const screenshotElement = document.getElementById('log_screenshot');
+        if (!screenshotElement) return;
+
+        screenshotElement.style.left = left + 'px';
+        screenshotElement.style.top = top + 'px';
+        screenshotElement.style.right = 'auto';
+        screenshotElement.innerHTML = "<img src=\"" + data.screenshot_url + "\" alt=\"step screenshot\">";
+    });
+
+    function renderPalette(palette) {
+        currentPalette = Array.isArray(palette) ? palette.slice(0, 7) : [];
+        const paletteElement = document.getElementById('log_palette');
+        if (!paletteElement) return;
+        if (!currentPalette.length) {
+            paletteElement.innerHTML = '';
+            return;
+        }
+        paletteElement.innerHTML = currentPalette.map(function(color) {
+            return '<div class="palette-stripe" style="background:' + color + '"></div>';
+        }).join('');
+    }
+
+    socket.on('image_analyzed', function(data) {
+        if (!data || !Array.isArray(data.palette)) return;
+        renderPalette(data.palette);
+    });
 
 
 
