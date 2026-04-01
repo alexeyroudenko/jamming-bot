@@ -215,10 +215,8 @@ body, html, button {
     left: 24px;
     z-index: 100;
     width: min(560px, calc(100vw - 48px));
-    height: calc(100vh - 260px);
+    height: 50%;
     padding: 16px;
-    background: rgba(5, 7, 10, 0.62);
-    box-shadow: var(--bot-shadow);
     color: #cbd5e1;
     overflow: hidden;
     opacity: 1;
@@ -648,7 +646,7 @@ button {
 .bot-workers-panel {
     position: fixed;
     left: 50%;
-    bottom: 20px;
+    bottom: 120px;
     transform: translateX(-50%);
     z-index: 205;
     width: min(640px, calc(100vw - 320px));
@@ -667,7 +665,7 @@ button {
     bottom: 212px;
     transform: translateX(-50%);
     z-index: 204;
-    width: min(640px, calc(100vw - 320px));
+    width: min(960px, calc(100vw - 240px));
     padding: 10px 12px;
     background: rgba(5, 7, 10, 0.76);
     border: 1px solid var(--bot-border);
@@ -692,7 +690,7 @@ button {
 
 .bot-backfill-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 6px 10px;
     margin-bottom: 8px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -954,7 +952,7 @@ body.is-admin .guest-only {
     .bot-workers-panel {
         left: 10px;
         right: 10px;
-        bottom: 72px;
+        bottom: 150px;
         transform: none;
         width: auto;
         max-height: 160px;
@@ -1268,6 +1266,10 @@ body.is-admin .guest-only {
             <span id="backfill-state" class="bot-backfill-value">idle</span>
           </div>
           <div class="bot-backfill-item">
+            <span class="bot-backfill-label">Step</span>
+            <span id="backfill-step" class="bot-backfill-value">—</span>
+          </div>
+          <div class="bot-backfill-item">
             <span class="bot-backfill-label">Page</span>
             <span id="backfill-page" class="bot-backfill-value">0 / 0</span>
           </div>
@@ -1520,14 +1522,16 @@ function renderWorkers(payload) {
 function renderBackfill(payload) {
     const metaEl = document.getElementById('backfill-meta');
     const stateEl = document.getElementById('backfill-state');
+    const stepEl = document.getElementById('backfill-step');
     const pageEl = document.getElementById('backfill-page');
     const processedEl = document.getElementById('backfill-processed');
     const skippedEl = document.getElementById('backfill-skipped');
     const detailEl = document.getElementById('backfill-detail');
-    if (!metaEl || !stateEl || !pageEl || !processedEl || !skippedEl || !detailEl) return;
+    if (!metaEl || !stateEl || !stepEl || !pageEl || !processedEl || !skippedEl || !detailEl) return;
 
     const data = payload || {};
     const state = String(data.state || 'idle');
+    const stepNumber = data.last_id ? String(data.last_id) : '—';
     const currentPage = Number(data.current_page || 0);
     const totalPages = Number(data.total_pages || 0);
     const processed = Number(data.processed || 0);
@@ -1539,6 +1543,7 @@ function renderBackfill(payload) {
     metaEl.textContent = data.error ? 'error' : (data.exists ? updatedAt : 'idle');
     stateEl.textContent = state;
     stateEl.className = 'bot-backfill-value is-' + state;
+    stepEl.textContent = stepNumber;
     pageEl.textContent = currentPage + ' / ' + totalPages;
     processedEl.textContent = String(processed);
     skippedEl.textContent = String(skipped);
