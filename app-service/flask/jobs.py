@@ -24,6 +24,7 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 TAGS_SERVICE_URL = os.getenv('TAGS_SERVICE_URL', 'http://tags_service:8000')
 SEMANTIC_SERVICE_URL = os.getenv('SEMANTIC_SERVICE_URL', 'http://semantic_service:8005')
 STORAGE_SERVICE_URL = os.getenv('STORAGE_SERVICE_URL', 'http://storage_service:7781')
+IMAGE_ANALYZE_SERVICE_URL = os.getenv('IMAGE_ANALYZE_SERVICE_URL', 'http://image-analyze-service:8006')
 IP_SERVICE_URL = os.getenv('IP_SERVICE_URL', 'http://bots.arthew0.online:8004')
 RENDERER_SERVICE_URL = os.getenv('RENDERER_SERVICE_URL', 'http://html-renderer-service:3000')
 SCREENSHOT_RENDER_RETRIES = int(os.getenv('SCREENSHOT_RENDER_RETRIES', '3'))
@@ -622,6 +623,55 @@ def do_screenshot(data):
         'url': current_url,
         'screenshot_url': public_url,
         's3_key': s3_key,
+        'pod': POD_NAME,
+    }
+
+
+@job('default', connection=redis_connection, timeout=120, result_ttl=270)
+@with_trace_context
+def image_analyze(data):
+    logger.info("job image_analyze start")
+
+    self_job = get_current_job()
+    self_job.meta['type'] = "image_analyze"
+    self_job.save_meta()
+
+    step_number = data.get('step', data.get('number', '0'))
+    current_url = data.get('url', '')
+    screenshot_url = data.get('screenshot_url', '')
+    set_step_span_attributes(step_number=step_number, step_url=current_url)
+
+    if not screenshot_url:
+        return {
+            'step': step_number,
+            'url': current_url,
+            'screenshot_url': '',
+            'palette': [],
+            'error': 'missing screenshot_url',
+            'pod': POD_NAME,
+        }
+
+    with sentry_sdk.start_span(op="http.client", description="image_analyze_service analyze") as span:
+        span.set_data("screenshot_url", screenshot_url)
+        response = requests.post(
+            f"{IMAGE_ANALYZE_SERVICE_URL}/api/v1/image-analyze/analyze/",
+            json={"image_url": screenshot_url, "n_colors": 7},
+            timeout=60,
+        )
+        response.raise_for_status()
+        payload = response.json()
+
+    palette = payload.get('palette', []) or []
+    self_job.meta['screenshot_url'] = screenshot_url
+    self_job.meta['palette'] = palette
+    self_job.meta['progress'] = {'num_iterations': 2, 'iteration': 2, 'percent': 100}
+    self_job.save_meta()
+
+    return {
+        'step': step_number,
+        'url': current_url,
+        'screenshot_url': screenshot_url,
+        'palette': palette,
         'pod': POD_NAME,
     }
 

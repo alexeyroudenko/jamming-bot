@@ -7,6 +7,7 @@ from starlette.status import HTTP_400_BAD_REQUEST
 from pydantic import BaseModel
 from app.api.db import metadata, database, engine
 from app.api import db_manager
+from app.api.models import StepAnalysisIn
 import asyncio
 import logging
 import os
@@ -102,6 +103,20 @@ async def get_step(number: str):
 @app.get("/get/latest")
 async def get_latest():
     return await db_manager.get_latest()
+
+
+@app.post("/analysis/store")
+async def store_step_analysis(payload: StepAnalysisIn):
+    result = await db_manager.upsert_step_analysis(payload.step_number, payload.palette)
+    return result
+
+
+@app.get("/analysis/get/{number}")
+async def get_step_analysis(number: str):
+    analysis = await db_manager.get_step_analysis_by_number(number)
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Step analysis not found")
+    return analysis
 
 
 @app.get("/get/ids")

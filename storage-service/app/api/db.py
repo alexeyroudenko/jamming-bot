@@ -36,4 +36,12 @@ steps = Table(
     Column('s3_key', Text),
 )
 
+steps_analysis = Table(
+    'steps_analysis',
+    metadata,
+    Column('id', Integer, primary_key=True),
+    Column('step_number', String(50), index=True, unique=True),
+    Column('palette', Text),
+)
+
 database = Database(DATABASE_URI)

@@ -325,6 +325,44 @@ code {
     overflow: hidden;
 }    
 
+#log_screenshot {
+    position: absolute;
+    top: 148px;
+    right: 320px;
+    z-index: 115;
+    width: 90px;
+    height: 160px;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+#log_screenshot img {
+    display: block;
+    width: 90px;
+    height: 160px;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: var(--bot-shadow);
+}
+
+#log_palette {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 120;
+    width: 32px;
+    height: 224px;
+    overflow: hidden;
+    box-shadow: var(--bot-shadow);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.palette-stripe {
+    width: 32px;
+    height: 32px;
+}
+
 #nodes{
     position:absolute;
     z-index:200;
@@ -828,6 +866,16 @@ body.is-admin .guest-only {
         color: #fff !important;
         opacity: .3 !important;
     }
+
+    #log_screenshot {
+        top: 96px;
+        right: 10px;
+    }
+
+    #log_palette {
+        right: 10px;
+        bottom: 10px;
+    }
     
     /* iPhone 14 Pro Max specific (430x932) */
     @media screen and (min-width: 428px) and (max-width: 432px) and (min-height: 930px) {
@@ -1021,6 +1069,8 @@ body.is-admin .guest-only {
     <div id="log_sub" class="text"></div> 
     <div id="log_events" class="text"></div> 
     <div id="log_headers" class="text"></div>  
+    <div id="log_screenshot" class="text"></div>
+    <div id="log_palette" class="text"></div>
     <div id="log_urls" class="text"></div>  
     <div id="log_words" class="text"></div> 
 
@@ -1182,6 +1232,7 @@ height = 600
 var counter = 0
 var tag = 0
 var imgs = 0
+var currentPalette = []
 
 var start_time = (new Date).getTime()   
 socket.on('connect', function() {  
@@ -1256,6 +1307,11 @@ return length
         text = ""    
         graph.removeAllNodes()
         graph.removeallLinks()
+        const screenshotElement = document.getElementById('log_screenshot');
+        if (screenshotElement) {
+            screenshotElement.innerHTML = "";
+        }
+        renderPalette([]);
     })
 
 
@@ -1360,6 +1416,9 @@ return length
         if (phrasesElement) {
             phrasesElement.innerHTML = "<code></code>";
         }
+        if (Array.isArray(data.palette)) {
+            renderPalette(data.palette);
+        }
 
         // Animate log_headers letter by letter
         let headersText = data['headers'] || '';
@@ -1390,6 +1449,44 @@ return length
 
 
     }); // socket on step
+
+    socket.on('screenshot', function(data) {
+        if (!data || !data.screenshot_url) return;
+
+        const shotWidth = 90;
+        const shotHeight = 160;
+        const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+        const maxLeft = Math.max(0, viewportWidth - shotWidth);
+        const maxTop = Math.max(0, viewportHeight - shotHeight);
+        const left = Math.random() * maxLeft;
+        const top = Math.random() * maxTop;
+        const screenshotElement = document.getElementById('log_screenshot');
+        if (!screenshotElement) return;
+
+        screenshotElement.style.left = left + 'px';
+        screenshotElement.style.top = top + 'px';
+        screenshotElement.style.right = 'auto';
+        screenshotElement.innerHTML = "<img src=\"" + data.screenshot_url + "\" alt=\"step screenshot\">";
+    });
+
+    function renderPalette(palette) {
+        currentPalette = Array.isArray(palette) ? palette.slice(0, 7) : [];
+        const paletteElement = document.getElementById('log_palette');
+        if (!paletteElement) return;
+        if (!currentPalette.length) {
+            paletteElement.innerHTML = '';
+            return;
+        }
+        paletteElement.innerHTML = currentPalette.map(function(color) {
+            return '<div class="palette-stripe" style="background:' + color + '"></div>';
+        }).join('');
+    }
+
+    socket.on('image_analyzed', function(data) {
+        if (!data || !Array.isArray(data.palette)) return;
+        renderPalette(data.palette);
+    });
 
 
 

@@ -267,7 +267,7 @@ def _ctrl_log(action: str, source: str):
 def _ensure_redis_defaults():
     defaults = {'value': 0.5, 'do_pass': 0.5, 'do_geo': 0.5,
                 'do_save': 0.5, 'do_analyze': 0.5, 'do_screenshot': 0.5,
-                'do_storage': 0.5, 'sleep_time': 2.0}
+                'do_image_analyze': 1.0, 'do_storage': 0.5, 'sleep_time': 2.0}
     for key, default in defaults.items():
         if not redis.get(key):
             redis.set(key, default)
@@ -384,7 +384,12 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                 if not silent:
                     socketio.emit(event_name, job.result)
                 _save_to_step_hash(step_key, job.result)
-                _patch_storage(step_key, job.result)
+                if event_name == "image_analyzed":
+                    _store_step_analysis(step_key, job.result)
+                else:
+                    _patch_storage(step_key, job.result)
+                if event_name == "screenshot":
+                    _enqueue_image_analysis_followup(step_key, job.result, silent=silent)
                 return
             if job.is_failed:
                 logger.warning(f"Job {job.id} failed for event {event_name}")
@@ -423,6 +428,48 @@ def _patch_storage(step_key, data):
         )
     except Exception as e:
         logger.warning(f"_patch_storage({number}): {e}")
+
+
+def _store_step_analysis(step_key, data):
+    number = step_key.split(":")[-1] if step_key else None
+    palette = data.get("palette") if isinstance(data, dict) else None
+    if not number or not isinstance(palette, list):
+        return
+    try:
+        requests.post(
+            f"{STORAGE_SERVICE_URL}/analysis/store",
+            json={"step_number": str(number), "palette": palette},
+            timeout=5,
+        )
+    except Exception as e:
+        logger.warning(f"_store_step_analysis({number}): {e}")
+
+
+def _enqueue_image_analysis_followup(step_key, screenshot_result, silent=False):
+    if float(redis.get("do_image_analyze") or 0) != 1.0:
+        return
+    screenshot_url = (screenshot_result or {}).get("screenshot_url")
+    if not screenshot_url:
+        return
+    merged = _read_step_hash(step_key)
+    payload = {
+        "step": merged.get("number") or merged.get("step") or (screenshot_result or {}).get("step"),
+        "number": merged.get("number") or (screenshot_result or {}).get("step"),
+        "url": merged.get("url") or (screenshot_result or {}).get("url", ""),
+        "screenshot_url": screenshot_url,
+    }
+    try:
+        job = enqueue_with_trace(
+            queue,
+            redis_connection,
+            jobs.image_analyze,
+            payload,
+            timeout=120,
+            result_ttl=270,
+        )
+        _poll_job_and_emit(job, "image_analyzed", timeout=120, step_key=step_key, silent=silent)
+    except Exception as e:
+        logger.warning(f"_enqueue_image_analysis_followup({step_key}): {e}")
 
 
 def _tags_response_json(r):
@@ -1476,6 +1523,10 @@ def handle_do_analyze(value):
 @socketio.on('do_screenshot')
 def handle_do_screenshot(value):
     redis.set('do_screenshot', float(value))
+
+@socketio.on('do_image_analyze')
+def handle_do_image_analyze(value):
+    redis.set('do_image_analyze', float(value))
 
 @socketio.on('do_storage')
 def handle_do_storage(value):

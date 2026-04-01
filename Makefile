@@ -60,6 +60,12 @@ k3s-semantic-service:
 	docker save semantic-service:latest | k3s ctr images import -
 	kubectl rollout restart deployment semantic-service -n jamming-bot
 
+.PHONY: k3s-image-analyze-service
+k3s-image-analyze-service:
+	docker build -t image-analyze-service:latest ./image-analyze-service
+	docker save image-analyze-service:latest | k3s ctr images import -
+	kubectl rollout restart deployment image-analyze-service -n jamming-bot
+
 .PHONY: k3s-storage-service
 k3s-storage-service:
 	docker build -t storage-service:latest ./storage-service
@@ -112,7 +118,7 @@ k3s-backfill-worker:
 	@echo "backfill-worker job started. Monitor: kubectl logs -n jamming-bot job/backfill-worker -f"
 
 .PHONY: k3s-all
-k3s-all: k3s-html-renderer k3s-keywords-service k3s-semantic-service k3s-storage-service k3s-tags-service k3s-bot-service k3s-ip-service k3s-app-service k3s-data-service k3s-frontend-static-app
+k3s-all: k3s-html-renderer k3s-keywords-service k3s-semantic-service k3s-image-analyze-service k3s-storage-service k3s-tags-service k3s-bot-service k3s-ip-service k3s-app-service k3s-data-service k3s-frontend-static-app
 
 .PHONY: k3s-cert-manager
 k3s-cert-manager:

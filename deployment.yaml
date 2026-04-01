@@ -193,6 +193,67 @@ spec:
     port: 80
     targetPort: 8005
 ---
+# ===================== image-analyze-service =====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: image-analyze-service
+  namespace: jamming-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: image-analyze-service
+  template:
+    metadata:
+      labels:
+        app: image-analyze-service
+    spec:
+      tolerations:
+      - key: node.kubernetes.io/disk-pressure
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: image-analyze-service
+        image: image-analyze-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8006
+        command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8006"]
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "768Mi"
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8006
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8006
+          initialDelaySeconds: 20
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: image-analyze-service
+  namespace: jamming-bot
+spec:
+  type: ClusterIP
+  selector:
+    app: image-analyze-service
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8006
+---
 # ===================== storage-service =====================
 apiVersion: apps/v1
 kind: Deployment
@@ -209,6 +270,10 @@ spec:
       labels:
         app: storage-service
     spec:
+      tolerations:
+      - key: node.kubernetes.io/disk-pressure
+        operator: Exists
+        effect: NoSchedule
       containers:
       - name: storage-service
         image: storage-service:latest
@@ -572,6 +637,10 @@ spec:
       labels:
         app: worker-service
     spec:
+      tolerations:
+      - key: node.kubernetes.io/disk-pressure
+        operator: Exists
+        effect: NoSchedule
       containers:
       - name: worker
         image: app-service:latest
@@ -594,6 +663,8 @@ spec:
           value: "http://ip-service"
         - name: RENDERER_SERVICE_URL
           value: "http://html-renderer-service"
+        - name: IMAGE_ANALYZE_SERVICE_URL
+          value: "http://image-analyze-service"
         - name: S3_HOST
           value: "s3.firstvds.ru"
         - name: S3_PORT
@@ -928,6 +999,10 @@ spec:
       labels:
         app: app-service
     spec:
+      tolerations:
+      - key: node.kubernetes.io/disk-pressure
+        operator: Exists
+        effect: NoSchedule
       containers:
       - name: app-service
         image: app-service:latest
@@ -951,6 +1026,8 @@ spec:
           value: "http://ip-service"
         - name: RENDERER_SERVICE_URL
           value: "http://html-renderer-service"
+        - name: IMAGE_ANALYZE_SERVICE_URL
+          value: "http://image-analyze-service"
         - name: S3_HOST
           value: "s3.firstvds.ru"
         - name: S3_PORT

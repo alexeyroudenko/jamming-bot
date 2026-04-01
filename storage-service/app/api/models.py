@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
 
 class StepIn(BaseModel):
@@ -27,4 +27,13 @@ class StepIn(BaseModel):
 
 
 class StepOut(StepIn):
+    id: int
+
+
+class StepAnalysisIn(BaseModel):
+    step_number: str
+    palette: List[str] = []
+
+
+class StepAnalysisOut(StepAnalysisIn):
     id: int
