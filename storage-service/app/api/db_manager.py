@@ -126,6 +126,31 @@ async def get_ids():
     return {"data": numbers}
 
 
+async def get_image_rows():
+    query = select(
+        steps.c.number,
+        steps.c.status_code,
+        steps.c.timestamp,
+        steps.c.text_length,
+        steps.c.screenshot_url,
+    )
+    rows = await database.fetch_all(query=query)
+    result = []
+    for row in rows:
+        number = _parse_step_number(row["number"])
+        if number is None:
+            continue
+        result.append({
+            "number": number,
+            "status_code": str(row["status_code"] or ""),
+            "timestamp": str(row["timestamp"] or ""),
+            "text_length": str(row["text_length"] or ""),
+            "screenshot_url": str(row["screenshot_url"] or ""),
+        })
+    result.sort(key=lambda item: item["number"])
+    return result
+
+
 async def get_latest(limit: int = 3000):
     total = await database.fetch_val(
         query=select(func.count()).select_from(steps)

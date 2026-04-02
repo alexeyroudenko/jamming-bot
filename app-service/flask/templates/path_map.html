@@ -224,6 +224,23 @@
   var MAX_STEPS = 3000;
   var MODE_STORAGE_KEY = 'path-map-display-mode';
   var ROWS_STORAGE_KEY = 'path-map-row-count';
+  var QUERY_TO_MODE = {
+    status_code: 'status',
+    'status code': 'status',
+    text_length: 'text-length',
+    'text length': 'text-length',
+    timestamp_delta: 'delta-time',
+    delta_time: 'delta-time',
+    'delta time': 'delta-time',
+    screenshot: 'screenshot',
+    screenshots: 'screenshot'
+  };
+  var MODE_TO_QUERY = {
+    status: 'status_code',
+    'text-length': 'text_length',
+    'delta-time': 'timestamp_delta',
+    screenshot: 'screenshot'
+  };
   var canvas = document.getElementById('path-map');
   var ctx = canvas.getContext('2d', { alpha: false });
   var banner = document.getElementById('api-error');
@@ -266,6 +283,16 @@
     deltaP10: 0,
     deltaP90: 1
   };
+
+  function normalizeTypeQuery(raw) {
+    var key = String(raw == null ? '' : raw).trim().toLowerCase().replace(/-/g, '_');
+    if (!key) return null;
+    return QUERY_TO_MODE[key] || null;
+  }
+
+  function getModeQueryValue() {
+    return MODE_TO_QUERY[displayMode] || 'status_code';
+  }
 
   function showErr(msg) {
     banner.textContent = msg;
@@ -430,6 +457,14 @@
   }
 
   function applyStoredMode() {
+    var fromQuery = normalizeTypeQuery(new URL(window.location.href).searchParams.get('type'));
+    if (fromQuery) {
+      displayMode = fromQuery;
+      for (var i = 0; i < modeInputs.length; i++) {
+        modeInputs[i].checked = modeInputs[i].value === fromQuery;
+      }
+      return;
+    }
     var saved = null;
     try {
       saved = sessionStorage.getItem(MODE_STORAGE_KEY);
@@ -484,6 +519,12 @@
     legendEl.innerHTML =
       '<span><span class="path-map-swatch" style="background:#000000;border:1px solid rgba(250,250,250,0.2)"></span>non-4xx</span>' +
       '<span><span class="path-map-swatch" style="background:#ef4444"></span>4xx</span>';
+  }
+
+  function syncModeUrl() {
+    var url = new URL(window.location.href);
+    url.searchParams.set('type', getModeQueryValue());
+    window.history.replaceState({}, '', url);
   }
 
   function resizeCanvas() {
@@ -757,6 +798,7 @@
     try {
       sessionStorage.setItem(MODE_STORAGE_KEY, nextMode);
     } catch (e) {}
+    syncModeUrl();
     updateLegend();
     updateStatus();
     render();

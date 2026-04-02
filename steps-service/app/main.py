@@ -5,6 +5,7 @@ import logging
 import os
 import struct
 import urllib.error
+import urllib.parse
 import urllib.request
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
@@ -34,6 +35,24 @@ DEFAULT_REFRESH_SECONDS = int(os.getenv("STEPS_REFRESH_SECONDS", "60"))
 DEFAULT_OUTPUT_DIR = Path(
     os.getenv("STEPS_OUTPUT_DIR", "/tmp/steps-service")
 ).resolve()
+DEFAULT_IMAGE_TYPE = "status_code"
+SUPPORTED_IMAGE_TYPES = (
+    "status_code",
+    "text_length",
+    "timestamp_delta",
+    "screenshot",
+)
+IMAGE_TYPE_ALIASES = {
+    "status_code": "status_code",
+    "status code": "status_code",
+    "text_length": "text_length",
+    "text length": "text_length",
+    "timestamp_delta": "timestamp_delta",
+    "delta_time": "timestamp_delta",
+    "delta time": "timestamp_delta",
+    "screenshot": "screenshot",
+    "screenshots": "screenshot",
+}
 
 
 def fetch_bytes(url: str) -> bytes:
@@ -79,11 +98,27 @@ def parse_png_dimensions(png_bytes: bytes) -> tuple[int, int]:
     return struct.unpack("!II", png_bytes[16:24])
 
 
+def normalize_image_type(raw_type: str | None) -> str:
+    key = str(raw_type or "").strip().lower().replace("-", "_")
+    if not key:
+        return DEFAULT_IMAGE_TYPE
+    return IMAGE_TYPE_ALIASES.get(key, key)
+
+
+def image_snapshot_name(image_type: str) -> str:
+    return f"presence_{image_type}.png"
+
+
 @dataclass
-class PresenceState:
+class ImageSnapshot:
     width: int = 1
     height: int = 1
     png_bytes: bytes = b""
+
+
+@dataclass
+class PresenceState:
+    snapshots: dict[str, ImageSnapshot] | None = None
     steps_payload: dict | None = None
     updated_at: str | None = None
     error: str | None = None
@@ -311,6 +346,18 @@ def render_html() -> str:
     <div id="auto-cursor" class="steps-auto-cursor" aria-hidden="true"></div>
     <script>
       const TYPE_STORAGE_KEY = "steps-display-type";
+      const DEFAULT_IMAGE_TYPE = "status_code";
+      const TYPE_ALIASES = {
+        status_code: "status_code",
+        "status code": "status_code",
+        text_length: "text_length",
+        "text length": "text_length",
+        timestamp_delta: "timestamp_delta",
+        delta_time: "timestamp_delta",
+        "delta time": "timestamp_delta",
+        screenshot: "screenshot",
+        screenshots: "screenshot"
+      };
       const VALID_TYPES = new Set([
         "status_code",
         "text_length",
@@ -372,6 +419,19 @@ def render_html() -> str:
           .replace(/'/g, "&#39;");
       }
 
+      function normalizeDisplayType(rawType) {
+        const key = String(rawType == null ? "" : rawType).trim().toLowerCase().replace(/-/g, "_");
+        if (!key) return DEFAULT_IMAGE_TYPE;
+        return TYPE_ALIASES[key] || key;
+      }
+
+      function getImageTypeForDisplay() {
+        if (displayType === "status_code" || displayType === "text_length" || displayType === "timestamp_delta" || displayType === "screenshot") {
+          return displayType;
+        }
+        return DEFAULT_IMAGE_TYPE;
+      }
+
       function normalizeRows(rows) {
         const normalized = rows.map((row, index) => {
           const stepId = parseStepNumber(row.number != null ? row.number : row.id, index);
@@ -406,10 +466,10 @@ def render_html() -> str:
 
       function getInitialType() {
         const url = new URL(window.location.href);
-        const fromQuery = url.searchParams.get("type");
+        const fromQuery = normalizeDisplayType(url.searchParams.get("type"));
         if (VALID_TYPES.has(fromQuery)) return fromQuery;
         try {
-          const saved = sessionStorage.getItem(TYPE_STORAGE_KEY);
+          const saved = normalizeDisplayType(sessionStorage.getItem(TYPE_STORAGE_KEY));
           if (VALID_TYPES.has(saved)) return saved;
         } catch (error) {}
         return "status_code";
@@ -422,7 +482,8 @@ def render_html() -> str:
       }
 
       function applyDisplayType(nextType, updateUrl) {
-        displayType = VALID_TYPES.has(nextType) ? nextType : "status_code";
+        const normalizedType = normalizeDisplayType(nextType);
+        displayType = VALID_TYPES.has(normalizedType) ? normalizedType : "status_code";
         typeInputs.forEach((input) => {
           input.checked = input.value === displayType;
         });
@@ -512,11 +573,16 @@ def render_html() -> str:
       async function refreshImage() {
         const stamp = Date.now();
         imageReady = false;
-        image.src = new URL(`presence_raw.png?v=${stamp}`, baseUrl).toString();
+        const url = new URL("presence_raw.png", baseUrl);
+        url.searchParams.set("type", getImageTypeForDisplay());
+        url.searchParams.set("v", String(stamp));
+        image.src = url.toString();
       }
 
       async function refreshLatest() {
-        const response = await fetch(new URL("api/latest", baseUrl), { cache: "no-store" });
+        const url = new URL("api/latest", baseUrl);
+        url.searchParams.set("type", displayType);
+        const response = await fetch(url, { cache: "no-store" });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -693,18 +759,30 @@ def render_html() -> str:
 """
 
 
-def write_snapshot(output_dir: Path, png_bytes: bytes) -> None:
+def write_snapshot(output_dir: Path, image_type: str, png_bytes: bytes) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-    (output_dir / "presence_raw.png").write_bytes(png_bytes)
+    (output_dir / image_snapshot_name(image_type)).write_bytes(png_bytes)
+
+
+def build_image_url(image_type: str) -> str:
+    return f"{DEFAULT_IMAGE_URL}?type={urllib.parse.quote(image_type)}"
 
 
 async def refresh_presence() -> None:
-    png_bytes, csv_rows = await asyncio.gather(
-        asyncio.to_thread(fetch_bytes, DEFAULT_IMAGE_URL),
-        asyncio.to_thread(fetch_csv_rows, DEFAULT_STEPS_CSV_URL),
-    )
-    width, height = parse_png_dimensions(png_bytes)
-    await asyncio.to_thread(write_snapshot, DEFAULT_OUTPUT_DIR, png_bytes)
+    image_urls = {image_type: build_image_url(image_type) for image_type in SUPPORTED_IMAGE_TYPES}
+    fetch_jobs = [
+        asyncio.to_thread(fetch_bytes, image_url)
+        for image_url in image_urls.values()
+    ]
+    fetch_jobs.append(asyncio.to_thread(fetch_csv_rows, DEFAULT_STEPS_CSV_URL))
+    results = await asyncio.gather(*fetch_jobs)
+    csv_rows = results[-1]
+    image_payloads = results[:-1]
+    snapshots = {}
+    for image_type, png_bytes in zip(image_urls.keys(), image_payloads):
+        width, height = parse_png_dimensions(png_bytes)
+        await asyncio.to_thread(write_snapshot, DEFAULT_OUTPUT_DIR, image_type, png_bytes)
+        snapshots[image_type] = ImageSnapshot(width=width, height=height, png_bytes=png_bytes)
     payload = {
         "fields": list(csv_rows[0].keys()) if csv_rows else [],
         "returned_lines": len(csv_rows),
@@ -712,9 +790,7 @@ async def refresh_presence() -> None:
         "data": csv_rows,
     }
     async with state_lock:
-        state.width = width
-        state.height = height
-        state.png_bytes = png_bytes
+        state.snapshots = snapshots
         state.steps_payload = payload
         state.updated_at = datetime.now(timezone.utc).isoformat()
         state.error = None
@@ -724,9 +800,11 @@ async def refresh_loop() -> None:
     while True:
         try:
             await refresh_presence()
-            logger.info("Presence updated: %sx%s", state.width, state.height)
+            async with state_lock:
+                loaded_types = sorted((state.snapshots or {}).keys())
+            logger.info("Presence updated for types: %s", ", ".join(loaded_types))
         except urllib.error.URLError as exc:
-            message = f"Failed to fetch {DEFAULT_IMAGE_URL}: {exc}"
+            message = f"Failed to fetch steps image payloads: {exc}"
             logger.exception(message)
             async with state_lock:
                 state.error = message
@@ -773,26 +851,33 @@ async def root() -> HTMLResponse:
 @app.get("/healthz")
 async def healthz():
     async with state_lock:
+        default_snapshot = (state.snapshots or {}).get(DEFAULT_IMAGE_TYPE)
         return {
-            "status": "ok" if state.png_bytes else "warming_up",
-            "width": state.width,
-            "height": state.height,
+            "status": "ok" if default_snapshot and default_snapshot.png_bytes else "warming_up",
+            "width": default_snapshot.width if default_snapshot else 1,
+            "height": default_snapshot.height if default_snapshot else 1,
+            "types": sorted((state.snapshots or {}).keys()),
             "updated_at": state.updated_at,
             "error": state.error,
         }
 
 
 @app.get("/api/latest")
-async def api_latest():
+async def api_latest(type: str = DEFAULT_IMAGE_TYPE):
+    image_type = normalize_image_type(type)
     async with state_lock:
         if state.steps_payload is None:
             raise HTTPException(status_code=503, detail="Steps payload not ready yet")
-        return JSONResponse(content=state.steps_payload)
+        payload = dict(state.steps_payload)
+        payload["type"] = image_type
+        return JSONResponse(content=payload)
 
 
 @app.get("/presence_raw.png")
-async def presence_raw_png() -> Response:
+async def presence_raw_png(type: str = DEFAULT_IMAGE_TYPE) -> Response:
+    image_type = normalize_image_type(type)
     async with state_lock:
-        if not state.png_bytes:
+        snapshot = (state.snapshots or {}).get(image_type)
+        if snapshot is None or not snapshot.png_bytes:
             raise HTTPException(status_code=503, detail="Presence image not ready yet")
-        return Response(content=state.png_bytes, media_type="image/png")
+        return Response(content=snapshot.png_bytes, media_type="image/png")

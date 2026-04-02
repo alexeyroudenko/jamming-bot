@@ -1,24 +1,46 @@
+import asyncio
 import csv
 import io
-import math
-import struct
-from typing import List
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import StreamingResponse
-from starlette.status import HTTP_400_BAD_REQUEST
-from pydantic import BaseModel
-from app.api.db import metadata, database, engine
-from app.api import db_manager
-from app.api.models import StepAnalysisIn
-import asyncio
 import logging
+import math
 import os
+import struct
 import zlib
+from typing import List
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from starlette.status import HTTP_400_BAD_REQUEST
+
+from app.api import db_manager
+from app.api.db import database, engine, metadata
+from app.api.models import StepAnalysisIn
 
 logger = logging.getLogger("storage_service")
 logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
+
+DEFAULT_IMAGE_TYPE = "presence"
+SUPPORTED_IMAGE_TYPES = {
+    "presence",
+    "status_code",
+    "text_length",
+    "timestamp_delta",
+    "screenshot",
+}
+IMAGE_TYPE_ALIASES = {
+    "status_code": "status_code",
+    "status code": "status_code",
+    "text_length": "text_length",
+    "text length": "text_length",
+    "timestamp_delta": "timestamp_delta",
+    "delta time": "timestamp_delta",
+    "delta_time": "timestamp_delta",
+    "screenshots": "screenshot",
+    "screenshot": "screenshot",
+}
 
 
 def _choose_presence_dimensions(max_step_id: int, requested_width: int) -> tuple[int, int]:
@@ -60,6 +82,113 @@ def _build_grayscale_png(rows: list[bytearray], width: int, height: int) -> byte
             _png_chunk(b"IEND", b""),
         ]
     )
+
+
+def _normalize_image_type(image_type: str | None) -> str:
+    raw = str(image_type or "").strip().lower().replace("-", "_")
+    if not raw:
+        return DEFAULT_IMAGE_TYPE
+    raw = raw.replace("__", "_")
+    if raw in SUPPORTED_IMAGE_TYPES:
+        return raw
+    return IMAGE_TYPE_ALIASES.get(raw, DEFAULT_IMAGE_TYPE)
+
+
+def _parse_float(value) -> float | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return None
+
+
+def _scale_to_gray(value: float | None, min_value: float, max_value: float) -> int:
+    if value is None:
+        return 0
+    if not math.isfinite(min_value) or not math.isfinite(max_value) or max_value <= min_value:
+        return 180
+    normalized = (value - min_value) / (max_value - min_value)
+    return max(0, min(255, int(round(normalized * 255))))
+
+
+def _rasterize_values(
+    image_rows: list[dict],
+    width: int,
+    height: int,
+    image_type: str,
+) -> list[bytearray]:
+    rows = [bytearray(width) for _ in range(height)]
+    text_lengths = []
+    delta_values = []
+    prev_timestamp = None
+
+    for row in image_rows:
+        row["_text_length"] = _parse_float(row.get("text_length"))
+        if row["_text_length"] is not None:
+            text_lengths.append(row["_text_length"])
+        timestamp = _parse_float(row.get("timestamp"))
+        if timestamp is not None and timestamp < 1e12:
+            timestamp *= 1000
+        delta_value = None
+        if timestamp is not None and prev_timestamp is not None:
+            delta_value = max(0.0, timestamp - prev_timestamp)
+            delta_values.append(delta_value)
+        row["_timestamp"] = timestamp
+        row["_delta_ms"] = delta_value
+        if timestamp is not None:
+            prev_timestamp = timestamp
+
+    text_min = min(text_lengths) if text_lengths else 0.0
+    text_max = max(text_lengths) if text_lengths else 1.0
+    delta_min = min(delta_values) if delta_values else 0.0
+    delta_max = max(delta_values) if delta_values else 1.0
+
+    for row in image_rows:
+        step_id = row["number"]
+        x = step_id % width
+        y = step_id // width
+        if y >= height:
+            continue
+
+        gray = 0
+        if image_type == "presence":
+            gray = 255
+        elif image_type == "status_code":
+            status_code = int(_parse_float(row.get("status_code")) or 0)
+            if 400 <= status_code < 500:
+                gray = 255
+            elif 500 <= status_code < 600:
+                gray = 208
+            elif 300 <= status_code < 400:
+                gray = 144
+            elif 200 <= status_code < 300:
+                gray = 96
+            elif 100 <= status_code < 200:
+                gray = 64
+            else:
+                gray = 32
+        elif image_type == "text_length":
+            gray = _scale_to_gray(row.get("_text_length"), text_min, text_max)
+        elif image_type == "timestamp_delta":
+            delta_value = row.get("_delta_ms")
+            if delta_value is None:
+                gray = 0
+            elif delta_max <= delta_min:
+                gray = 192
+            else:
+                normalized = (delta_value - delta_min) / (delta_max - delta_min)
+                normalized = max(0.0, min(1.0, normalized))
+                normalized = math.pow(normalized, 0.75)
+                gray = max(0, min(255, int(round(235 * (1 - normalized)))))
+        elif image_type == "screenshot":
+            gray = 255 if str(row.get("screenshot_url") or "").strip() else 0
+
+        rows[y][x] = gray
+    return rows
 
 
 async def _init_db_with_retry():
@@ -193,19 +322,19 @@ async def export_csv():
 
 
 @app.get("/export/img")
-async def export_img(width: int = 0):
-    payload = await db_manager.get_ids()
-    step_ids = payload.get("data", [])
-    if not step_ids:
+async def export_img(width: int = 0, type: str = DEFAULT_IMAGE_TYPE):
+    image_type = _normalize_image_type(type)
+    image_rows = await db_manager.get_image_rows()
+    if not image_rows:
         raise HTTPException(status_code=404, detail="No step ids available")
 
-    max_step_id = step_ids[-1]
+    max_step_id = image_rows[-1]["number"]
     img_width, img_height = _choose_presence_dimensions(max_step_id, width)
-    rows = _rasterize_presence(step_ids, img_width, img_height)
+    rows = _rasterize_values(image_rows, img_width, img_height, image_type)
     png_bytes = _build_grayscale_png(rows, img_width, img_height)
 
     return StreamingResponse(
         io.BytesIO(png_bytes),
         media_type="image/png",
-        headers={"Content-Disposition": 'inline; filename="presence_raw.png"'},
+        headers={"Content-Disposition": f'inline; filename="presence_{image_type}.png"'},
     )

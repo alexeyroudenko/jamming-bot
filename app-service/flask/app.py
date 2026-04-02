@@ -1545,8 +1545,11 @@ def api_storage_img():
     try:
         params = {}
         width = request.args.get("width", "").strip()
+        image_type = request.args.get("type", "").strip()
         if width:
             params["width"] = width
+        if image_type:
+            params["type"] = image_type
         resp = requests.get(
             f"{STORAGE_SERVICE_URL}/export/img",
             params=params,
