@@ -17,6 +17,7 @@ from urllib.robotparser import RobotFileParser
 
 import httpx
 import requests
+from redis import Redis
 from bs4 import BeautifulSoup
 from databases import Database
 from tld import get_tld
@@ -38,7 +39,17 @@ FLASK_HOST = os.getenv('FLASK_HOST', 'flask')
 FLASK_PORT = os.getenv('FLASK_PORT', '5000')
 STEP_URL = f"http://{FLASK_HOST}:{FLASK_PORT}/bot/step/"
 EVENT_URL = f"http://{FLASK_HOST}:{FLASK_PORT}/bot/events"
-SUBLINK_URL = f"http://{FLASK_HOST}:{FLASK_PORT}/bot/sublink/add/"
+SUBLINK_CHANNEL = os.getenv("SUBLINK_CHANNEL", "sublink")
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_CLIENT = None
+
+
+def get_redis_client():
+    global REDIS_CLIENT
+    if REDIS_CLIENT is None:
+        REDIS_CLIENT = Redis(host=REDIS_HOST, port=REDIS_PORT)
+    return REDIS_CLIENT
 
 
 import sentry_sdk
@@ -393,9 +404,10 @@ class NetSpider():
     def notify_about_sublink(self, data):
         if self.send_sublinks:      
             try:      
-                r = requests.post(SUBLINK_URL, data, timeout=3)
+                payload = json.dumps(data)
+                get_redis_client().publish(SUBLINK_CHANNEL, payload)
             except Exception as e0:
-                logging.error(f"error send sublink data {SUBLINK_URL}")
+                logging.error(f"error publish sublink to redis channel {SUBLINK_CHANNEL}: {e0}")
                 self.send_sublinks = False
             
             
@@ -748,6 +760,7 @@ class NetSpider():
 
 
 async def main():
+    global STEP_URL, EVENT_URL, REDIS_CLIENT
     
     #
     # Init app
@@ -758,17 +771,16 @@ async def main():
         
     STEP_URL = config["step_url"]
     EVENT_URL = config["event_url"]
-    SUBLINK_URL = config["sublink_url"]
     
     logging.info(f"init bot version: {config['version']}")
     
     pubsub = None
     if config['receive_events']:        
-        from redis import Redis
         for _attempt in range(30):
             try:
-                redis = Redis(host=os.getenv('REDIS_HOST', 'redis'), port=int(os.getenv('REDIS_PORT', '6379')))
+                redis = get_redis_client()
                 redis.ping()
+                REDIS_CLIENT = redis
                 pubsub = redis.pubsub()
                 CHANNEL_NAME = 'ctrl'
                 pubsub.subscribe(CHANNEL_NAME)
@@ -859,7 +871,6 @@ async def main():
             spider.reload_config()
             STEP_URL = config["step_url"]
             EVENT_URL = config["event_url"]
-            SUBLINK_URL = config["sublink_url"]
 
             if config['receive_events'] and pubsub is not None:
                 try:

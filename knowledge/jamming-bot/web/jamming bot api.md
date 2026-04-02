@@ -17,6 +17,8 @@ tags:
 
 > [!note]
 > В таблицах ниже указан внешний путь в том виде, в каком он доступен снаружи.
+> `sublink`-события для bot page теперь в штатном режиме идут через Redis Pub/Sub (`bot-service -> redis -> app-service -> Socket.IO`).
+> `POST /bot/sublink/add/` оставлен как legacy fallback для совместимости.
 
 ## App / gateway
 
@@ -51,7 +53,7 @@ tags:
 | `POST /set_values/`                                      | Отправить набор значений в realtime-канал.            |
 | `GET /set_tick/` / `POST /set_tick/`                     | Control endpoint для tick / restart action.           |
 | `POST /bot/events/<event_id>/`                           | Внешний bot event hook.                               |
-| `POST /bot/sublink/add/`                                 | Добавление sublink event.                             |
+| `POST /bot/sublink/add/`                                 | Legacy fallback для sublink event.                    |
 | `GET /bot/step/` / `POST /bot/step/`                     | Основной ingest шага бота.                            |
 | `GET /spacy/` / `POST /spacy/`                           | Тестовый spaCy proxy endpoint.                        |
 | `GET /screenshoter/` / `POST /screenshoter/`             | Тестовый screenshots endpoint.                        |

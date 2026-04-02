@@ -44,6 +44,9 @@ STORAGE_SERVICE_URL = os.getenv('STORAGE_SERVICE_URL', 'http://storage_service:7
 cfg = getConfig()
 redis = getRedis()
 BACKFILL_STATUS_KEY = os.getenv("BACKFILL_STATUS_KEY", "backfill:status")
+SUBLINK_CHANNEL = os.getenv("SUBLINK_CHANNEL", "sublink")
+_sublink_listener_started = False
+_sublink_listener_lock = threading.Lock()
 
 # ---------------------------------------------------------------------------
 # Sentry
@@ -216,6 +219,45 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet", manage
 viewers_lock = threading.Lock()
 active_viewers = {}
 
+
+def _run_sublink_listener():
+    """Forward sublink Pub/Sub messages to Socket.IO clients."""
+    while True:
+        pubsub = None
+        try:
+            pubsub = redis.pubsub(ignore_subscribe_messages=True)
+            pubsub.subscribe(SUBLINK_CHANNEL)
+            logger.info("Subscribed to Redis channel %s", SUBLINK_CHANNEL)
+            while True:
+                message = pubsub.get_message(timeout=1.0)
+                if message and message.get("type") == "message":
+                    raw_data = message.get("data")
+                    if isinstance(raw_data, bytes):
+                        raw_data = raw_data.decode("utf-8")
+                    payload = json.loads(raw_data)
+                    if isinstance(payload, dict):
+                        socketio.emit("sublink", payload)
+                socketio.sleep(0.05)
+        except Exception as exc:
+            logger.warning("Sublink Redis listener error: %s", exc)
+            socketio.sleep(2)
+        finally:
+            if pubsub is not None:
+                try:
+                    pubsub.close()
+                except Exception:
+                    pass
+
+
+def _ensure_sublink_listener_started():
+    global _sublink_listener_started
+    with _sublink_listener_lock:
+        if _sublink_listener_started:
+            return
+        socketio.start_background_task(_run_sublink_listener)
+        _sublink_listener_started = True
+        logger.info("Started sublink Redis listener")
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -258,6 +300,7 @@ PUBLIC_PATHS = ("/", "/login")
 
 @app.before_request
 def _check_auth():
+    _ensure_sublink_listener_started()
     if request.method == "OPTIONS":
         return
     if request.path in PUBLIC_PATHS or any(request.path.startswith(p) for p in PUBLIC_PREFIXES):
@@ -1194,6 +1237,7 @@ def bot_event(event_id):
 def sublink_add():
     if request.method == 'POST':
         data = request.form.to_dict()
+        logger.info("Received legacy HTTP sublink event; prefer Redis Pub/Sub channel %s", SUBLINK_CHANNEL)
         socketio.emit('sublink', data)
     return "step"
 
@@ -1702,6 +1746,7 @@ def semantic_ent():
 
 @socketio.on('connect')
 def handle_connect():
+    _ensure_sublink_listener_started()
     viewer = _capture_viewer_snapshot()
     with viewers_lock:
         active_viewers[viewer["sid"]] = viewer
