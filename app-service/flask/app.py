@@ -240,6 +240,7 @@ PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
                    "/api/rq/workers/",
                    "/api/socket/viewers/",
                    "/api/storage_ids/",
+                   "/api/storage_img/",
                    "/api/storage_geo/")
 
 
@@ -1464,6 +1465,36 @@ def api_storage_ids():
         return jsonify(resp.json())
     except Exception as e:
         logger.warning(f"api_storage_ids: {e}")
+        return jsonify({"error": str(e)}), 502
+
+
+@app.route("/api/storage_img/", methods=["GET"])
+@cross_origin()
+def api_storage_img():
+    """Proxy to storage-service GET /export/img."""
+    try:
+        params = {}
+        width = request.args.get("width", "").strip()
+        if width:
+            params["width"] = width
+        resp = requests.get(
+            f"{STORAGE_SERVICE_URL}/export/img",
+            params=params,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return Response(
+            resp.content,
+            mimetype=resp.headers.get("Content-Type", "image/png"),
+            headers={
+                "Content-Disposition": resp.headers.get(
+                    "Content-Disposition",
+                    'inline; filename="presence_raw.png"',
+                )
+            },
+        )
+    except Exception as e:
+        logger.warning(f"api_storage_img: {e}")
         return jsonify({"error": str(e)}), 502
 
 

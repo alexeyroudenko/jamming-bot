@@ -263,6 +263,8 @@ services:
       - ./data:/usr/src/app/data
     ports:
       - 7781:7781
+    depends_on:
+      - tags_db      
     command: uvicorn app.main:app --host 0.0.0.0 --port 7781
     networks:
       - app_network          
