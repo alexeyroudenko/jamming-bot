@@ -346,8 +346,12 @@ spec:
         - containerPort: 8007
         command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8007"]
         env:
-        - name: STEPS_STORAGE_IDS_URL
-          value: "http://storage-service/get/ids"
+        - name: STEPS_IMAGE_URL
+          value: "http://app-service/api/storage_img/"
+        - name: STEPS_LATEST_URL
+          value: "http://app-service/api/storage_latest/"
+        - name: STEPS_CSV_URL
+          value: "http://storage-service/export/csv"
         - name: STEPS_REFRESH_SECONDS
           value: "60"
         - name: STEPS_OUTPUT_DIR

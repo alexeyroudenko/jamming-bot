@@ -1,17 +1,27 @@
 # steps-service
 
-FastAPI service that renders step presence into `presence_raw.png`, serves it as a fullscreen HTML background, and returns step ids for hovered pixels.
+FastAPI service that proxies `presence_raw.png`, renders it as a fullscreen background, and overlays metric-aware tooltip / auto-mode UI for `/steps/?type=...`.
 
 ## Environment
 
-- `STEPS_STORAGE_IDS_URL` — source endpoint for step ids, default `http://storage_service:7781/get/ids`
-- `STEPS_REFRESH_SECONDS` — refresh interval in seconds, default `60`
-- `STEPS_OUTPUT_DIR` — directory for `presence_raw.png` and metadata, default `/tmp/steps-service`
-- `STEPS_CANVAS_WIDTH` — optional fixed canvas width, default automatic
+- `STEPS_IMAGE_URL` — source PNG URL, default `http://localhost:5000/api/storage_img/`
+- `STEPS_LATEST_URL` — source latest-steps JSON URL, default `http://localhost:5000/api/storage_latest/`
+- `STEPS_CSV_URL` — source CSV export used to build full step map for tooltip, default `http://storage_service:7781/export/csv`
+- `STEPS_REFRESH_SECONDS` — image refresh interval in seconds, default `60`
+- `STEPS_OUTPUT_DIR` — directory for cached `presence_raw.png`, default `/tmp/steps-service`
+
+## Modes
+
+- `status_code`
+- `text_length`
+- `timestamp_delta`
+- `screenshot`
+- `latitude_longitude`
+- `error`
 
 ## Routes
 
-- `GET /` — fullscreen HTML page
-- `GET /presence_raw.png` — latest PNG snapshot
-- `GET /api/tooltip?x=...&y=...` — hovered step id or `null`
-- `GET /healthz` — current render status
+- `GET /` — fullscreen HTML page with support for `?type=...`
+- `GET /presence_raw.png` — latest proxied PNG snapshot
+- `GET /api/latest` — cached full step payload aligned with current PNG
+- `GET /healthz` — current image cache status

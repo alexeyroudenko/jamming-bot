@@ -276,7 +276,9 @@ services:
     restart: unless-stopped
     command: uvicorn app.main:app --host 0.0.0.0 --port 8007
     environment:
-      - STEPS_STORAGE_IDS_URL=http://storage_service:7781/get/ids
+      - STEPS_IMAGE_URL=http://localhost:5000/api/storage_img/
+      - STEPS_LATEST_URL=http://localhost:5000/api/storage_latest/
+      - STEPS_CSV_URL=http://storage_service:7781/export/csv
       - STEPS_REFRESH_SECONDS=60
       - STEPS_OUTPUT_DIR=/app/data
     volumes:
