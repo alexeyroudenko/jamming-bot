@@ -106,7 +106,7 @@ def normalize_image_type(raw_type: str | None) -> str:
 
 
 def image_snapshot_name(image_type: str) -> str:
-    return f"presence_{image_type}.png"
+    return f"steps_{image_type}.png"
 
 
 @dataclass
@@ -338,7 +338,7 @@ def render_html() -> str:
       <span class="steps-status" id="status">Loading...</span>
     </div>
     <div id="stage">
-      <img id="presence" alt="steps presence" src="./presence_raw.png" crossorigin="anonymous" />
+      <img id="presence" alt="steps presence" src="./api/image" crossorigin="anonymous" />
       <div id="overlay"></div>
     </div>
     <canvas id="pixel-source"></canvas>
@@ -386,6 +386,10 @@ def render_html() -> str:
       let animationFrameId = 0;
       let steps = [];
       let stepMap = new Map();
+      const stepCache = new Map();
+      const pendingStepRequests = new Map();
+      let stepDetailTimer = null;
+      const STEP_DETAIL_DELAY_MS = 100;
       let displayType = "status_code";
       let hoveredStepId = null;
       let latestStepNumber = -1;
@@ -432,25 +436,27 @@ def render_html() -> str:
         return DEFAULT_IMAGE_TYPE;
       }
 
+      function normalizeStep(row, fallbackStepId) {
+        const stepId = parseStepNumber(row.number != null ? row.number : row.id, fallbackStepId);
+        const statusCode = parseInt(String(row.status_code == null ? "" : row.status_code), 10);
+        return {
+          step_id: stepId,
+          status_code: Number.isFinite(statusCode) ? statusCode : 0,
+          text_length: parseInt(String(row.text_length == null ? "" : row.text_length), 10) || 0,
+          timestamp: trimText(row.timestamp),
+          screenshot_url: trimText(row.screenshot_url),
+          latitude: trimText(row.latitude),
+          longitude: trimText(row.longitude),
+          error: trimText(row.error),
+          url: trimText(row.url),
+          src: trimText(row.src),
+          _ts: parseTimestamp(row.timestamp),
+          _delta_ms: NaN
+        };
+      }
+
       function normalizeRows(rows) {
-        const normalized = rows.map((row, index) => {
-          const stepId = parseStepNumber(row.number != null ? row.number : row.id, index);
-          const statusCode = parseInt(String(row.status_code == null ? "" : row.status_code), 10);
-          return {
-            step_id: stepId,
-            status_code: Number.isFinite(statusCode) ? statusCode : 0,
-            text_length: parseInt(String(row.text_length == null ? "" : row.text_length), 10) || 0,
-            timestamp: trimText(row.timestamp),
-            screenshot_url: trimText(row.screenshot_url),
-            latitude: trimText(row.latitude),
-            longitude: trimText(row.longitude),
-            error: trimText(row.error),
-            url: trimText(row.url),
-            src: trimText(row.src),
-            _ts: parseTimestamp(row.timestamp),
-            _delta_ms: NaN
-          };
-        }).sort((a, b) => a.step_id - b.step_id);
+        const normalized = rows.map((row, index) => normalizeStep(row, index)).sort((a, b) => a.step_id - b.step_id);
 
         let prevTs = NaN;
         normalized.forEach((row) => {
@@ -495,9 +501,12 @@ def render_html() -> str:
         }
         updateStatus();
         if (hoveredStepId !== null && pendingPointerEvent) {
-          const row = stepMap.get(hoveredStepId);
+          const row = getRowForStep(hoveredStepId);
           if (row) {
             renderTooltip(row, pendingPointerEvent.clientX, pendingPointerEvent.clientY);
+          } else {
+            renderStepNumberOnly(hoveredStepId, pendingPointerEvent.clientX, pendingPointerEvent.clientY);
+            scheduleStepDetailFetch(hoveredStepId);
           }
         }
       }
@@ -543,7 +552,31 @@ def render_html() -> str:
         setTooltipPosition(clientX, clientY);
       }
 
+      function renderNoDataTooltip(stepId, clientX, clientY) {
+        tooltip.innerHTML = `<div class="steps-tooltip-row">step <code>${escapeHtml(stepId)}</code> - no data</div>`;
+        tooltip.classList.add("visible");
+        setTooltipPosition(clientX, clientY);
+      }
+
+      function renderStepNumberOnly(stepId, clientX, clientY) {
+        tooltip.innerHTML = `<div class="steps-tooltip-row">step <code>${escapeHtml(stepId)}</code></div>`;
+        tooltip.classList.add("visible");
+        setTooltipPosition(clientX, clientY);
+      }
+
+      function clearStepDetailTimer() {
+        if (stepDetailTimer !== null) {
+          window.clearTimeout(stepDetailTimer);
+          stepDetailTimer = null;
+        }
+      }
+
+      function getRowForStep(stepId) {
+        return stepMap.get(stepId) || stepCache.get(stepId) || null;
+      }
+
       function hideTooltip() {
+        clearStepDetailTimer();
         hoveredStepId = null;
         tooltip.classList.remove("visible");
         autoCursor.classList.remove("visible");
@@ -573,7 +606,7 @@ def render_html() -> str:
       async function refreshImage() {
         const stamp = Date.now();
         imageReady = false;
-        const url = new URL("presence_raw.png", baseUrl);
+        const url = new URL("api/image", baseUrl);
         url.searchParams.set("type", getImageTypeForDisplay());
         url.searchParams.set("v", String(stamp));
         image.src = url.toString();
@@ -592,6 +625,68 @@ def render_html() -> str:
         stepMap = new Map(steps.map((row) => [row.step_id, row]));
         latestStepNumber = steps.length ? steps[steps.length - 1].step_id : -1;
         updateStatus();
+      }
+
+      async function fetchStep(stepId) {
+        if (stepCache.has(stepId)) {
+          return stepCache.get(stepId);
+        }
+        if (pendingStepRequests.has(stepId)) {
+          return pendingStepRequests.get(stepId);
+        }
+        const request = (async () => {
+          const response = await fetch(`/api/storage_step/${stepId}/`, { cache: "no-store" });
+          if (response.status === 404) {
+            return null;
+          }
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          const data = normalizeStep(await response.json(), stepId);
+          stepCache.set(stepId, data);
+          stepMap.set(stepId, data);
+          return data;
+        })();
+        pendingStepRequests.set(stepId, request);
+        try {
+          return await request;
+        } finally {
+          pendingStepRequests.delete(stepId);
+        }
+      }
+
+      function scheduleStepDetailFetch(stepId) {
+        clearStepDetailTimer();
+        stepDetailTimer = window.setTimeout(async () => {
+          stepDetailTimer = null;
+          if (hoveredStepId !== stepId) {
+            return;
+          }
+          const ev = pendingPointerEvent;
+          if (!ev) {
+            return;
+          }
+          let row = getRowForStep(stepId);
+          try {
+            if (!row) {
+              row = await fetchStep(stepId);
+            }
+          } catch (error) {
+            if (hoveredStepId !== stepId) {
+              return;
+            }
+            renderNoDataTooltip(stepId, ev.clientX, ev.clientY);
+            return;
+          }
+          if (hoveredStepId !== stepId) {
+            return;
+          }
+          if (!row) {
+            renderNoDataTooltip(stepId, ev.clientX, ev.clientY);
+          } else {
+            renderTooltip(row, ev.clientX, ev.clientY);
+          }
+        }, STEP_DETAIL_DELAY_MS);
       }
 
       function centerForStep(stepId) {
@@ -615,21 +710,26 @@ def render_html() -> str:
         const y = Math.max(0, Math.min(image.naturalHeight - 1, Math.floor(normalizedY * image.naturalHeight)));
         try {
           const pixel = pixelContext.getImageData(x, y, 1, 1).data;
-          const luminance = pixel[0] + pixel[1] + pixel[2] + pixel[3];
-          if (luminance === 0) {
+          const intensity = pixel[0] + pixel[1] + pixel[2];
+          if (intensity === 0) {
             hideTooltip();
             return;
           }
           const stepId = y * image.naturalWidth + x;
-          const row = stepMap.get(stepId);
-          if (!row) {
-            hideTooltip();
-            return;
-          }
           hoveredStepId = stepId;
-          renderTooltip(row, event.clientX, event.clientY);
+          const row = getRowForStep(stepId);
+          if (row) {
+            clearStepDetailTimer();
+            renderTooltip(row, event.clientX, event.clientY);
+          } else {
+            renderStepNumberOnly(stepId, event.clientX, event.clientY);
+            scheduleStepDetailFetch(stepId);
+          }
         } catch (error) {
-          hideTooltip();
+          const stepId = y * image.naturalWidth + x;
+          hoveredStepId = stepId;
+          renderStepNumberOnly(stepId, event.clientX, event.clientY);
+          scheduleStepDetailFetch(stepId);
         }
       }
 
@@ -722,7 +822,10 @@ def render_html() -> str:
 
       async function refreshAll() {
         try {
-          await Promise.all([refreshImage(), refreshLatest()]);
+          await refreshImage();
+          try {
+            await refreshLatest();
+          } catch (error) {}
         } catch (error) {
           statusEl.textContent = "Load failed";
         }
@@ -768,32 +871,61 @@ def build_image_url(image_type: str) -> str:
     return f"{DEFAULT_IMAGE_URL}?type={urllib.parse.quote(image_type)}"
 
 
+async def fetch_snapshot(image_type: str) -> ImageSnapshot:
+    png_bytes = await asyncio.to_thread(fetch_bytes, build_image_url(image_type))
+    width, height = parse_png_dimensions(png_bytes)
+    await asyncio.to_thread(write_snapshot, DEFAULT_OUTPUT_DIR, image_type, png_bytes)
+    return ImageSnapshot(width=width, height=height, png_bytes=png_bytes)
+
+
 async def refresh_presence() -> None:
     image_urls = {image_type: build_image_url(image_type) for image_type in SUPPORTED_IMAGE_TYPES}
-    fetch_jobs = [
-        asyncio.to_thread(fetch_bytes, image_url)
-        for image_url in image_urls.values()
-    ]
-    fetch_jobs.append(asyncio.to_thread(fetch_csv_rows, DEFAULT_STEPS_CSV_URL))
-    results = await asyncio.gather(*fetch_jobs)
-    csv_rows = results[-1]
-    image_payloads = results[:-1]
-    snapshots = {}
-    for image_type, png_bytes in zip(image_urls.keys(), image_payloads):
-        width, height = parse_png_dimensions(png_bytes)
-        await asyncio.to_thread(write_snapshot, DEFAULT_OUTPUT_DIR, image_type, png_bytes)
-        snapshots[image_type] = ImageSnapshot(width=width, height=height, png_bytes=png_bytes)
-    payload = {
-        "fields": list(csv_rows[0].keys()) if csv_rows else [],
-        "returned_lines": len(csv_rows),
-        "total_lines": len(csv_rows),
-        "data": csv_rows,
-    }
+    async with state_lock:
+        snapshots = dict(state.snapshots or {})
+        payload = dict(state.steps_payload) if state.steps_payload else None
+
+    image_results = await asyncio.gather(
+        *[
+            asyncio.to_thread(fetch_bytes, image_url)
+            for image_url in image_urls.values()
+        ],
+        return_exceptions=True,
+    )
+    csv_result = await asyncio.gather(
+        asyncio.to_thread(fetch_csv_rows, DEFAULT_STEPS_CSV_URL),
+        return_exceptions=True,
+    )
+
+    errors = []
+    for image_type, result in zip(image_urls.keys(), image_results):
+        if isinstance(result, Exception):
+            errors.append(f"{image_type}: {result}")
+            continue
+        width, height = parse_png_dimensions(result)
+        await asyncio.to_thread(write_snapshot, DEFAULT_OUTPUT_DIR, image_type, result)
+        snapshots[image_type] = ImageSnapshot(width=width, height=height, png_bytes=result)
+
+    csv_rows = csv_result[0]
+    if isinstance(csv_rows, Exception):
+        errors.append(f"csv: {csv_rows}")
+    else:
+        payload = {
+            "fields": list(csv_rows[0].keys()) if csv_rows else [],
+            "returned_lines": len(csv_rows),
+            "total_lines": len(csv_rows),
+            "data": csv_rows,
+        }
+
+    if not snapshots:
+        raise RuntimeError("No image snapshots available after refresh")
+    if payload is None:
+        raise RuntimeError("Steps payload not available after refresh")
+
     async with state_lock:
         state.snapshots = snapshots
         state.steps_payload = payload
         state.updated_at = datetime.now(timezone.utc).isoformat()
-        state.error = None
+        state.error = "; ".join(errors) if errors else None
 
 
 async def refresh_loop() -> None:
@@ -865,6 +997,14 @@ async def healthz():
 @app.get("/api/latest")
 async def api_latest(type: str = DEFAULT_IMAGE_TYPE):
     image_type = normalize_image_type(type)
+    should_refresh = False
+    async with state_lock:
+        should_refresh = state.steps_payload is None
+    if should_refresh:
+        try:
+            await refresh_presence()
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Steps payload not ready yet: {exc}")
     async with state_lock:
         if state.steps_payload is None:
             raise HTTPException(status_code=503, detail="Steps payload not ready yet")
@@ -873,9 +1013,21 @@ async def api_latest(type: str = DEFAULT_IMAGE_TYPE):
         return JSONResponse(content=payload)
 
 
-@app.get("/presence_raw.png")
-async def presence_raw_png(type: str = DEFAULT_IMAGE_TYPE) -> Response:
+@app.get("/api/image")
+async def api_image(type: str = DEFAULT_IMAGE_TYPE) -> Response:
     image_type = normalize_image_type(type)
+    async with state_lock:
+        snapshot = (state.snapshots or {}).get(image_type)
+    if snapshot is None or not snapshot.png_bytes:
+        try:
+            snapshot = await fetch_snapshot(image_type)
+            async with state_lock:
+                snapshots = dict(state.snapshots or {})
+                snapshots[image_type] = snapshot
+                state.snapshots = snapshots
+                state.updated_at = datetime.now(timezone.utc).isoformat()
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Presence image not ready yet: {exc}")
     async with state_lock:
         snapshot = (state.snapshots or {}).get(image_type)
         if snapshot is None or not snapshot.png_bytes:

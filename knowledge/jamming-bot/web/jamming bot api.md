@@ -166,7 +166,7 @@ tags:
 | `GET /steps/` | HTML-страница steps-service с fullscreen PNG-фоном. |
 | `GET /steps/?type=<mode>` | Та же страница, но с выбранным режимом tooltip / auto-mode. |
 | `GET /steps/healthz` | Health-check steps-service и статус кэша PNG. |
-| `GET /steps/presence_raw.png` | Актуальный PNG, который steps-service проксирует и кэширует. |
+| `GET /steps/api/image` | Актуальный PNG, который steps-service проксирует и кэширует. |
 | `GET /steps/api/latest` | Прокси latest-steps JSON для UI-режимов и tooltip. |
 
 ## Direct service APIs on main host

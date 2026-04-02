@@ -290,10 +290,10 @@ spec:
         resources:
           requests:
             cpu: "50m"
-            memory: "128Mi"
-          limits:
-            cpu: "125m"
             memory: "256Mi"
+          limits:
+            cpu: "250m"
+            memory: "1024Mi"
         startupProbe:
           tcpSocket:
             port: 7781
@@ -347,7 +347,7 @@ spec:
         command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8007"]
         env:
         - name: STEPS_IMAGE_URL
-          value: "http://app-service/api/storage_img/"
+          value: "http://storage-service/export/img"
         - name: STEPS_LATEST_URL
           value: "http://app-service/api/storage_latest/"
         - name: STEPS_CSV_URL
@@ -359,22 +359,24 @@ spec:
         resources:
           requests:
             cpu: "100m"
-            memory: "256Mi"
+            memory: "512Mi"
           limits:
             cpu: "250m"
-            memory: "1024Mi"
+            memory: "2048Mi"
         readinessProbe:
           httpGet:
             path: /healthz
             port: 8007
           initialDelaySeconds: 5
           periodSeconds: 10
+          timeoutSeconds: 5
         livenessProbe:
           httpGet:
             path: /healthz
             port: 8007
           initialDelaySeconds: 15
           periodSeconds: 20
+          timeoutSeconds: 5
         volumeMounts:
         - name: steps-data
           mountPath: /app/data

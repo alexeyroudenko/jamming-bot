@@ -1562,7 +1562,7 @@ def api_storage_img():
             headers={
                 "Content-Disposition": resp.headers.get(
                     "Content-Disposition",
-                    'inline; filename="presence_raw.png"',
+                    'inline; filename="steps_image.png"',
                 )
             },
         )
