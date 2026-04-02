@@ -23,5 +23,10 @@ FastAPI service that proxies step PNG snapshots, renders them as a fullscreen ba
 
 - `GET /` — fullscreen HTML page with support for `?type=...`
 - `GET /api/image` — latest proxied PNG snapshot
-- `GET /api/latest` — cached full step payload aligned with current PNG
+- `GET /api/latest` — cached full step payload (debug/compat endpoint, not required by `/steps` UI)
 - `GET /healthz` — current image cache status
+
+## Backfill panel
+
+The page includes a collapsible **Backfill** panel that polls `GET /api/backfill/status/` on the **same browser origin** (e.g. main host serves `/steps` via this service and `/api/*` via app-service). If Steps is ever served from another origin, configure CORS or a reverse-proxy for that API.
+

@@ -253,8 +253,9 @@ def render_html() -> str:
       #tooltip {
         position: fixed;
         z-index: 25;
-        display: none;
+        display: block;
         pointer-events: none;
+        opacity: 0;
         min-width: 240px;
         max-width: min(420px, calc(100vw - 24px));
         padding: 10px 12px;
@@ -266,9 +267,10 @@ def render_html() -> str:
         font-size: 12px;
         line-height: 1.45;
         backdrop-filter: blur(8px);
+        transition: opacity 0.14s ease, left 0.2s ease, top 0.2s ease;
       }
       #tooltip.visible {
-        display: block;
+        opacity: 1;
       }
       .steps-tooltip-row {
         margin-top: 4px;
@@ -313,6 +315,91 @@ def render_html() -> str:
       #pixel-source {
         display: none;
       }
+      .steps-backfill-panel {
+        position: fixed;
+        top: 64px;
+        right: 12px;
+        z-index: 21;
+        max-width: min(320px, calc(100vw - 24px));
+        border-radius: 12px;
+        border: 1px solid var(--steps-border);
+        background: var(--steps-panel);
+        backdrop-filter: blur(10px);
+        font-size: 12px;
+        color: var(--steps-text);
+        box-shadow: 0 12px 38px rgba(0, 0, 0, 0.35);
+      }
+      .steps-backfill-panel > summary {
+        list-style: none;
+        cursor: pointer;
+        padding: 10px 12px;
+        font-weight: 600;
+        color: var(--steps-muted);
+        user-select: none;
+      }
+      .steps-backfill-panel > summary::-webkit-details-marker {
+        display: none;
+      }
+      .steps-backfill-panel[open] > summary {
+        color: var(--steps-accent);
+        border-bottom: 1px solid var(--steps-border);
+      }
+      .steps-backfill-inner {
+        padding: 10px 12px 12px;
+      }
+      .steps-backfill-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 12px;
+      }
+      .steps-backfill-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .steps-backfill-label {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--steps-muted);
+      }
+      .steps-backfill-value {
+        font-family: ui-monospace, monospace;
+        font-size: 11px;
+        word-break: break-all;
+      }
+      .steps-backfill-value.is-running { color: #4ade80; }
+      .steps-backfill-value.is-finished { color: var(--steps-muted); }
+      .steps-backfill-value.is-failed { color: #f87171; }
+      .steps-backfill-detail {
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px solid var(--steps-border);
+        font-size: 11px;
+        line-height: 1.4;
+        color: var(--steps-muted);
+        word-break: break-word;
+      }
+      .steps-presence-anchor {
+        position: fixed;
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: #ff0000;
+        box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.85), 0 0 12px rgba(255, 0, 0, 0.7);
+        transform: translate(-50%, -50%);
+        z-index: 26;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.2s ease, transform 0.45s ease;
+      }
+      .steps-presence-anchor.visible {
+        opacity: 1;
+      }
+      .steps-presence-anchor.fading {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.82);
+      }
     </style>
   </head>
   <body>
@@ -343,7 +430,50 @@ def render_html() -> str:
     </div>
     <canvas id="pixel-source"></canvas>
     <div id="tooltip"></div>
+    <div id="presence-anchors" aria-hidden="true"></div>
     <div id="auto-cursor" class="steps-auto-cursor" aria-hidden="true"></div>
+    <details id="steps-backfill" class="steps-backfill-panel" aria-live="polite">
+      <summary>Backfill</summary>
+      <div class="steps-backfill-inner">
+        <div class="steps-backfill-meta steps-backfill-label" id="steps-bf-meta">—</div>
+        <div class="steps-backfill-grid" style="margin-top:10px">
+          <div class="steps-backfill-item">
+            <span class="steps-backfill-label">State</span>
+            <span id="steps-bf-state" class="steps-backfill-value">idle</span>
+          </div>
+          <div class="steps-backfill-item">
+            <span class="steps-backfill-label">Step</span>
+            <span id="steps-bf-step" class="steps-backfill-value">—</span>
+          </div>
+          <div class="steps-backfill-item">
+            <span class="steps-backfill-label">Page</span>
+            <span id="steps-bf-page" class="steps-backfill-value">0 / 0</span>
+          </div>
+          <div class="steps-backfill-item">
+            <span class="steps-backfill-label">Processed</span>
+            <span id="steps-bf-processed" class="steps-backfill-value">0</span>
+          </div>
+          <div class="steps-backfill-item">
+            <span class="steps-backfill-label">Skipped</span>
+            <span id="steps-bf-skipped" class="steps-backfill-value">0</span>
+          </div>
+          <div class="steps-backfill-item">
+            <span class="steps-backfill-label">Sleep</span>
+            <span id="steps-bf-sleep" class="steps-backfill-value">—</span>
+          </div>
+          <div class="steps-backfill-item">
+            <span class="steps-backfill-label">Timeout</span>
+            <span id="steps-bf-timeout" class="steps-backfill-value">—</span>
+          </div>
+          <div class="steps-backfill-item">
+            <span class="steps-backfill-label">Delta sec</span>
+            <span id="steps-bf-delta" class="steps-backfill-value">—</span>
+          </div>
+        </div>
+        <div id="steps-bf-detail" class="steps-backfill-detail">No data yet</div>
+      </div>
+    </details>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
     <script>
       const TYPE_STORAGE_KEY = "steps-display-type";
       const DEFAULT_IMAGE_TYPE = "status_code";
@@ -373,6 +503,7 @@ def render_html() -> str:
       const statusEl = document.getElementById("status");
       const pixelSource = document.getElementById("pixel-source");
       const pixelContext = pixelSource.getContext("2d", { willReadFrequently: true });
+      const presenceAnchorsHost = document.getElementById("presence-anchors");
       const autoCursor = document.getElementById("auto-cursor");
       const autoBtn = document.getElementById("btn-auto");
       const refreshBtn = document.getElementById("btn-refresh");
@@ -390,6 +521,8 @@ def render_html() -> str:
       const pendingStepRequests = new Map();
       let stepDetailTimer = null;
       const STEP_DETAIL_DELAY_MS = 100;
+      const AUTO_ID_SPREAD_MULTIPLIER = 20;
+      const AUTO_ID_FOCUS = 100000;
       let displayType = "status_code";
       let hoveredStepId = null;
       let latestStepNumber = -1;
@@ -397,6 +530,17 @@ def render_html() -> str:
       let autoTarget = null;
       let autoTimer = null;
       let autoAnimationFrame = null;
+      let presenceDebounceTimer = null;
+      let pendingPresenceStep = null;
+      let pendingAnchorAfterImageLoad = null;
+      let socketImageRefreshTimer = null;
+      let lastSocketImageRefreshAt = 0;
+      let tooltipPositionReady = false;
+      const MAX_PRESENCE_ANCHORS = 100;
+      const PRESENCE_ANCHOR_FADE_MS = 7000;
+      const SOCKET_PRESENCE_DEBOUNCE_MS = 600;
+      const SOCKET_IMAGE_REFRESH_MIN_INTERVAL_MS = 45000;
+      const presenceAnchors = [];
       const autoState = { x: 0, y: 0, targetX: 0, targetY: 0, vx: 0, vy: 0 };
 
       function trimText(value) {
@@ -518,8 +662,20 @@ def render_html() -> str:
         const rect = tooltip.getBoundingClientRect();
         if (x + rect.width > window.innerWidth - pad) x = clientX - rect.width - 18;
         if (y + rect.height > window.innerHeight - pad) y = clientY - rect.height - 18;
-        tooltip.style.left = Math.max(pad, Math.min(x, window.innerWidth - rect.width - pad)) + "px";
-        tooltip.style.top = Math.max(pad, Math.min(y, window.innerHeight - rect.height - pad)) + "px";
+        const targetX = Math.max(pad, Math.min(x, window.innerWidth - rect.width - pad));
+        const targetY = Math.max(pad, Math.min(y, window.innerHeight - rect.height - pad));
+        if (!tooltipPositionReady) {
+          tooltip.style.transition = "none";
+          tooltip.style.left = targetX + "px";
+          tooltip.style.top = targetY + "px";
+          tooltipPositionReady = true;
+          window.requestAnimationFrame(() => {
+            tooltip.style.transition = "";
+          });
+          return;
+        }
+        tooltip.style.left = targetX + "px";
+        tooltip.style.top = targetY + "px";
       }
 
       function renderTooltip(step, clientX, clientY) {
@@ -584,7 +740,8 @@ def render_html() -> str:
 
       function updateStatus() {
         const parts = [displayType];
-        if (steps.length) parts.push(`steps ${steps.length}`);
+        const knownSteps = stepMap.size;
+        if (knownSteps) parts.push(`known ${knownSteps}`);
         if (latestStepNumber >= 0) parts.push(`latest ${latestStepNumber}`);
         if (image.naturalWidth && image.naturalHeight) parts.push(`image ${image.naturalWidth}x${image.naturalHeight}`);
         statusEl.textContent = parts.join(" · ") || "Loading...";
@@ -601,6 +758,11 @@ def render_html() -> str:
         pixelContext.drawImage(image, 0, 0);
         imageReady = true;
         updateStatus();
+        if (Number.isFinite(pendingAnchorAfterImageLoad)) {
+          const stepId = pendingAnchorAfterImageLoad;
+          pendingAnchorAfterImageLoad = null;
+          highlightPresenceStep(stepId);
+        }
       }
 
       async function refreshImage() {
@@ -612,21 +774,6 @@ def render_html() -> str:
         image.src = url.toString();
       }
 
-      async function refreshLatest() {
-        const url = new URL("api/latest", baseUrl);
-        url.searchParams.set("type", displayType);
-        const response = await fetch(url, { cache: "no-store" });
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        const payload = await response.json();
-        const rows = Array.isArray(payload.data) ? payload.data : [];
-        steps = normalizeRows(rows);
-        stepMap = new Map(steps.map((row) => [row.step_id, row]));
-        latestStepNumber = steps.length ? steps[steps.length - 1].step_id : -1;
-        updateStatus();
-      }
-
       async function fetchStep(stepId) {
         if (stepCache.has(stepId)) {
           return stepCache.get(stepId);
@@ -636,7 +783,7 @@ def render_html() -> str:
         }
         const request = (async () => {
           const response = await fetch(`/api/storage_step/${stepId}/`, { cache: "no-store" });
-          if (response.status === 404) {
+          if (response.status === 404 || response.status === 502 || response.status === 503 || response.status === 504) {
             return null;
           }
           if (!response.ok) {
@@ -645,6 +792,8 @@ def render_html() -> str:
           const data = normalizeStep(await response.json(), stepId);
           stepCache.set(stepId, data);
           stepMap.set(stepId, data);
+          latestStepNumber = Math.max(latestStepNumber, stepId);
+          updateStatus();
           return data;
         })();
         pendingStepRequests.set(stepId, request);
@@ -698,6 +847,108 @@ def render_html() -> str:
         };
       }
 
+      function trimPresenceAnchors() {
+        while (presenceAnchors.length > MAX_PRESENCE_ANCHORS) {
+          const oldItem = presenceAnchors.shift();
+          if (!oldItem) continue;
+          if (oldItem.fadeTimer) window.clearTimeout(oldItem.fadeTimer);
+          if (oldItem.removeTimer) window.clearTimeout(oldItem.removeTimer);
+          if (oldItem.el && oldItem.el.parentNode) oldItem.el.parentNode.removeChild(oldItem.el);
+        }
+      }
+
+      function pushPresenceAnchor(point) {
+        if (!presenceAnchorsHost || !point) return;
+        const anchor = document.createElement("div");
+        anchor.className = "steps-presence-anchor";
+        anchor.style.left = point.x + "px";
+        anchor.style.top = point.y + "px";
+        presenceAnchorsHost.appendChild(anchor);
+        window.requestAnimationFrame(() => {
+          anchor.classList.add("visible");
+        });
+        const item = { el: anchor, fadeTimer: null, removeTimer: null };
+        item.fadeTimer = window.setTimeout(() => {
+          anchor.classList.add("fading");
+          item.removeTimer = window.setTimeout(() => {
+            if (anchor.parentNode) anchor.parentNode.removeChild(anchor);
+          }, 550);
+        }, PRESENCE_ANCHOR_FADE_MS);
+        presenceAnchors.push(item);
+        trimPresenceAnchors();
+      }
+
+      function pointForStepOnOverlay(stepId) {
+        if (!image.naturalWidth || !image.naturalHeight) return null;
+        const rect = overlay.getBoundingClientRect();
+        const ix = stepId % image.naturalWidth;
+        const iy = Math.floor(stepId / image.naturalWidth);
+        return {
+          x: rect.left + ((ix + 0.5) / image.naturalWidth) * rect.width,
+          y: rect.top + ((iy + 0.5) / image.naturalHeight) * rect.height
+        };
+      }
+
+      async function highlightPresenceStep(stepId) {
+        if (!Number.isFinite(stepId) || stepId < 0) return;
+        const point = pointForStepOnOverlay(stepId);
+        if (!point) {
+          pendingAnchorAfterImageLoad = stepId;
+          console.log("[steps] presence anchor delayed: image not ready", { stepId });
+          return;
+        }
+        console.log("[steps] presence step highlight", { stepId, x: point.x, y: point.y });
+        pushPresenceAnchor(point);
+        let row = getRowForStep(stepId);
+        if (!row) {
+          try {
+            row = await fetchStep(stepId);
+          } catch (error) {
+            row = null;
+          }
+        }
+        hoveredStepId = stepId;
+        pendingPointerEvent = { clientX: point.x, clientY: point.y };
+        if (row) {
+          renderTooltip(row, point.x, point.y);
+        } else {
+          renderStepNumberOnly(stepId, point.x, point.y);
+        }
+      }
+
+      function scheduleSocketImageRefresh(stepId) {
+        const now = Date.now();
+        const elapsedMs = now - lastSocketImageRefreshAt;
+        const waitMs = Math.max(0, SOCKET_IMAGE_REFRESH_MIN_INTERVAL_MS - elapsedMs);
+        if (socketImageRefreshTimer) return;
+        const runRefresh = async () => {
+          socketImageRefreshTimer = null;
+          try {
+            await refreshImage();
+            lastSocketImageRefreshAt = Date.now();
+            console.log("[steps] refreshImage debounced after presence_step OK", { stepId });
+          } catch (error) {}
+        };
+        if (waitMs <= 0) {
+          runRefresh();
+        } else {
+          socketImageRefreshTimer = window.setTimeout(runRefresh, waitMs);
+        }
+      }
+
+      function schedulePresenceRefresh(stepId) {
+        pendingPresenceStep = stepId;
+        if (presenceDebounceTimer) return;
+        presenceDebounceTimer = window.setTimeout(async () => {
+          const targetStep = pendingPresenceStep;
+          pendingPresenceStep = null;
+          presenceDebounceTimer = null;
+          console.log("[steps] presence_step received", { stepId: targetStep });
+          await highlightPresenceStep(targetStep);
+          scheduleSocketImageRefresh(targetStep);
+        }, SOCKET_PRESENCE_DEBOUNCE_MS);
+      }
+
       function processPointer(event) {
         if (!imageReady || !image.naturalWidth || !image.naturalHeight) {
           hideTooltip();
@@ -746,17 +997,37 @@ def render_html() -> str:
       }
 
       function pickAutoTarget() {
-        if (!steps.length) return null;
-        return steps[Math.floor(Math.random() * steps.length)].step_id;
+        if (!imageReady || !image.naturalWidth || !image.naturalHeight) return null;
+        const knownStepIds = Array.from(stepMap.keys()).filter((id) => Number.isFinite(id) && id >= 0);
+        const maxRasterId = image.naturalWidth * image.naturalHeight - 1;
+        if (!knownStepIds.length) {
+          return maxRasterId >= 0 ? Math.floor(Math.random() * (maxRasterId + 1)) : null;
+        }
+        const randomExisting = knownStepIds[Math.floor(Math.random() * knownStepIds.length)];
+        if (Math.random() < 0.25) {
+          return randomExisting;
+        }
+        const minId = Math.min(...knownStepIds);
+        const maxId = Math.max(...knownStepIds);
+        const span = Math.max(1, maxId - minId + 1);
+        const expandedSpan = span * AUTO_ID_SPREAD_MULTIPLIER;
+        const sigma = expandedSpan / 6;
+        const jitter = (Math.random() - 0.5) * sigma;
+        const gaussian = Math.sqrt(-2 * Math.log(Math.max(Number.EPSILON, Math.random()))) * Math.cos(2 * Math.PI * Math.random());
+        const sampled = Math.round(AUTO_ID_FOCUS + gaussian * sigma + jitter);
+        return Math.max(0, Math.min(maxRasterId, sampled));
       }
 
       function syncAutoTooltip() {
         if (!autoMode || autoTarget == null) return;
         const row = stepMap.get(autoTarget);
-        if (!row) return;
         autoCursor.style.left = autoState.x + "px";
         autoCursor.style.top = autoState.y + "px";
         autoCursor.classList.add("visible");
+        if (!row) {
+          renderStepNumberOnly(autoTarget, autoState.x, autoState.y);
+          return;
+        }
         renderTooltip(row, autoState.x, autoState.y);
       }
 
@@ -773,7 +1044,7 @@ def render_html() -> str:
       }
 
       function tickAuto() {
-        if (!steps.length || !imageReady) return;
+        if (!imageReady) return;
         autoTarget = pickAutoTarget();
         if (autoTarget == null) return;
         const point = centerForStep(autoTarget);
@@ -794,7 +1065,7 @@ def render_html() -> str:
       }
 
       function startAuto() {
-        if (!steps.length || !imageReady) return;
+        if (!imageReady) return;
         autoMode = true;
         autoBtn.setAttribute("aria-pressed", "true");
         autoBtn.textContent = "Auto: on";
@@ -823,9 +1094,6 @@ def render_html() -> str:
       async function refreshAll() {
         try {
           await refreshImage();
-          try {
-            await refreshLatest();
-          } catch (error) {}
         } catch (error) {
           statusEl.textContent = "Load failed";
         }
@@ -852,10 +1120,89 @@ def render_html() -> str:
         }
       });
 
+      const BF_POLL_MS = 8000;
+      const bfMeta = document.getElementById("steps-bf-meta");
+      const bfState = document.getElementById("steps-bf-state");
+      const bfStep = document.getElementById("steps-bf-step");
+      const bfPage = document.getElementById("steps-bf-page");
+      const bfProcessed = document.getElementById("steps-bf-processed");
+      const bfSkipped = document.getElementById("steps-bf-skipped");
+      const bfSleep = document.getElementById("steps-bf-sleep");
+      const bfTimeout = document.getElementById("steps-bf-timeout");
+      const bfDelta = document.getElementById("steps-bf-delta");
+      const bfDetail = document.getElementById("steps-bf-detail");
+
+      function renderStepsBackfill(payload) {
+        if (!bfState || !bfStep || !bfPage || !bfProcessed || !bfSkipped || !bfSleep || !bfTimeout || !bfDelta || !bfDetail) return;
+        const data = payload || {};
+        const st = String(data.state || "idle");
+        const stepNum = data.last_id ? String(data.last_id) : "—";
+        const cur = Number(data.current_page || 0);
+        const tot = Number(data.total_pages || 0);
+        const proc = Number(data.processed || 0);
+        const skip = Number(data.skipped || 0);
+        const sleep = Number(data.backfill_sleep);
+        const timeout = Number(data.backfill_timeout);
+        const delta = Number(data.step_delta_sec);
+        const lastUrl = data.last_url ? escapeHtml(String(data.last_url)) : "—";
+        const lastErr = data.last_error ? escapeHtml(String(data.last_error)) : "";
+        const updated = data.updated_at ? escapeHtml(String(data.updated_at)) : "no data";
+        if (bfMeta) bfMeta.textContent = data.error ? "error" : (data.exists ? updated : "idle");
+        bfState.textContent = st;
+        bfState.className = "steps-backfill-value is-" + st;
+        bfStep.textContent = stepNum;
+        bfPage.textContent = cur + " / " + tot;
+        bfProcessed.textContent = String(proc);
+        bfSkipped.textContent = String(skip);
+        bfSleep.textContent = Number.isFinite(sleep) ? sleep.toFixed(1) + "s" : "—";
+        bfTimeout.textContent = Number.isFinite(timeout) ? timeout.toFixed(1) + "s" : "—";
+        bfDelta.textContent = Number.isFinite(delta) && delta > 0 ? delta.toFixed(2) + "s" : "—";
+        if (data.error) {
+          bfDetail.textContent = "Status unavailable: " + data.error;
+          return;
+        }
+        if (!data.exists) {
+          bfDetail.textContent = "No data yet";
+          return;
+        }
+        bfDetail.innerHTML = lastErr ? ("Last error: " + lastErr) : ("Last URL: " + lastUrl);
+      }
+
+      async function refreshStepsBackfill() {
+        if (!bfState) return;
+        try {
+          const response = await fetch("/api/backfill/status/", {
+            cache: "no-store",
+            credentials: "include",
+          });
+          const payload = await response.json();
+          renderStepsBackfill(payload);
+          console.log("[steps] backfill status", payload);
+        } catch (err) {
+          renderStepsBackfill({ error: "fetch failed", exists: false, state: "idle" });
+          console.log("[steps] backfill status fetch failed", err);
+        }
+      }
+
+      const socket = io(window.location.origin, { transports: ["websocket", "polling"] });
+      socket.on("connect", () => {
+        console.log("[steps] socket connected", { id: socket.id });
+      });
+      socket.on("disconnect", (reason) => {
+        console.log("[steps] socket disconnected", { reason });
+      });
+      socket.on("presence_step", (payload) => {
+        const stepId = parseInt(String((payload || {}).step ?? ""), 10);
+        if (!Number.isFinite(stepId)) return;
+        console.log("[steps] socket presence_step", payload);
+        schedulePresenceRefresh(stepId);
+      });
+
       applyDisplayType(getInitialType(), true);
       refreshAll();
-      window.setInterval(refreshImage, 60000);
-      window.setInterval(refreshLatest, 45000);
+      refreshStepsBackfill();
+      window.setInterval(refreshImage, 300000);
+      window.setInterval(refreshStepsBackfill, BF_POLL_MS);
     </script>
   </body>
 </html>
@@ -917,9 +1264,11 @@ async def refresh_presence() -> None:
         }
 
     if not snapshots:
-        raise RuntimeError("No image snapshots available after refresh")
+        err_text = "; ".join(errors) if errors else "no per-fetch details"
+        raise RuntimeError(f"No image snapshots available after refresh: {err_text}")
     if payload is None:
-        raise RuntimeError("Steps payload not available after refresh")
+        err_text = "; ".join(errors) if errors else "no per-fetch details"
+        raise RuntimeError(f"Steps payload not available after refresh: {err_text}")
 
     async with state_lock:
         state.snapshots = snapshots

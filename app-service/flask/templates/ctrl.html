@@ -89,6 +89,18 @@
             <label for="sleep_time_input">sleep_time: <output id="sleep_time_value">{{ cfg.sleep_time }}</output>s</label><br>
             <input style="width:300px" type="range" class="form-range" min="0" max="10" step="0.1" id="sleep_time_input" value={{ cfg.sleep_time }}>
         </span>
+        <span>
+            <label for="random_time_input">random_time: <output id="random_time_value">{{ cfg.random_time }}</output>s</label><br>
+            <input style="width:300px" type="range" class="form-range" min="0" max="5" step="0.1" id="random_time_input" value={{ cfg.random_time }}>
+        </span>
+        <span>
+            <label for="backfill_sleep_input">backfill_sleep: <output id="backfill_sleep_value">{{ cfg.backfill_sleep }}</output>s</label><br>
+            <input style="width:300px" type="range" class="form-range" min="0" max="10" step="0.1" id="backfill_sleep_input" value={{ cfg.backfill_sleep }}>
+        </span>
+        <span>
+            <label for="backfill_timeout_input">backfill_timeout: <output id="backfill_timeout_value">{{ cfg.backfill_timeout }}</output>s</label><br>
+            <input style="width:300px" type="range" class="form-range" min="0" max="10" step="0.1" id="backfill_timeout_input" value={{ cfg.backfill_timeout }}>
+        </span>
 
     </fieldset>
     <br><br>
@@ -183,6 +195,30 @@
     sleep_time_input.addEventListener("input", (event) => {
         sleep_time_value.textContent = event.target.value;
         socket.emit('sleep_time', parseFloat(event.target.value));
+    });
+
+    const random_time_value = document.querySelector("#random_time_value");
+    const random_time_input = document.querySelector("#random_time_input");
+    random_time_value.textContent = random_time_input.value;
+    random_time_input.addEventListener("input", (event) => {
+        random_time_value.textContent = event.target.value;
+        socket.emit('random_time', parseFloat(event.target.value));
+    });
+
+    const backfill_sleep_value = document.querySelector("#backfill_sleep_value");
+    const backfill_sleep_input = document.querySelector("#backfill_sleep_input");
+    backfill_sleep_value.textContent = backfill_sleep_input.value;
+    backfill_sleep_input.addEventListener("input", (event) => {
+        backfill_sleep_value.textContent = event.target.value;
+        socket.emit('backfill_sleep', parseFloat(event.target.value));
+    });
+
+    const backfill_timeout_value = document.querySelector("#backfill_timeout_value");
+    const backfill_timeout_input = document.querySelector("#backfill_timeout_input");
+    backfill_timeout_value.textContent = backfill_timeout_input.value;
+    backfill_timeout_input.addEventListener("input", (event) => {
+        backfill_timeout_value.textContent = event.target.value;
+        socket.emit('backfill_timeout', parseFloat(event.target.value));
     });
 
     socket.on('disconnect', function() {

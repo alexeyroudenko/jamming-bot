@@ -25,8 +25,8 @@
       width: 8px;
       height: 8px;
       border-radius: 999px;
-      background: #ef4444;
-      box-shadow: 0 0 10px rgba(239, 68, 68, 0.7);
+      background: #ff0000;
+      box-shadow: 0 0 10px rgba(255, 0, 0, 0.7);
     }
 
     .path-map-dot.ok {
@@ -211,17 +211,17 @@
 </div>
 <div id="path-map-tooltip" class="path-map-tooltip" role="status" aria-live="polite"></div>
 <div id="path-map-auto-cursor" class="path-map-auto-cursor" aria-hidden="true"></div>
-<p class="tags-vis-hint" id="path-map-hint">Latest 3000 steps. Grid flows left-to-right, then top-to-bottom. Black = all non-4xx, red = 4xx.</p>
+<p class="tags-vis-hint" id="path-map-hint">Latest 100 steps. Grid flows left-to-right, then top-to-bottom. Black = all non-4xx, red = 4xx.</p>
 <div class="path-map-legend" id="path-map-legend">
   <span><span class="path-map-swatch" style="background:#000000;border:1px solid rgba(250,250,250,0.2)"></span>non-4xx</span>
-  <span><span class="path-map-swatch" style="background:#ef4444"></span>4xx</span>
+  <span><span class="path-map-swatch" style="background:#ff0000"></span>4xx</span>
 </div>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
 <script>
 (function () {
   var STORAGE_API = '/api/storage_latest/';
-  var MAX_STEPS = 3000;
+  var MAX_STEPS = 100;
   var MODE_STORAGE_KEY = 'path-map-display-mode';
   var ROWS_STORAGE_KEY = 'path-map-row-count';
   var QUERY_TO_MODE = {
@@ -304,7 +304,7 @@
   }
 
   function statusColor(code) {
-    return code >= 400 && code < 500 ? '#ef4444' : '#000000';
+    return code >= 400 && code < 500 ? '#ff0000' : '#000000';
   }
 
   function parseStepNumber(v) {
@@ -495,30 +495,30 @@
 
   function updateLegend() {
     if (displayMode === 'text-length') {
-      hintEl.textContent = 'Latest 3000 steps. White = more text, black = less text.';
+      hintEl.textContent = 'Latest 100 steps. White = more text, black = less text.';
       legendEl.innerHTML =
         '<span><span class="path-map-swatch" style="background:#000"></span>short</span>' +
         '<span><span class="path-map-swatch" style="background:#fff;border:1px solid rgba(0,0,0,0.25)"></span>long</span>';
       return;
     }
     if (displayMode === 'screenshot') {
-      hintEl.textContent = 'Latest 3000 steps. White = screenshot exists, black = no screenshot. Tooltip shows thumbnail.';
+      hintEl.textContent = 'Latest 100 steps. White = screenshot exists, black = no screenshot. Tooltip shows thumbnail.';
       legendEl.innerHTML =
         '<span><span class="path-map-swatch" style="background:#000"></span>no screenshot</span>' +
         '<span><span class="path-map-swatch" style="background:#fff;border:1px solid rgba(0,0,0,0.25)"></span>has screenshot</span>';
       return;
     }
     if (displayMode === 'delta-time') {
-      hintEl.textContent = 'Latest 3000 steps. White = smaller time gap from previous step, black = larger gap.';
+      hintEl.textContent = 'Latest 100 steps. White = smaller time gap from previous step, black = larger gap.';
       legendEl.innerHTML =
         '<span><span class="path-map-swatch" style="background:#fff;border:1px solid rgba(0,0,0,0.25)"></span>fast change</span>' +
         '<span><span class="path-map-swatch" style="background:#000"></span>slow change</span>';
       return;
     }
-    hintEl.textContent = 'Latest 3000 steps. Grid flows left-to-right, then top-to-bottom. Black = all non-4xx, red = 4xx.';
+    hintEl.textContent = 'Latest 100 steps. Grid flows left-to-right, then top-to-bottom. Black = all non-4xx, red = 4xx.';
     legendEl.innerHTML =
       '<span><span class="path-map-swatch" style="background:#000000;border:1px solid rgba(250,250,250,0.2)"></span>non-4xx</span>' +
-      '<span><span class="path-map-swatch" style="background:#ef4444"></span>4xx</span>';
+      '<span><span class="path-map-swatch" style="background:#ff0000"></span>4xx</span>';
   }
 
   function syncModeUrl() {

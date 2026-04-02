@@ -320,11 +320,22 @@ def _ctrl_log(action: str, source: str):
 def _ensure_redis_defaults():
     defaults = {'value': 0.5, 'do_pass': 0.5, 'do_geo': 0.5,
                 'do_save': 0.5, 'do_analyze': 0.5, 'do_screenshot': 0.5,
-                'do_image_analyze': 1.0, 'do_storage': 0.5, 'sleep_time': 2.0}
+                'do_image_analyze': 1.0, 'do_storage': 0.5, 'sleep_time': 2.0,
+                'random_time': 2.0, 'backfill_sleep': 2.0, 'backfill_timeout': 4.0}
     for key, default in defaults.items():
         if not redis.get(key):
             redis.set(key, default)
     return {k: float(redis.get(k)) for k in defaults}
+
+
+def _redis_float(key: str, default: float) -> float:
+    try:
+        raw = redis.get(key)
+        if raw is None:
+            return default
+        return float(raw)
+    except (TypeError, ValueError):
+        return default
 
 
 BOT_YAML_KEYS = ("send_events", "send_sublinks", "log_events")
@@ -420,6 +431,18 @@ def _save_to_step_hash(step_key, data):
         logger.warning(f"_save_to_step_hash({step_key}): {exc}")
 
 
+def _emit_presence_step(step_number, phase="update"):
+    """Emit lightweight websocket signal for Steps Presence overlays."""
+    try:
+        step_num = int(step_number)
+    except (TypeError, ValueError):
+        return
+    socketio.emit(
+        "presence_step",
+        {"step": step_num, "source": "backfill", "phase": str(phase or "update")},
+    )
+
+
 def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                        step_key=None, silent=False):
     """Poll an RQ job in a background thread and emit result via SocketIO."""
@@ -441,6 +464,8 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                     _store_step_analysis(step_key, job.result)
                 else:
                     _patch_storage(step_key, job.result)
+                    if silent and step_key:
+                        _emit_presence_step(step_key.split(":")[-1], phase=event_name)
                 if event_name == "screenshot":
                     _enqueue_image_analysis_followup(step_key, job.result, silent=silent)
                 return
@@ -481,6 +506,9 @@ def _read_backfill_status():
         "last_id": "",
         "last_url": "",
         "last_error": "",
+        "backfill_sleep": 0.0,
+        "backfill_timeout": 0.0,
+        "step_delta_sec": 0.0,
         "updated_at": "",
     }
     try:
@@ -502,6 +530,19 @@ def _read_backfill_status():
             status[key] = int(float(raw.get(key) or 0))
         except (ValueError, TypeError):
             status[key] = 0
+    for key in ("step_delta_sec",):
+        try:
+            status[key] = float(raw.get(key) or 0.0)
+        except (ValueError, TypeError):
+            status[key] = 0.0
+    try:
+        status["backfill_sleep"] = float(_redis_float("backfill_sleep", 2.0))
+    except (ValueError, TypeError):
+        status["backfill_sleep"] = 2.0
+    try:
+        status["backfill_timeout"] = float(_redis_float("backfill_timeout", 4.0))
+    except (ValueError, TypeError):
+        status["backfill_timeout"] = 4.0
     return status
 
 
@@ -627,14 +668,28 @@ def _patch_storage(step_key, data):
     number = step_key.split(":")[-1] if step_key else None
     if not number or not data:
         return
-    try:
-        requests.patch(
-            f"{STORAGE_SERVICE_URL}/update/step/{number}",
-            json={k: v for k, v in data.items() if not k.startswith('_')},
-            timeout=5,
-        )
-    except Exception as e:
-        logger.warning(f"_patch_storage({number}): {e}")
+    payload = {k: v for k, v in data.items() if not k.startswith('_')}
+    delays = (0.0, 0.8, 1.6)
+    last_error = None
+    for idx, delay in enumerate(delays):
+        if delay > 0:
+            time.sleep(delay)
+        try:
+            response = requests.patch(
+                f"{STORAGE_SERVICE_URL}/update/step/{number}",
+                json=payload,
+                timeout=12,
+            )
+            if response.status_code == 404:
+                logger.warning(f"_patch_storage({number}) 404 not found (step missing in storage)")
+                return
+            response.raise_for_status()
+            return
+        except Exception as e:
+            last_error = e
+            logger.warning(f"_patch_storage({number}) retry={idx+1}/{len(delays)}: {e}")
+    if last_error is not None:
+        logger.warning(f"_patch_storage({number}) failed after retries: {last_error}")
 
 
 def _store_step_analysis(step_key, data):
@@ -1277,11 +1332,28 @@ def step():
 
         if float(current_cfg.get('do_storage', 0)) == 1.0 and data.get('url'):
             try:
-                requests.post(
-                    f"{STORAGE_SERVICE_URL}/store",
-                    json=partial_data, timeout=5,
-                )
+                store_resp = None
+                last_error = None
+                for idx, delay in enumerate((0.0, 0.8, 1.6)):
+                    if delay > 0:
+                        time.sleep(delay)
+                    try:
+                        store_resp = requests.post(
+                            f"{STORAGE_SERVICE_URL}/store",
+                            json=partial_data,
+                            timeout=12,
+                        )
+                        store_resp.raise_for_status()
+                        last_error = None
+                        break
+                    except Exception as e:
+                        last_error = e
+                        logger.warning(f"step: early storage retry={idx+1}/3 failed: {e}")
+                if last_error is not None:
+                    raise last_error
                 logger.info(f"step: early storage OK for step {data['number']}")
+                if is_silent:
+                    _emit_presence_step(data.get("number"), phase="store")
             except Exception as e:
                 logger.warning(f"step: early storage failed: {e}")
 
@@ -1475,17 +1547,23 @@ def api_step_detail(step_num):
 @cross_origin()
 def api_storage_step(step_num):
     """Proxy to storage-service GET /get/step/{number}."""
-    try:
-        resp = requests.get(
-            f"{STORAGE_SERVICE_URL}/get/step/{step_num}", timeout=10)
-        resp.raise_for_status()
-        return jsonify(resp.json())
-    except requests.exceptions.HTTPError:
-        status = resp.status_code if resp is not None else 502
-        return jsonify({"error": "step not found"}), status
-    except Exception as e:
-        logger.warning(f"api_storage_step: {e}")
-        return jsonify({"error": str(e)}), 502
+    resp = None
+    delays = (0.0, 0.8, 1.6)
+    for idx, delay in enumerate(delays):
+        if delay > 0:
+            time.sleep(delay)
+        try:
+            resp = requests.get(
+                f"{STORAGE_SERVICE_URL}/get/step/{step_num}", timeout=20
+            )
+            resp.raise_for_status()
+            return jsonify(resp.json())
+        except requests.exceptions.HTTPError:
+            status = resp.status_code if resp is not None else 502
+            return jsonify({"error": "step not found"}), status
+        except Exception as e:
+            logger.warning(f"api_storage_step retry={idx+1}/{len(delays)}: {e}")
+    return jsonify({"error": "storage temporarily unavailable"}), 502
 
 
 @app.route("/api/storage_latest/", methods=["GET"])
@@ -1854,6 +1932,21 @@ def handle_do_storage(value):
 @socketio.on('sleep_time')
 def handle_sleep_time(value):
     redis.set('sleep_time', float(value))
+
+
+@socketio.on('random_time')
+def handle_random_time(value):
+    redis.set('random_time', float(value))
+
+
+@socketio.on('backfill_sleep')
+def handle_backfill_sleep(value):
+    redis.set('backfill_sleep', float(value))
+
+
+@socketio.on('backfill_timeout')
+def handle_backfill_timeout(value):
+    redis.set('backfill_timeout', float(value))
 
 
 def _socket_bot_yaml_flag(key: str, value):

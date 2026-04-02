@@ -1805,7 +1805,8 @@ metadata:
   name: backfill-worker
   namespace: jamming-bot
 spec:
-  backoffLimit: 3
+  # Many pod restarts on crash/OOM before Job is marked Failed (was 3 → backoff limit too soon).
+  backoffLimit: 100
   activeDeadlineSeconds: 604800
   template:
     metadata:
@@ -1828,14 +1829,23 @@ spec:
         - name: REDIS_PORT
           value: "6379"
         - name: BATCH_SIZE
-          value: "100"
+          value: "10"
         - name: SLEEP_BETWEEN
           value: "2.0"
+        - name: BACKFILL_STEP_BASE
+          value: "0"
+        - name: BACKFILL_MIN_ID
+          value: "150000"
+        - name: BACKFILL_MAX_ID
+          value: "300000"
+        # Defaults; live tuning via Redis keys backfill_sleep / backfill_timeout from /ctrl/
+        - name: PAGE_TIMEOUT
+          value: "10"
         resources:
           requests:
-            cpu: "50m"
-            memory: "64Mi"
+            cpu: "150m"
+            memory: "512Mi"
           limits:
-            cpu: "250m"
-            memory: "256Mi"
+            cpu: "500m"
+            memory: "2048Mi"
       restartPolicy: OnFailure
