@@ -729,6 +729,8 @@ spec:
           value: "http://semantic-service"
         - name: STORAGE_SERVICE_URL
           value: "http://storage-service"
+        - name: DATA_SERVICE_URL
+          value: "http://data-service"
         - name: IP_SERVICE_URL
           value: "http://ip-service"
         - name: RENDERER_SERVICE_URL

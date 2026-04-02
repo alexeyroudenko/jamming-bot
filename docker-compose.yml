@@ -78,6 +78,7 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=app-service
       - BOT_YAML_PATH=/app/bot_config/bot.yaml
+      - DATA_SERVICE_URL=http://data_service:8010
       - IMAGE_ANALYZE_SERVICE_URL=http://image_analyze_service:8006
     volumes:
       - type: bind

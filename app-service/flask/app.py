@@ -40,6 +40,7 @@ SENTRY_DSN = os.getenv('SENTRY_DSN', '')
 TAGS_SERVICE_URL = os.getenv('TAGS_SERVICE_URL', 'http://tags_service:8000')
 SEMANTIC_SERVICE_URL = os.getenv('SEMANTIC_SERVICE_URL', 'http://semantic_service:8005')
 STORAGE_SERVICE_URL = os.getenv('STORAGE_SERVICE_URL', 'http://storage_service:7781')
+DATA_SERVICE_URL = os.getenv('DATA_SERVICE_URL', 'http://data_service:8010')
 
 cfg = getConfig()
 redis = getRedis()
@@ -281,6 +282,7 @@ PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
                    "/api/step/", "/api/steps", "/api/storage_step/", "/api/storage_latest/",
                    "/api/rq/workers/",
                    "/api/socket/viewers/",
+                   "/api/data-service/",
                    "/api/storage_ids/",
                    "/api/storage_img/",
                    "/api/storage_geo/")
@@ -1510,6 +1512,30 @@ def api_storage_ids():
     except Exception as e:
         logger.warning(f"api_storage_ids: {e}")
         return jsonify({"error": str(e)}), 502
+
+
+@app.route("/api/data-service/urls/", methods=["GET"])
+@app.route("/api/data-service/uls/", methods=["GET"])
+@cross_origin()
+def api_data_service_urls():
+    """Proxy to data-service GET /api/urls."""
+    try:
+        resp = requests.get(
+            f"{DATA_SERVICE_URL}/api/urls",
+            params=list(request.args.items(multi=True)),
+            timeout=15,
+        )
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except requests.exceptions.ConnectionError as e:
+        logger.warning(f"api_data_service_urls: {e}")
+        return jsonify({"error": "Data service unreachable", "detail": str(e)}), 503
+    except requests.exceptions.Timeout:
+        logger.warning("api_data_service_urls: timeout")
+        return jsonify({"error": "Data service timeout"}), 504
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"api_data_service_urls: {e}")
+        return jsonify({"error": "Data service error", "detail": str(e)}), 502
 
 
 @app.route("/api/storage_img/", methods=["GET"])

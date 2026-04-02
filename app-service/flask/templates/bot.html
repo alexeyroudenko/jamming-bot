@@ -2013,6 +2013,14 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeQuickPanelToggles();
     bindMoveModeControls();
     startStepTimelineCursorLoop();
+
+    document.addEventListener('change', function(event) {
+        var target = event.target;
+        if (!(target instanceof HTMLInputElement) || target.type !== 'checkbox') {
+            return;
+        }
+        console.log(getCheckboxLogLabel(target), target.checked);
+    });
 });
 
 
@@ -2209,6 +2217,20 @@ function initializeMoveTargets() {
     });
 }
 
+function getCheckboxLogLabel(input) {
+    if (!(input instanceof HTMLInputElement)) {
+        return '';
+    }
+    var label = input.closest('label');
+    if (label) {
+        var labelText = label.textContent.trim();
+        if (labelText) {
+            return labelText;
+        }
+    }
+    return input.getAttribute('aria-label') || input.name || input.id || 'checkbox';
+}
+
 function loadBlockVisibilityState() {
     try {
         return JSON.parse(localStorage.getItem(BLOCK_VISIBILITY_STORAGE_KEY) || '{}');
@@ -2294,7 +2316,7 @@ function initializeBlockVisibilityControls() {
 }
 
 function initializeQuickPanelToggles() {
-    document.querySelectorAll('#visibility-panel input[data-target-selector]').forEach(function(input) {
+    document.querySelectorAll('input[data-target-selector]').forEach(function(input) {
         var selector = input.dataset.targetSelector;
         if (!selector) {
             return;
@@ -2303,26 +2325,22 @@ function initializeQuickPanelToggles() {
         if (targetElement) {
             input.checked = !targetElement.hidden;
         }
-    });
-
-    var visibilityPanel = document.getElementById('visibility-panel');
-    if (!visibilityPanel || visibilityPanel.dataset.visibilityBound === 'true') {
-        return;
-    }
-
-    visibilityPanel.addEventListener('change', function(event) {
-        var target = event.target;
-        if (!(target instanceof HTMLInputElement)) {
+        if (input.dataset.visibilityBound === 'true') {
             return;
         }
-        var selector = target.dataset.targetSelector;
-        if (!selector) {
-            return;
-        }
-        setBlockVisibility(selector, target.checked);
+        input.addEventListener('change', function(event) {
+            var target = event.target;
+            if (!(target instanceof HTMLInputElement)) {
+                return;
+            }
+            var targetSelector = target.dataset.targetSelector;
+            if (!targetSelector) {
+                return;
+            }
+            setBlockVisibility(targetSelector, target.checked);
+        });
+        input.dataset.visibilityBound = 'true';
     });
-
-    visibilityPanel.dataset.visibilityBound = 'true';
 }
 
 function getMoveToggleElement() {
