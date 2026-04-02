@@ -256,12 +256,14 @@ services:
     build: ./storage-service
     container_name: storage_service
     restart: unless-stopped
+    environment:
+      - DATABASE_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@tags_db/tags_db_dev
     volumes:
-      - ./storage-service/app:/app
+      - ./storage-service:/app
       - ./data:/usr/src/app/data
     ports:
       - 7781:7781
-    command: uvicorn main:app --host 0.0.0.0 --port 7781
+    command: uvicorn app.main:app --host 0.0.0.0 --port 7781
     networks:
       - app_network          
 

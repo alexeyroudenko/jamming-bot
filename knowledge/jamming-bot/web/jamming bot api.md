@@ -88,46 +88,46 @@ tags:
 
 ## Direct service APIs on main host
 
-| endpoint | описание |
-| --- | --- |
-| `GET /tags/api/` | Корень tags-service; API info / redirect target. |
-| `GET /tags/api/healthz` | Health-check tags-service. |
-| `GET /tags/api/api/v1/tags/docs` | Swagger docs tags-service. |
-| `GET /tags/api/api/v1/tags/openapi.json` | OpenAPI schema tags-service. |
-| `POST /tags/api/api/v1/tags/` | Создать tag напрямую в tags-service. |
-| `GET /tags/api/api/v1/tags/` | Получить все tags. |
-| `GET /tags/api/api/v1/tags/{id}/` | Получить tag по id. |
-| `PUT /tags/api/api/v1/tags/{id}/` | Обновить tag по id. |
-| `DELETE /tags/api/api/v1/tags/{id}/` | Удалить tag по id. |
-| `GET /tags/api/api/v1/tags/tags/group/` | Получить сгруппированные tags с `count` и `page`. |
-| `GET /tags/api/3d/` | Legacy redirect / 404 для старого UI path. |
-| `GET /tags/api/phrases/` | Legacy redirect / 404 для старого UI path. |
-| `GET /semantic/health` | Health-check semantic-service. |
-| `GET /semantic/api/v1/semantic/docs` | Swagger docs semantic-service. |
-| `GET /semantic/api/v1/semantic/openapi.json` | OpenAPI schema semantic-service. |
-| `POST /semantic/api/v1/semantic/tags/` | Извлечь words / phrases / sim из текста. |
-| `GET /semantic/api/v1/semantic/analyze_all/` | Полный semantic analysis по query param `text`. |
-| `POST /semantic/api/v1/semantic/analyze_all/` | Полный semantic analysis по JSON body. |
-| `POST /semantic/api/v1/semantic/combine/` | Сгенерировать phrases из списка words. |
-| `POST /semantic/api/v1/semantic/sentiment-phrases/` | Sentiment analysis для phrases. |
-| `GET /ip/api/v1/ip/docs` | Swagger docs ip-service. |
-| `GET /ip/api/v1/ip/openapi.json` | OpenAPI schema ip-service. |
-| `GET /ip/api/v1/ip/{ip}/` | Геолокация по IP. |
-| `POST /storage/store` | Сохранить step в storage-service. |
-| `PATCH /storage/update/step/{number}` | Частично обновить сохранённый step. |
-| `POST /storage/exists/batch` | Проверить набор step numbers на существование. |
-| `GET /storage/get/step/{number}` | Получить сохранённый step по number. |
-| `GET /storage/get/latest` | Получить последние сохранённые steps. |
-| `GET /storage/get/ids` | Получить список ids / numbers из storage. |
-| `GET /storage/export/csv` | Экспорт steps в CSV. |
-| `GET /data/healthz` | Health-check data-service. |
-| `GET /data/api/urls/stats` | Статистика по таблице URL. |
-| `GET /data/api/urls` | Список URL c пагинацией и фильтрами. |
-| `GET /data/api/urls/hostnames` | Distinct hostnames с counts. |
-| `GET /data/api/urls/export` | Экспорт URL-таблицы в CSV. |
-| `POST /keywords/classify` | Классификация текста по keywords dictionary. |
-| `GET /render/` | Root html-renderer service с краткой справкой. |
-| `GET /render/render` | Рендер страницы в screenshot по query params. |
+| endpoint                                            | описание                                          |
+| --------------------------------------------------- | ------------------------------------------------- |
+| `GET /tags/api/`                                    | Корень tags-service; API info / redirect target.  |
+| `GET /tags/api/healthz`                             | Health-check tags-service.                        |
+| `GET /tags/api/api/v1/tags/docs`                    | Swagger docs tags-service.                        |
+| `GET /tags/api/api/v1/tags/openapi.json`            | OpenAPI schema tags-service.                      |
+| `POST /tags/api/api/v1/tags/`                       | Создать tag напрямую в tags-service.              |
+| `GET /tags/api/api/v1/tags/`                        | Получить все tags.                                |
+| `GET /tags/api/api/v1/tags/{id}/`                   | Получить tag по id.                               |
+| `PUT /tags/api/api/v1/tags/{id}/`                   | Обновить tag по id.                               |
+| `DELETE /tags/api/api/v1/tags/{id}/`                | Удалить tag по id.                                |
+| `GET /tags/api/api/v1/tags/tags/group/`             | Получить сгруппированные tags с `count` и `page`. |
+| `GET /tags/api/3d/`                                 | Legacy redirect / 404 для старого UI path.        |
+| `GET /tags/api/phrases/`                            | Legacy redirect / 404 для старого UI path.        |
+| `GET /semantic/health`                              | Health-check semantic-service.                    |
+| `GET /semantic/api/v1/semantic/docs`                | Swagger docs semantic-service.                    |
+| `GET /semantic/api/v1/semantic/openapi.json`        | OpenAPI schema semantic-service.                  |
+| `POST /semantic/api/v1/semantic/tags/`              | Извлечь words / phrases / sim из текста.          |
+| `GET /semantic/api/v1/semantic/analyze_all/`        | Полный semantic analysis по query param `text`.   |
+| `POST /semantic/api/v1/semantic/analyze_all/`       | Полный semantic analysis по JSON body.            |
+| `POST /semantic/api/v1/semantic/combine/`           | Сгенерировать phrases из списка words.            |
+| `POST /semantic/api/v1/semantic/sentiment-phrases/` | Sentiment analysis для phrases.                   |
+| `GET /ip/api/v1/ip/docs`                            | Swagger docs ip-service.                          |
+| `GET /ip/api/v1/ip/openapi.json`                    | OpenAPI schema ip-service.                        |
+| `GET /ip/api/v1/ip/{ip}/`                           | Геолокация по IP.                                 |
+| `POST /storage/store`                               | Сохранить step в storage-service.                 |
+| `PATCH /storage/update/step/{number}`               | Частично обновить сохранённый step.               |
+| `POST /storage/exists/batch`                        | Проверить набор step numbers на существование.    |
+| `GET /storage/get/step/{number}`                    | Получить сохранённый step по number.              |
+| `GET /storage/get/latest`                           | Получить последние сохранённые steps.             |
+| `GET /storage/get/ids`                              | Получить список ids / numbers из storage.         |
+| `GET /storage/export/csv`                           | Экспорт steps в CSV.                              |
+| `GET /data/healthz`                                 | Health-check data-service.                        |
+| `GET /data/api/urls/stats`                          | Статистика по таблице URL.                        |
+| `GET /data/api/urls`                                | Список URL c пагинацией и фильтрами.              |
+| `GET /data/api/urls/hostnames`                      | Distinct hostnames с counts.                      |
+| `GET /data/api/urls/export`                         | Экспорт URL-таблицы в CSV.                        |
+| `POST /keywords/classify`                           | Классификация текста по keywords dictionary.      |
+| `GET /render/`                                      | Root html-renderer service с краткой справкой.    |
+| `GET /render/render`                                | Рендер страницы в screenshot по query params.     |
 
 ## Alternate app hosts
 

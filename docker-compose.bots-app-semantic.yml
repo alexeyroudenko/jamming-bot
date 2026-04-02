@@ -1,0 +1,115 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data
+    networks:
+      - app_network
+
+  tags_db:
+    image: postgres:12-alpine
+    container_name: tags_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: tags_db_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - bots_app_semantic_pg_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+
+  tags_service:
+    build: ./tags-service
+    container_name: tags_service
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment:
+      DATABASE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@tags_db:5432/tags_db_dev
+      CAST_SERVICE_HOST_URL: http://tags_service:8000/api/v1/casts/
+      SENTRY_DSN: ${SHHH_SENTRY_URL:-}
+    volumes:
+      - ./tags-service:/app
+    ports:
+      - "8003:8000"
+    depends_on:
+      - tags_db
+    networks:
+      - app_network
+
+  semantic:
+    build: ./semantic-service
+    container_name: semantic_service
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8005
+    volumes:
+      - ./semantic-service:/app
+      - ./semantic-service/data:/app/data
+    ports:
+      - "8005:8005"
+    networks:
+      - app_network
+
+  app:
+    build: ./app-service
+    container_name: flask
+    restart: unless-stopped
+    command: python app.py
+    environment:
+      SENTRY_DSN: ${SHHH_SENTRY_URL:-}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_HOST: ${S3_HOST}
+      S3_PORT: ${S3_PORT}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      TAGS_SERVICE_URL: http://tags_service:8000
+      SEMANTIC_SERVICE_URL: http://semantic:8005
+      BOT_YAML_PATH: /app/bot_config/bot.yaml
+      OTEL_TRACING_ENABLED: ${OTEL_TRACING_ENABLED:-0}
+    volumes:
+      - ./app-service/flask:/app
+      - ./data:/app/data
+      - ./bot-service/bot/bot.yaml:/app/bot_config/bot.yaml
+    ports:
+      - "5000:5000"
+    depends_on:
+      - redis
+      - tags_service
+      - semantic
+    networks:
+      - app_network
+
+  bot:
+    build: ./bot-service
+    container_name: jamming-bot
+    restart: unless-stopped
+    ports:
+      - "7001:7001"
+    environment:
+      SHHH_SENTRY_URL: ${SHHH_SENTRY_URL}
+      SHHH_API_KEY: ${SHHH_API_KEY}
+      SHHH_MY_CHAT_ID: ${SHHH_MY_CHAT_ID}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    volumes:
+      - ./bot-service/bot:/app
+      - ./data:/app/data
+    depends_on:
+      - redis
+    networks:
+      - app_network
+
+volumes:
+  bots_app_semantic_pg_data:
+
+networks:
+  app_network:
+    driver: bridge
