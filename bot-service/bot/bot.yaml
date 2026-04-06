@@ -18,5 +18,4 @@ do_save_html: false
 receive_events: true
 step_url: http://flask:5000/bot/step/
 event_url: http://flask:5000/bot/events
-# legacy fallback only; sublinks now use Redis Pub/Sub channel `sublink`
 sublink_url: http://flask:5000/bot/sublink/add/

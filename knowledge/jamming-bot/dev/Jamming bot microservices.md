@@ -57,6 +57,7 @@ tags:
 
 ## Связанные заметки
 
+- [[Jamming bot данные и хранение|Jamming Bot — данные и хранение]]
 - [[Jamming bot Dev project]]
 - [[jamming bot flask]]
 - [[Jamming bot Redis Queue Jobs]]

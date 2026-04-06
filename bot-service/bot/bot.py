@@ -40,6 +40,19 @@ FLASK_PORT = os.getenv('FLASK_PORT', '5000')
 STEP_URL = f"http://{FLASK_HOST}:{FLASK_PORT}/bot/step/"
 EVENT_URL = f"http://{FLASK_HOST}:{FLASK_PORT}/bot/events"
 SUBLINK_CHANNEL = os.getenv("SUBLINK_CHANNEL", "sublink")
+
+
+def apply_step_event_urls(config: dict) -> None:
+    """Use bot.yaml URLs unless FLASK_HOST is set (Kubernetes overrides docker-compose hostnames)."""
+    global STEP_URL, EVENT_URL
+    host = os.getenv("FLASK_HOST", "").strip()
+    if host:
+        port = os.getenv("FLASK_PORT", "5000").strip()
+        STEP_URL = f"http://{host}:{port}/bot/step/"
+        EVENT_URL = f"http://{host}:{port}/bot/events"
+        return
+    STEP_URL = config["step_url"]
+    EVENT_URL = config["event_url"]
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_CLIENT = None
@@ -768,10 +781,9 @@ async def main():
     
     with open(config_file) as file:
         config = yaml.load(file, Loader=SafeLoader)
-        
-    STEP_URL = config["step_url"]
-    EVENT_URL = config["event_url"]
-    
+
+    apply_step_event_urls(config)
+    logging.info("step/event URLs: %s | %s", STEP_URL, EVENT_URL)
     logging.info(f"init bot version: {config['version']}")
     
     pubsub = None
@@ -869,18 +881,21 @@ async def main():
             #     logging.info("iddle")
                                           
             spider.reload_config()
-            STEP_URL = config["step_url"]
-            EVENT_URL = config["event_url"]
+            apply_step_event_urls(config)
 
-            if config['receive_events'] and pubsub is not None:
-                try:
-                    redis_sleep = redis.get('sleep_time')
-                    if redis_sleep is not None:
-                        spider.sleep_time = float(redis_sleep)
-                except Exception:
-                    pass
+            random_span = 2.0
+            try:
+                r = get_redis_client()
+                redis_sleep = r.get('sleep_time')
+                if redis_sleep is not None:
+                    spider.sleep_time = float(redis_sleep)
+                raw_rnd = r.get('random_time')
+                if raw_rnd is not None:
+                    random_span = float(raw_rnd)
+            except Exception:
+                pass
 
-            delay = random.uniform(1.0, 4.0)
+            delay = spider.sleep_time + random.uniform(0, max(0.0, random_span))
             await asyncio.sleep(delay)
             
             if killer.kill_now:
