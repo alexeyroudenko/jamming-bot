@@ -17,6 +17,7 @@ tags:
 ## Architecture
 
 - [[Jamming bot microservices|Jamming Bot Microservices]]
+- [[Jamming bot данные и хранение|Jamming Bot — данные и хранение]]
 - [[jamming bot flask|Jamming Bot Flask]]
 - [[шаг|Шаг]]
 

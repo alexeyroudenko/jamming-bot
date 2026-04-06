@@ -15,6 +15,7 @@ description: Карта содержания проекта Jamming Bot в vault
 - [[Jamming Bot v1.0.0]] — версия выставки
 
 ## Сцены и нарратив
+- [[AV лайв — сценарий]] — конспект сценария AV-лайва (линия 0–6)
 - [[Scene 0. Desert]]
 - [[Scene 1. Path]]
 - [[Scene 2. Dependency Parsing]]
@@ -33,6 +34,7 @@ description: Карта содержания проекта Jamming Bot в vault
 - [[dev/_index|Jamming Bot Dev Index]]
 - [[Jamming bot Dev project|Jamming Bot Dev Project]]
 - [[Jamming bot microservices|Jamming Bot Microservices]]
+- [[Jamming bot данные и хранение|Jamming Bot — данные и хранение]]
 - [[Jamming bot posts|Jamming Bot Posts]]
 - [[Semantic dev notes]]
 - [[Jamming bot Redis Queue Jobs|Jamming Bot Redis Queue Jobs]]
