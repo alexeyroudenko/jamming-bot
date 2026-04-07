@@ -1,0 +1,10 @@
+---
+description: Деплой только через Kubernetes (k3s), не docker-compose на сервере
+alwaysApply: true
+---
+
+# Сервер и деплой
+
+- На **сервере** (production, `b0ts`, `/opt/jamming-bot`) **не запускать** `docker compose` и не опираться на `docker-compose.yml` — его в репозитории нет.
+- Деплой: **`kubectl apply -f deployment.yaml`** в namespace `jamming-bot`, образы — `docker build` + `k3s ctr images import` (как в `.github/workflows/deploy.yml` и целях `make k3s-*`).
+- Локальная разработка: цели **`make k3s-*`**, **`make k3s-apply`**, опционально отдельные override-файлы вроде `docker-compose.tags-vectorfield.yml` только на **локальной** машине, не на сервере.
