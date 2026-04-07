@@ -1845,11 +1845,14 @@ spec:
         # Defaults; live tuning via Redis keys backfill_sleep / backfill_timeout from /ctrl/
         - name: PAGE_TIMEOUT
           value: "10"
+        # Avoid OOM on huge pages (BeautifulSoup + duplicate strings); tune if needed.
+        - name: MAX_HTML_BYTES
+          value: "6291456"
         resources:
           requests:
             cpu: "150m"
-            memory: "512Mi"
+            memory: "1Gi"
           limits:
-            cpu: "500m"
-            memory: "2048Mi"
+            cpu: "1000m"
+            memory: "4Gi"
       restartPolicy: OnFailure

@@ -41,6 +41,14 @@
 </fieldset>
 
 <fieldset class="jb-fieldset">
+  <legend>Backfill worker</legend>
+  <p class="jb-muted" style="margin-bottom:var(--jb-space-2); max-width:52ch;">Процесс <code class="jb-code">backfill-worker</code> в кластере читает ключ Redis <code class="jb-code">backfill_active</code>. Выкл — пауза между циклами и между страницами; вкл — обычный прогон.</p>
+  <ul class="jb-check-grid">
+    <li><label class="jb-check"><input type="checkbox" id="backfill_active" name="backfill_active" {% if cfg.backfill_active >= 0.5 %}checked{% endif %}> backfill-active</label></li>
+  </ul>
+</fieldset>
+
+<fieldset class="jb-fieldset">
   <legend>Timing &amp; tick</legend>
   <p class="jb-muted" style="margin-bottom:var(--jb-space-2);">GET <code class="jb-code">/set_tick/?tick=…</code> по-прежнему доступен; слайдер шлёт значение через WebSocket.</p>
   <div class="jb-range-row">
@@ -130,6 +138,7 @@
   bindCheckbox('send_events', 'bot_send_events');
   bindCheckbox('send_sublinks', 'bot_send_sublinks');
   bindCheckbox('log_events', 'bot_log_events');
+  bindCheckbox('backfill_active', 'backfill_active');
 
   function bindRangeOutput(inputId, outputId, eventName, parser) {
     var input = document.getElementById(inputId);

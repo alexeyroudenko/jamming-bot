@@ -36,6 +36,8 @@ APP_SERVICE = os.getenv("APP_SERVICE_URL", "http://app-service")
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", "100"))
 SLEEP_BETWEEN = float(os.getenv("SLEEP_BETWEEN", "2.0"))
 PAGE_TIMEOUT = int(os.getenv("PAGE_TIMEOUT", "10"))
+# Cap fetched HTML before decode/BS4 — pathological pages otherwise OOM the pod (limit often 2–4Gi).
+MAX_HTML_BYTES = int(os.getenv("MAX_HTML_BYTES", str(6 * 1024 * 1024)))
 # round_robin: shuffle within hostname, then interleave hosts; id: preserve data-service order
 BACKFILL_URL_ORDER = os.getenv("BACKFILL_URL_ORDER", "round_robin").strip().lower()
 BACKFILL_CYCLE_SLEEP = float(os.getenv("BACKFILL_CYCLE_SLEEP", "20"))
@@ -74,6 +76,19 @@ def current_backfill_sleep() -> float:
 def current_page_timeout() -> float:
     t = _redis_float("backfill_timeout", float(PAGE_TIMEOUT))
     return 1.0 if t <= 0 else t
+
+
+def backfill_is_active() -> bool:
+    """When False, worker idles (Redis key backfill_active, set from /ctrl/). Default True if unset."""
+    try:
+        raw = redis_client.get("backfill_active")
+        if raw is None:
+            return True
+        if isinstance(raw, bytes):
+            raw = raw.decode()
+        return float(raw) >= 0.5
+    except (TypeError, ValueError, AttributeError):
+        return True
 
 
 def now_ts() -> str:
@@ -301,7 +316,19 @@ async def process_row(row: dict):
         update_backfill_step_progress(step_number, url, f"non-html content-type: {content_type}")
         return False
 
-    html = response.content.decode("utf-8", errors="replace")
+    raw = response.content
+    if len(raw) > MAX_HTML_BYTES:
+        logger.warning(
+            "truncating html id=%s step=%s url=%s size=%s -> %s bytes",
+            row["id"],
+            step_number,
+            url,
+            len(raw),
+            MAX_HTML_BYTES,
+        )
+        raw = raw[:MAX_HTML_BYTES]
+    html = raw.decode("utf-8", errors="replace")
+    del raw
     text = get_text_from_html(html)
     ip = resolve_ip(url)
 
@@ -332,6 +359,14 @@ async def main():
     cycle = 0
 
     while True:
+        while not backfill_is_active():
+            update_backfill_status(
+                state="paused",
+                finished_at=now_ts(),
+                last_error="backfill выключен (backfill_active=0, /ctrl/)",
+            )
+            await asyncio.sleep(2.0)
+
         cycle += 1
         page = 1
         cycle_processed = 0
@@ -408,6 +443,13 @@ async def main():
             )
 
             for row in order_rows_for_backfill(rows, missing):
+                while not backfill_is_active():
+                    update_backfill_status(
+                        state="paused",
+                        finished_at=now_ts(),
+                        last_error="backfill выключен (backfill_active=0, /ctrl/)",
+                    )
+                    await asyncio.sleep(1.0)
                 ok = await process_row(row)
                 if ok:
                     total_processed += 1

@@ -320,7 +320,8 @@ def _ensure_redis_defaults():
     defaults = {'value': 0.5, 'do_pass': 0.5, 'do_geo': 0.5,
                 'do_save': 0.5, 'do_analyze': 0.5, 'do_screenshot': 0.5,
                 'do_image_analyze': 1.0, 'do_storage': 0.5, 'sleep_time': 2.0,
-                'random_time': 2.0, 'backfill_sleep': 2.0, 'backfill_timeout': 4.0}
+                'random_time': 2.0, 'backfill_sleep': 2.0, 'backfill_timeout': 4.0,
+                'backfill_active': 1.0}
     for key, default in defaults.items():
         if not redis.get(key):
             redis.set(key, default)
@@ -515,9 +516,17 @@ def _read_backfill_status():
     except Exception as exc:
         logger.warning("_read_backfill_status: %s", exc)
         status["error"] = str(exc)
+        try:
+            status["backfill_active"] = float(_redis_float("backfill_active", 1.0)) >= 0.5
+        except (ValueError, TypeError):
+            status["backfill_active"] = True
         return status
 
     if not raw:
+        try:
+            status["backfill_active"] = float(_redis_float("backfill_active", 1.0)) >= 0.5
+        except (ValueError, TypeError):
+            status["backfill_active"] = True
         return status
 
     status["exists"] = True
@@ -542,6 +551,10 @@ def _read_backfill_status():
         status["backfill_timeout"] = float(_redis_float("backfill_timeout", 4.0))
     except (ValueError, TypeError):
         status["backfill_timeout"] = 4.0
+    try:
+        status["backfill_active"] = float(_redis_float("backfill_active", 1.0)) >= 0.5
+    except (ValueError, TypeError):
+        status["backfill_active"] = True
     return status
 
 
@@ -1988,6 +2001,11 @@ def handle_backfill_sleep(value):
 @socketio.on('backfill_timeout')
 def handle_backfill_timeout(value):
     redis.set('backfill_timeout', float(value))
+
+
+@socketio.on('backfill_active')
+def handle_backfill_active(value):
+    redis.set('backfill_active', float(value))
 
 
 def _socket_bot_yaml_flag(key: str, value):
