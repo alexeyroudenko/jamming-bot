@@ -321,7 +321,7 @@ def _ensure_redis_defaults():
                 'do_save': 1.0, 'do_analyze': 1.0, 'do_screenshot': 0.5,
                 'do_image_analyze': 1.0, 'do_storage': 1.0, 'sleep_time': 2.0,
                 'random_time': 2.0, 'backfill_sleep': 2.0, 'backfill_timeout': 4.0,
-                'backfill_active': 1.0}
+                'backfill_active': 1.0, 'fetch_concurrency': 10.0}
     for key, default in defaults.items():
         if not redis.get(key):
             redis.set(key, default)
@@ -2012,6 +2012,16 @@ def handle_backfill_timeout(value):
 @socketio.on('backfill_active')
 def handle_backfill_active(value):
     redis.set('backfill_active', float(value))
+
+
+@socketio.on('fetch_concurrency')
+def handle_fetch_concurrency(value):
+    try:
+        v = int(float(value))
+    except (TypeError, ValueError):
+        v = 10
+    v = max(1, min(32, v))
+    redis.set('fetch_concurrency', float(v))
 
 
 def _socket_bot_yaml_flag(key: str, value):

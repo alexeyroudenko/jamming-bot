@@ -91,6 +91,22 @@ def fetch_presence_png() -> None:
 
 
 BLACK_PIXEL_MAX_TRIES = int(os.getenv("BLACK_PIXEL_MAX_TRIES", "8000"))
+# Parallel HTML fetches (async httpx) per inner-loop iteration; presence PNG steps stay sequential.
+# Default from env; live value from Redis key fetch_concurrency (1–32), set from /ctrl/.
+_FETCH_CONCURRENCY_DEFAULT = max(1, min(32, int(os.getenv("FETCH_CONCURRENCY", "10"))))
+
+
+def current_fetch_concurrency() -> int:
+    try:
+        raw = redis_client.get("fetch_concurrency")
+        if raw is None:
+            return _FETCH_CONCURRENCY_DEFAULT
+        if isinstance(raw, bytes):
+            raw = raw.decode()
+        v = int(float(raw))
+        return max(1, min(32, v))
+    except (TypeError, ValueError):
+        return _FETCH_CONCURRENCY_DEFAULT
 
 
 def _pixel_is_black(value: object) -> bool:
@@ -437,9 +453,10 @@ async def process_row(row: dict):
 
 async def main():
     logger.info(
-        "backfill-worker started (batch=%s, sleep=%.1fs, url_order=%s, step_base=%s, id_range=%s..%s)",
+        "backfill-worker started (batch=%s, sleep=%.1fs, fetch_concurrency=%s, url_order=%s, step_base=%s, id_range=%s..%s)",
         BATCH_SIZE,
         SLEEP_BETWEEN,
+        current_fetch_concurrency(),
         BACKFILL_URL_ORDER,
         BACKFILL_STEP_BASE,
         BACKFILL_MIN_ID,
@@ -485,32 +502,50 @@ async def main():
             if cycle % 64 == 0 or not _presence_png_cache_valid():
                 fetch_presence_png()
 
-            with Image.open(PRESENCE_PNG_PATH) as img:
-                width, height = img.size
-                total_pages = width * height
-                px, py, pixwel_number = pick_black_pixel_linear_index(img)
-                mark_presence_pixel_used(img, px, py)
-                img.save(PRESENCE_PNG_PATH)
+            fc = current_fetch_concurrency()
+            total_pages = 0
+            batch: list[dict] = []
+            for _ in range(fc):
+                with Image.open(PRESENCE_PNG_PATH) as img:
+                    width, height = img.size
+                    total_pages = width * height
+                    px, py, pixwel_number = pick_black_pixel_linear_index(img)
+                    mark_presence_pixel_used(img, px, py)
+                    img.save(PRESENCE_PNG_PATH)
 
-            row_url = f"{DATA_SERVICE.rstrip('/')}/data/{pixwel_number}/"
-            try:
-                row_resp = requests.get(row_url, timeout=30)
-                row_resp.raise_for_status()
-                data = row_resp.json()
-                row = {
-                    "id": data["id"],
-                    "url": data["url"],
-                }
-            except (requests.RequestException, ValueError, KeyError) as e:
-                logger.warning("data-service row %s: %s", row_url, e)
+                row_url = f"{DATA_SERVICE.rstrip('/')}/data/{pixwel_number}/"
+                try:
+                    row_resp = requests.get(row_url, timeout=30)
+                    row_resp.raise_for_status()
+                    data = row_resp.json()
+                    batch.append(
+                        {
+                            "id": data["id"],
+                            "url": data["url"],
+                        }
+                    )
+                except (requests.RequestException, ValueError, KeyError) as e:
+                    logger.warning("data-service row %s: %s", row_url, e)
+
+            if not batch:
                 cycle += 1
                 await asyncio.sleep(current_backfill_sleep())
                 continue
 
-            ok = await process_row(row)
+            results = await asyncio.gather(*(process_row(r) for r in batch), return_exceptions=True)
+            for row, res in zip(batch, results):
+                if isinstance(res, Exception):
+                    logger.exception(
+                        "process_row failed id=%s url=%s: %s",
+                        row.get("id"),
+                        row.get("url"),
+                        res,
+                    )
+
+            n = len(batch)
             total_processed = cycle
             page = cycle
-            cycle += 1
+            cycle += n
             update_backfill_status(
                 state="running",
                 cycle=cycle,
@@ -524,14 +559,14 @@ async def main():
 
             await asyncio.sleep(current_backfill_sleep())
             logger.info(
-                "cycle %s page %s/%s done - total_processed=%s total_skipped=%s cycle_processed=%s cycle_skipped=%s",
+                "batch n=%s fetch_concurrency=%s cycle=%s page=%s/%s total_processed=%s total_skipped=%s",
+                n,
+                fc,
                 cycle,
                 page,
                 total_pages,
                 total_processed,
                 total_skipped,
-                cycle_processed,
-                cycle_skipped,
             )
 
             if page >= total_pages:

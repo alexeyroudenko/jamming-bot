@@ -41,6 +41,7 @@ SUPPORTED_IMAGE_TYPES = (
     "text_length",
     "timestamp_delta",
     "screenshot",
+    "latitude_longitude",
 )
 IMAGE_TYPE_ALIASES = {
     "status_code": "status_code",
@@ -52,6 +53,8 @@ IMAGE_TYPE_ALIASES = {
     "delta time": "timestamp_delta",
     "screenshot": "screenshot",
     "screenshots": "screenshot",
+    "latitude_longitude": "latitude_longitude",
+    "geo": "latitude_longitude",
 }
 
 
@@ -102,7 +105,9 @@ def normalize_image_type(raw_type: str | None) -> str:
     key = str(raw_type or "").strip().lower().replace("-", "_")
     if not key:
         return DEFAULT_IMAGE_TYPE
-    return IMAGE_TYPE_ALIASES.get(key, key)
+    if key in SUPPORTED_IMAGE_TYPES:
+        return key
+    return IMAGE_TYPE_ALIASES.get(key, DEFAULT_IMAGE_TYPE)
 
 
 def image_snapshot_name(image_type: str) -> str:
@@ -235,16 +240,36 @@ def render_html() -> str:
       #stage {
         position: fixed;
         inset: 0;
+        overflow: hidden;
+        background: var(--jb-color-bg-page);
+      }
+      #stage.steps-stage-fit-scale,
+      #stage.steps-stage-fit-noscale {
+        background: #09090b;
       }
       #presence {
         position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: fill;
         image-rendering: pixelated;
         user-select: none;
         -webkit-user-drag: none;
+      }
+      #presence.steps-presence-fit-scale {
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        transform: none;
+        left: auto;
+        top: auto;
+        object-fit: cover;
+      }
+      #presence.steps-presence-fit-noscale {
+        inset: auto;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        object-fit: none;
+        max-width: none;
+        max-height: none;
       }
       #overlay {
         position: absolute;
@@ -423,6 +448,11 @@ def render_html() -> str:
         <label class="steps-mode-label"><input type="radio" name="display-type" value="latitude_longitude">geo</label>
         <label class="steps-mode-label"><input type="radio" name="display-type" value="error">error</label>
       </fieldset>
+      <fieldset class="steps-mode-group">
+        <legend style="display:none">Image fit</legend>
+        <label class="steps-mode-label"><input type="radio" name="image-fit" value="scale">scale</label>
+        <label class="steps-mode-label"><input type="radio" name="image-fit" value="no-scale">no-scale</label>
+      </fieldset>
       <span class="steps-status" id="status">Loading...</span>
     </div>
     <div id="stage">
@@ -477,6 +507,7 @@ def render_html() -> str:
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
     <script>
       const TYPE_STORAGE_KEY = "steps-display-type";
+      const FIT_STORAGE_KEY = "steps-image-fit";
       const DEFAULT_IMAGE_TYPE = "status_code";
       const TYPE_ALIASES = {
         status_code: "status_code",
@@ -497,8 +528,10 @@ def render_html() -> str:
         "latitude_longitude",
         "error"
       ]);
+      const VALID_FITS = new Set(["scale", "no-scale"]);
 
       const image = document.getElementById("presence");
+      const stageEl = document.getElementById("stage");
       const overlay = document.getElementById("overlay");
       const tooltip = document.getElementById("tooltip");
       const statusEl = document.getElementById("status");
@@ -509,6 +542,7 @@ def render_html() -> str:
       const autoBtn = document.getElementById("btn-auto");
       const refreshBtn = document.getElementById("btn-refresh");
       const typeInputs = Array.from(document.querySelectorAll('input[name="display-type"]'));
+      const fitInputs = Array.from(document.querySelectorAll('input[name="image-fit"]'));
       const baseUrl = new URL(
         window.location.pathname.endsWith("/") ? window.location.href : window.location.href + "/"
       );
@@ -525,6 +559,7 @@ def render_html() -> str:
       const AUTO_ID_SPREAD_MULTIPLIER = 20;
       const AUTO_ID_FOCUS = 100000;
       let displayType = "status_code";
+      let imageFitMode = "no-scale";
       let hoveredStepId = null;
       let latestStepNumber = -1;
       let autoMode = false;
@@ -575,7 +610,13 @@ def render_html() -> str:
       }
 
       function getImageTypeForDisplay() {
-        if (displayType === "status_code" || displayType === "text_length" || displayType === "timestamp_delta" || displayType === "screenshot") {
+        if (
+          displayType === "status_code" ||
+          displayType === "text_length" ||
+          displayType === "timestamp_delta" ||
+          displayType === "screenshot" ||
+          displayType === "latitude_longitude"
+        ) {
           return displayType;
         }
         return DEFAULT_IMAGE_TYPE;
@@ -626,9 +667,28 @@ def render_html() -> str:
         return "status_code";
       }
 
-      function syncTypeUrl() {
+      function normalizeImageFit(raw) {
+        const key = String(raw == null ? "" : raw).trim().toLowerCase().replace(/_/g, "-");
+        if (key === "scale") return "scale";
+        if (key === "no-scale" || key === "noscale") return "no-scale";
+        return "";
+      }
+
+      function getInitialFit() {
+        const url = new URL(window.location.href);
+        const fromQuery = normalizeImageFit(url.searchParams.get("fit"));
+        if (fromQuery && VALID_FITS.has(fromQuery)) return fromQuery;
+        try {
+          const saved = normalizeImageFit(sessionStorage.getItem(FIT_STORAGE_KEY));
+          if (saved && VALID_FITS.has(saved)) return saved;
+        } catch (error) {}
+        return "no-scale";
+      }
+
+      function syncQueryParams() {
         const url = new URL(window.location.href);
         url.searchParams.set("type", displayType);
+        url.searchParams.set("fit", imageFitMode);
         window.history.replaceState({}, "", url);
       }
 
@@ -642,7 +702,7 @@ def render_html() -> str:
           sessionStorage.setItem(TYPE_STORAGE_KEY, displayType);
         } catch (error) {}
         if (updateUrl) {
-          syncTypeUrl();
+          syncQueryParams();
         }
         updateStatus();
         if (hoveredStepId !== null && pendingPointerEvent) {
@@ -654,6 +714,95 @@ def render_html() -> str:
             scheduleStepDetailFetch(hoveredStepId);
           }
         }
+      }
+
+      function syncPresenceImageLayout() {
+        if (!image) return;
+        if (imageFitMode === "scale") {
+          image.classList.add("steps-presence-fit-scale");
+          image.classList.remove("steps-presence-fit-noscale");
+          image.style.removeProperty("width");
+          image.style.removeProperty("height");
+        } else {
+          image.classList.remove("steps-presence-fit-scale");
+          image.classList.add("steps-presence-fit-noscale");
+          if (image.naturalWidth && image.naturalHeight) {
+            image.style.width = image.naturalWidth + "px";
+            image.style.height = image.naturalHeight + "px";
+          }
+        }
+      }
+
+      function applyImageFit(nextFit, updateUrl) {
+        const n = normalizeImageFit(nextFit);
+        imageFitMode = VALID_FITS.has(n) ? n : "no-scale";
+        fitInputs.forEach((input) => {
+          input.checked = input.value === imageFitMode;
+        });
+        if (stageEl) {
+          stageEl.classList.toggle("steps-stage-fit-scale", imageFitMode === "scale");
+          stageEl.classList.toggle("steps-stage-fit-noscale", imageFitMode === "no-scale");
+        }
+        syncPresenceImageLayout();
+        try {
+          sessionStorage.setItem(FIT_STORAGE_KEY, imageFitMode);
+        } catch (error) {}
+        if (updateUrl) {
+          syncQueryParams();
+        }
+      }
+
+      /** Bitmap cell center in client coordinates (no-scale: 1:1, scale: object-fit cover). */
+      function stepCenterClientXY(stepId) {
+        if (!image.naturalWidth || !image.naturalHeight) return null;
+        const nw = image.naturalWidth;
+        const nh = image.naturalHeight;
+        const ix = (stepId % nw) + 0.5;
+        const iy = Math.floor(stepId / nw) + 0.5;
+        const rect = image.getBoundingClientRect();
+        const ew = rect.width;
+        const eh = rect.height;
+        let lx;
+        let ly;
+        if (imageFitMode === "no-scale") {
+          lx = (ix / nw) * ew;
+          ly = (iy / nh) * eh;
+        } else {
+          const s = Math.max(ew / nw, eh / nh);
+          const offX = (ew - nw * s) / 2;
+          const offY = (eh - nh * s) / 2;
+          lx = ix * s + offX;
+          ly = iy * s + offY;
+        }
+        return { x: rect.left + lx, y: rect.top + ly };
+      }
+
+      function clientToImagePixel(clientX, clientY) {
+        if (!image.naturalWidth || !image.naturalHeight) return null;
+        const nw = image.naturalWidth;
+        const nh = image.naturalHeight;
+        const rect = image.getBoundingClientRect();
+        const ew = rect.width;
+        const eh = rect.height;
+        const lx = clientX - rect.left;
+        const ly = clientY - rect.top;
+        let bx;
+        let by;
+        if (imageFitMode === "no-scale") {
+          if (lx < 0 || lx > ew || ly < 0 || ly > eh) return null;
+          bx = (lx / ew) * nw;
+          by = (ly / eh) * nh;
+        } else {
+          const s = Math.max(ew / nw, eh / nh);
+          const offX = (ew - nw * s) / 2;
+          const offY = (eh - nh * s) / 2;
+          bx = (lx - offX) / s;
+          by = (ly - offY) / s;
+          if (bx < 0 || bx >= nw || by < 0 || by >= nh) return null;
+        }
+        const x = Math.max(0, Math.min(nw - 1, Math.floor(bx)));
+        const y = Math.max(0, Math.min(nh - 1, Math.floor(by)));
+        return { x, y };
       }
 
       function setTooltipPosition(clientX, clientY) {
@@ -758,6 +907,7 @@ def render_html() -> str:
         pixelContext.clearRect(0, 0, pixelSource.width, pixelSource.height);
         pixelContext.drawImage(image, 0, 0);
         imageReady = true;
+        syncPresenceImageLayout();
         updateStatus();
         if (Number.isFinite(pendingAnchorAfterImageLoad)) {
           const stepId = pendingAnchorAfterImageLoad;
@@ -840,12 +990,11 @@ def render_html() -> str:
       }
 
       function centerForStep(stepId) {
-        const x = (stepId % image.naturalWidth) + 0.5;
-        const y = Math.floor(stepId / image.naturalWidth) + 0.5;
-        return {
-          x: (x / image.naturalWidth) * window.innerWidth,
-          y: (y / image.naturalHeight) * window.innerHeight
-        };
+        const p = stepCenterClientXY(stepId);
+        if (!p) {
+          return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+        }
+        return p;
       }
 
       function trimPresenceAnchors() {
@@ -880,14 +1029,7 @@ def render_html() -> str:
       }
 
       function pointForStepOnOverlay(stepId) {
-        if (!image.naturalWidth || !image.naturalHeight) return null;
-        const rect = overlay.getBoundingClientRect();
-        const ix = stepId % image.naturalWidth;
-        const iy = Math.floor(stepId / image.naturalWidth);
-        return {
-          x: rect.left + ((ix + 0.5) / image.naturalWidth) * rect.width,
-          y: rect.top + ((iy + 0.5) / image.naturalHeight) * rect.height
-        };
+        return stepCenterClientXY(stepId);
       }
 
       async function highlightPresenceStep(stepId) {
@@ -955,11 +1097,13 @@ def render_html() -> str:
           hideTooltip();
           return;
         }
-        const rect = overlay.getBoundingClientRect();
-        const normalizedX = (event.clientX - rect.left) / rect.width;
-        const normalizedY = (event.clientY - rect.top) / rect.height;
-        const x = Math.max(0, Math.min(image.naturalWidth - 1, Math.floor(normalizedX * image.naturalWidth)));
-        const y = Math.max(0, Math.min(image.naturalHeight - 1, Math.floor(normalizedY * image.naturalHeight)));
+        const pixel = clientToImagePixel(event.clientX, event.clientY);
+        if (!pixel) {
+          hideTooltip();
+          return;
+        }
+        const x = pixel.x;
+        const y = pixel.y;
         try {
           const pixel = pixelContext.getImageData(x, y, 1, 1).data;
           const intensity = pixel[0] + pixel[1] + pixel[2];
@@ -1107,6 +1251,13 @@ def render_html() -> str:
           }
         });
       });
+      fitInputs.forEach((input) => {
+        input.addEventListener("change", (event) => {
+          if (event.target.checked) {
+            applyImageFit(event.target.value, true);
+          }
+        });
+      });
       autoBtn.addEventListener("click", toggleAuto);
       refreshBtn.addEventListener("click", refreshAll);
       image.addEventListener("load", handleImageLoad);
@@ -1199,7 +1350,9 @@ def render_html() -> str:
         schedulePresenceRefresh(stepId);
       });
 
-      applyDisplayType(getInitialType(), true);
+      applyDisplayType(getInitialType(), false);
+      applyImageFit(getInitialFit(), false);
+      syncQueryParams();
       refreshAll();
       refreshStepsBackfill();
       window.setInterval(refreshImage, 300000);

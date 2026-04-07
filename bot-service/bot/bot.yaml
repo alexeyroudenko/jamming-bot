@@ -11,9 +11,9 @@ resume_at_restart: true
 max_errors: 100000
 send_osc: true
 send_step: true
-send_events: true
-send_sublinks: true
-log_events: true
+send_events: false
+send_sublinks: false
+log_events: false
 do_save_html: false
 receive_events: true
 step_url: http://flask:5000/bot/step/

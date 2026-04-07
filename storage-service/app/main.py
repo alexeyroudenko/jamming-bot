@@ -43,6 +43,7 @@ SUPPORTED_IMAGE_TYPES = {
     "text_length",
     "timestamp_delta",
     "screenshot",
+    "latitude_longitude",
 }
 IMAGE_TYPE_ALIASES = {
     "status_code": "status_code",
@@ -54,6 +55,8 @@ IMAGE_TYPE_ALIASES = {
     "delta_time": "timestamp_delta",
     "screenshots": "screenshot",
     "screenshot": "screenshot",
+    "latitude_longitude": "latitude_longitude",
+    "geo": "latitude_longitude",
 }
 
 
@@ -161,6 +164,19 @@ def _rasterize_values(
     delta_min = min(delta_values) if delta_values else 0.0
     delta_max = max(delta_values) if delta_values else 1.0
 
+    geo_values: list[float] = []
+    for row in image_rows:
+        la = _parse_float(row.get("latitude"))
+        lo = _parse_float(row.get("longitude"))
+        if la is None and lo is None:
+            row["_geo_metric"] = None
+        else:
+            g = abs(la or 0.0) + abs(lo or 0.0)
+            row["_geo_metric"] = g
+            geo_values.append(g)
+    geo_min = min(geo_values) if geo_values else 0.0
+    geo_max = max(geo_values) if geo_values else 1.0
+
     for row in image_rows:
         step_id = row["number"]
         x = step_id % width
@@ -200,6 +216,9 @@ def _rasterize_values(
                 gray = max(0, min(255, int(round(235 * (1 - normalized)))))
         elif image_type == "screenshot":
             gray = 255 if str(row.get("screenshot_url") or "").strip() else 0
+        elif image_type == "latitude_longitude":
+            gm = row.get("_geo_metric")
+            gray = 0 if gm is None else _scale_to_gray(gm, geo_min, geo_max)
 
         rows[y][x] = gray
     return rows

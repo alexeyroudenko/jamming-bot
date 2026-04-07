@@ -1944,6 +1944,8 @@ spec:
           value: "300000"
         - name: PRESENCE_PNG_PATH
           value: "/tmp/backfill/presence.png"
+        - name: FETCH_CONCURRENCY
+          value: "10"
         # Defaults; live tuning via Redis keys backfill_sleep / backfill_timeout from /ctrl/
         - name: PAGE_TIMEOUT
           value: "10"
