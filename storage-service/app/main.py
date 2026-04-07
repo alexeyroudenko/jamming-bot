@@ -10,7 +10,7 @@ from typing import List
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from starlette.status import HTTP_400_BAD_REQUEST
 
@@ -20,6 +20,7 @@ from app.api.models import StepAnalysisIn
 
 logger = logging.getLogger("storage_service")
 logging.basicConfig(level=logging.INFO)
+BACKFILL_IMAGE_PATH = os.getenv("BACKFILL_IMAGE_PATH", "/tmp/backfill/presence.png")
 
 app = FastAPI(
     title="Storage Service",
@@ -350,4 +351,20 @@ async def export_img(width: int = 0, type: str = DEFAULT_IMAGE_TYPE):
         io.BytesIO(png_bytes),
         media_type="image/png",
         headers={"Content-Disposition": f'inline; filename="presence_{image_type}.png"'},
+    )
+
+
+@app.get("/backfill/image")
+async def backfill_image():
+    try:
+        if not os.path.isfile(BACKFILL_IMAGE_PATH) or os.path.getsize(BACKFILL_IMAGE_PATH) == 0:
+            raise HTTPException(status_code=404, detail="Backfill image not found")
+    except OSError:
+        raise HTTPException(status_code=404, detail="Backfill image not found")
+
+    return FileResponse(
+        BACKFILL_IMAGE_PATH,
+        media_type="image/png",
+        filename="backfill_presence.png",
+        headers={"Cache-Control": "no-cache"},
     )

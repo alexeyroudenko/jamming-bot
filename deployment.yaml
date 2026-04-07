@@ -278,6 +278,11 @@ spec:
       - key: node.kubernetes.io/disk-pressure
         operator: Exists
         effect: NoSchedule
+      volumes:
+      - name: backfill-shared
+        hostPath:
+          path: /tmp/backfill
+          type: DirectoryOrCreate
       containers:
       - name: storage-service
         image: storage-service:latest
@@ -291,6 +296,11 @@ spec:
             secretKeyRef:
               name: jamming-bot-secrets
               key: DATABASE_URI
+        - name: BACKFILL_IMAGE_PATH
+          value: "/tmp/backfill/presence.png"
+        volumeMounts:
+        - name: backfill-shared
+          mountPath: /tmp/backfill
         resources:
           requests:
             cpu: "50m"
@@ -1902,6 +1912,11 @@ spec:
       labels:
         app: backfill-worker
     spec:
+      volumes:
+      - name: backfill-shared
+        hostPath:
+          path: /tmp/backfill
+          type: DirectoryOrCreate
       containers:
       - name: backfill-worker
         image: backfill-worker:latest
@@ -1927,12 +1942,17 @@ spec:
           value: "150000"
         - name: BACKFILL_MAX_ID
           value: "300000"
+        - name: PRESENCE_PNG_PATH
+          value: "/tmp/backfill/presence.png"
         # Defaults; live tuning via Redis keys backfill_sleep / backfill_timeout from /ctrl/
         - name: PAGE_TIMEOUT
           value: "10"
         # Avoid OOM on huge pages (BeautifulSoup + duplicate strings); tune if needed.
         - name: MAX_HTML_BYTES
           value: "6291456"
+        volumeMounts:
+        - name: backfill-shared
+          mountPath: /tmp/backfill
         resources:
           requests:
             cpu: "150m"

@@ -21,6 +21,7 @@ from urllib.parse import urlparse
 import httpx
 import requests
 from bs4 import BeautifulSoup, NavigableString, Tag
+from PIL import Image
 from redis import Redis
 
 logging.basicConfig(
@@ -55,6 +56,97 @@ redis_client = Redis(
     host=os.getenv("REDIS_HOST", "redis"),
     port=int(os.getenv("REDIS_PORT", "6379")),
 )
+
+# Local cache of storage presence PNG (refreshed every N cycles or on missing/empty file).
+PRESENCE_PNG_PATH = os.getenv("PRESENCE_PNG_PATH", "/tmp/backfill/presence.png")
+
+
+def _presence_export_url() -> str:
+    explicit = os.getenv("PRESENCE_EXPORT_URL", "").strip()
+    if explicit:
+        return explicit
+    return f"{STORAGE_SERVICE.rstrip('/')}/export/img?width=0&type=presence"
+
+
+def _presence_png_cache_valid() -> bool:
+    try:
+        return os.path.isfile(PRESENCE_PNG_PATH) and os.path.getsize(PRESENCE_PNG_PATH) > 0
+    except OSError:
+        return False
+
+
+def fetch_presence_png() -> None:
+    """Download presence raster from storage-service (or PRESENCE_EXPORT_URL) into PRESENCE_PNG_PATH."""
+    url = _presence_export_url()
+    resp = requests.get(url, timeout=60)
+    resp.raise_for_status()
+    with open(PRESENCE_PNG_PATH, "wb") as f:
+        f.write(resp.content)
+    logger.info(
+        "presence png fetched %s -> %s (%s bytes)",
+        url,
+        PRESENCE_PNG_PATH,
+        len(resp.content),
+    )
+
+
+BLACK_PIXEL_MAX_TRIES = int(os.getenv("BLACK_PIXEL_MAX_TRIES", "8000"))
+
+
+def _pixel_is_black(value: object) -> bool:
+    """Presence PNG may be L (int) or RGB/RGBA tuples."""
+    if value == 0:
+        return True
+    if value == (0, 0, 0):
+        return True
+    if isinstance(value, (tuple, list)):
+        if len(value) >= 3 and value[0] == 0 and value[1] == 0 and value[2] == 0:
+            return True
+        if len(value) == 1 and value[0] == 0:
+            return True
+    return False
+
+
+def pick_black_pixel_linear_index(img: Image.Image) -> tuple[int, int, int]:
+    """
+    Random tries, then full scan for a black pixel; if none, random cell.
+    Returns (px, py, linear_index px + py * width).
+    """
+    width, height = img.size
+    cap = max(1, min(BLACK_PIXEL_MAX_TRIES, width * height))
+    for _ in range(cap):
+        px = random.randint(0, width - 1)
+        py = random.randint(0, height - 1)
+        if _pixel_is_black(img.getpixel((px, py))):
+            return px, py, px + py * width
+    for py in range(height):
+        for px in range(width):
+            if _pixel_is_black(img.getpixel((px, py))):
+                return px, py, px + py * width
+    px = random.randint(0, width - 1)
+    py = random.randint(0, height - 1)
+    logger.warning(
+        "presence image has no black pixel; using random cell px=%s py=%s",
+        px,
+        py,
+    )
+    return px, py, px + py * width
+
+
+def mark_presence_pixel_used(img: Image.Image, px: int, py: int) -> None:
+    """Mutate image so this cell is unlikely to read as black next time."""
+    mode = img.mode
+    if mode == "L":
+        img.putpixel((px, py), 255)
+    elif mode == "RGB":
+        img.putpixel((px, py), (255, 0, 0))
+    elif mode == "RGBA":
+        img.putpixel((px, py), (255, 0, 0, 255))
+    else:
+        try:
+            img.putpixel((px, py), 255)
+        except Exception:
+            logger.debug("could not mark pixel in mode %s", mode)
 
 
 def _redis_float(key: str, default: float) -> float:
@@ -389,82 +481,33 @@ async def main():
         )
 
         while True:
-            
-            # every 10 minutes
-            if cycle % (64) == 0:
-            # get image from https://storage.jamming-bot.arthew0.online/export/img?width=0&type=presence
-            # and save it to /tmp/presence.png
-                resp = requests.get("https://storage.jamming-bot.arthew0.online/export/img?width=0&type=presence")
-                resp.raise_for_status()
-                with open("/tmp/presence.png", "wb") as f:
-                    f.write(resp.content)
-            
-            # get random black pixel
-            # pixwel_number = random_x + random_y * width            
-            from PIL import Image
-            # check if step is black
-            with Image.open("/tmp/presence.png") as img:
+            # Refresh periodically, or immediately if cache missing/empty (cold start).
+            if cycle % 64 == 0 or not _presence_png_cache_valid():
+                fetch_presence_png()
+
+            with Image.open(PRESENCE_PNG_PATH) as img:
                 width, height = img.size
                 total_pages = width * height
-                px = random.randint(0, width - 1)
-                py = random.randint(0, height - 1)
-                pixwel_number = px + py * width
-                while img.getpixel((px, py)) != (0, 0, 0):
-                    px = random.randint(0, width - 1)
-                    py = random.randint(0, height - 1)
-            
-            # get step from data-service
-            rows, pagination = get_visited_urls(page, per_page=BATCH_SIZE)
-            total_pages = int(pagination.get("total_pages", 0))
+                px, py, pixwel_number = pick_black_pixel_linear_index(img)
+                mark_presence_pixel_used(img, px, py)
+                img.save(PRESENCE_PNG_PATH)
 
-            # try:
-            #     rows, pagination = get_visited_urls(page, per_page=BATCH_SIZE)
-            #     total_pages = int(pagination.get("total_pages", 0))
-            # except Exception as e:
-            #     logger.error("data-service error page=%s: %s", page, e)
-            #     update_backfill_status(state="failed", cycle=cycle, current_page=page, last_error=f"data-service error: {e}")
-            #     break
+            row_url = f"{DATA_SERVICE.rstrip('/')}/data/{pixwel_number}/"
+            try:
+                row_resp = requests.get(row_url, timeout=30)
+                row_resp.raise_for_status()
+                data = row_resp.json()
+                row = {
+                    "id": data["id"],
+                    "url": data["url"],
+                }
+            except (requests.RequestException, ValueError, KeyError) as e:
+                logger.warning("data-service row %s: %s", row_url, e)
+                cycle += 1
+                await asyncio.sleep(current_backfill_sleep())
+                continue
 
-            # if not rows:
-            #     break
-            # if int(rows[0]["id"]) > BACKFILL_MAX_ID:
-            #     logger.info("page=%s starts above max id (%s > %s), stopping cycle", page, rows[0]["id"], BACKFILL_MAX_ID)
-            #     break
-
-            # rows = [r for r in rows if id_in_range(r["id"])]
-            # if not rows:
-            #     if page >= total_pages:
-            #         break
-            #     page += 1
-            #     continue
-
-            # ids = [backfill_step_number(r["id"]) for r in rows]
-            # try:
-            #     missing = set(check_missing(ids))
-            # except Exception as e:
-            #     logger.error("storage exists/batch error: %s", e)
-            #     update_backfill_status(
-            #         state="failed",
-            #         cycle=cycle,
-            #         current_page=page,
-            #         total_pages=total_pages,
-            #         processed=total_processed,
-            #         skipped=total_skipped,
-            #         cycle_processed=cycle_processed,
-            #         cycle_skipped=cycle_skipped,
-            #         last_error=f"storage exists/batch error: {e}",
-            #     )
-            #     break
-
-            row = {
-                "id": pixwel_number,
-                "url": f"https://data.jamming-bot.arthew0.online/data/{pixwel_number}/",
-            }
             ok = await process_row(row)
-
-            # skipped = len(ids) - len(missing)
-            # total_skipped += skipped
-            # cycle_skipped += skipped            
             total_processed = cycle
             page = cycle
             cycle += 1
@@ -479,30 +522,7 @@ async def main():
                 cycle_skipped=cycle_skipped,
             )
 
-            # for row in order_rows_for_backfill(rows, missing):
-            #     while not backfill_is_active():
-            #         update_backfill_status(
-            #             state="paused",
-            #             finished_at=now_ts(),
-            #             last_error="backfill выключен (backfill_active=0, /ctrl/)",
-            #         )
-            #         await asyncio.sleep(1.0)
-            #     ok = await process_row(row)
-            #     if ok:
-            #         total_processed += 1
-            #         cycle_processed += 1
-            #         update_backfill_status(
-            #             state="running",
-            #             cycle=cycle,
-            #             current_page=page,
-            #             total_pages=total_pages,
-            #             processed=total_processed,
-            #             skipped=total_skipped,
-            #             cycle_processed=cycle_processed,
-            #             cycle_skipped=cycle_skipped,
-            #         )
-            #     await asyncio.sleep(current_backfill_sleep())
-
+            await asyncio.sleep(current_backfill_sleep())
             logger.info(
                 "cycle %s page %s/%s done - total_processed=%s total_skipped=%s cycle_processed=%s cycle_skipped=%s",
                 cycle,
