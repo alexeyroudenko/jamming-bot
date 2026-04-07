@@ -57,6 +57,32 @@ async def update_tag(id: int, payload: TagIn):
     return await get_tag(id)
 
 
+async def add_tags_bulk(raw_names: list) -> dict:
+    """Для каждого имени вызывает add_tag(TagIn(...)) — порядок и дубликаты как у серии одиночных POST."""
+    skipped_empty = 0
+    processed = 0
+    errors: list = []
+    for raw in raw_names:
+        name = str(raw).strip()[:50]
+        if not name:
+            skipped_empty += 1
+            continue
+        try:
+            await add_tag(TagIn(name=name, count=0))
+            processed += 1
+        except Exception as e:
+            errors.append({"name": name, "error": str(e)})
+    out = {
+        "ok": len(errors) == 0,
+        "processed": processed,
+        "skipped_empty": skipped_empty,
+        "input_count": len(raw_names),
+    }
+    if errors:
+        out["errors"] = errors
+    return out
+
+
 async def get_grouped_tags(count: int = 50, page: int = 0):
     from sqlalchemy import desc
     safe_count = max(1, min(500, int(count)))

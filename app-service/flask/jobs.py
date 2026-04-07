@@ -72,25 +72,28 @@ if os.getenv("OTEL_TRACING_ENABLED", "0") == "1":
     from opentelemetry.instrumentation.requests import RequestsInstrumentor
     RequestsInstrumentor().instrument()
 
-POD_NAME = os.environ.get('HOSTNAME', 'unknown')  
+POD_NAME = os.environ.get('HOSTNAME', 'unknown')
 
+
+def _tags_bulk_post(names, timeout=60):
+    """POST /api/v1/tags/bulk/ — пустой список не шлём."""
+    if not names:
+        return None
+    url = f"{TAGS_SERVICE_URL}/api/v1/tags/bulk/"
+    headers = {"content-type": "application/json"}
+    resp = requests.post(
+        url,
+        data=json.dumps({"names": list(names)}),
+        headers=headers,
+        timeout=timeout,
+    )
+    resp.raise_for_status()
+    return resp.json()
 
 
 def remove_html_tags(text):
     clean_text = re.sub(r'<.*?>', '', text)
     return clean_text
-
-_nlp = None
-
-
-def _get_nlp():
-    """Load spaCy model once per worker process, reuse for all analyze jobs."""
-    global _nlp
-    if _nlp is None:
-        import spacy
-        _nlp = spacy.load("en_core_web_sm")
-    return _nlp
-
 
 def remove_special_characters(text):
     # Remove non-ASCII characters (keeping basic ASCII only)
@@ -166,15 +169,9 @@ def clean_tags():
 @job('default', connection=redis_connection, timeout=90, result_ttl=90)
 @with_trace_context
 def add_tags(tags):
-    results = []
-    for word in tags:
-        tag_name = str(word)[0:50]
-        url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
-        headers = {'content-type': 'application/json'}
-        data = {'name': tag_name, "count": 0}
-        response = requests.post(url, data=json.dumps(data), headers=headers, timeout=15)
-        results.append(response.json())
-    return {'results': results, 'pod': POD_NAME}
+    normalized = [str(word)[0:50] for word in tags]
+    bulk = _tags_bulk_post(normalized, timeout=60)
+    return {"bulk": bulk, "pod": POD_NAME}
 
 
 
@@ -201,13 +198,8 @@ def add_tags_from_steps():
             headers = {'content-type': 'application/json'}
             rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
             sem_data = rr.json()
-            sim = sem_data.get('sim', [])
-
-            for hras in sim:
-                url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
-                headers = {'content-type': 'application/json'}
-                tag_data = {'name': hras, "count": 0}
-                requests.post(url, data=json.dumps(tag_data), headers=headers, timeout=15)
+            sim = sem_data.get('sim', []) or []
+            _tags_bulk_post(sim, timeout=60)
         
         if i % 50 == 0:
             self_job = get_current_job()
@@ -224,117 +216,6 @@ def add_tags_from_steps():
             return {'text': text, 'pod': POD_NAME}
 
     return {'completed': num_iterations, 'pod': POD_NAME}
-
-
-#
-#
-#  1. STEP
-#   
-@job('default', connection=redis_connection, timeout=90, result_ttl=270)
-@with_trace_context
-def dostep(step):
-
-    logger.info(f"job dostep step {step}")
-        
-    self_job = get_current_job()
-    self_job.meta['type'] = "step"
-    if "current_url" in step.keys():
-        self_job.meta['url'] = step['current_url']
-
-    set_step_span_attributes(
-        step_number=step.get('number', step.get('step')),
-        step_url=step.get('current_url', step.get('url')),
-    )
-    ip = step.get('ip', '0.0.0.0')
-    self_job.meta['ip'] = ip
-    text = step.get('text', '')
-    self_job.meta['text'] = text
-    self_job.save_meta()
-
-    with sentry_sdk.start_span(op="parse", description="clean text"):
-        text = remove_html_tags(text)
-        text = remove_special_characters(text)
-
-    tags = []
-    words = []
-    hrases = []
-    noun_phrases = []
-    sim = []
-        
-    if len(text) > 128:
-        with sentry_sdk.start_span(op="http.client", description="semantic_service /tags/"):
-            url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
-            headers = {'content-type': 'application/json'}
-            rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
-            sem_data = rr.json()
-            sentry_sdk.logger.info(f"semantic_service data: {sem_data}")
-            sim = sem_data.get('sim', [])
-            words = sim
-
-        with sentry_sdk.start_span(op="http.client", description="tags_service add tags") as span:
-            span.set_data("tags_count", len(sim))
-            for hras in sim:
-                url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
-                headers = {'content-type': 'application/json'}
-                tag_data = {'name': hras, "count": 0}
-                response = requests.post(url, data=json.dumps(tag_data), headers=headers, timeout=15)
-
-    do_save = float(redis_connection.get('do_save') or 0)
-    if do_save == 1.0:
-        with sentry_sdk.start_span(op="http.client", description="storage_service /store"):
-            sentry_sdk.logger.info(f"semantic_service write {step['step']} to store")
-            url = f"{STORAGE_SERVICE_URL}/store"
-            headers = {'content-type': 'application/json'}
-            step['text'] = text
-            step_number_val = step.pop('step', None)
-            step.pop('headers', None)
-            step.pop('src_url', None)
-            step.pop('current_url', None)
-            try:
-                response = requests.post(url, data=json.dumps(step), headers=headers, timeout=30)
-                r = response.json()
-            except Exception as e:
-                logger.warning(f"Storage service error: {e}")
-                r = {"error": str(e)}
-            if step_number_val is not None:
-                step['step'] = step_number_val
-    else:
-        logger.info("do_save disabled, skipping storage write")
-
-    self_job.meta['progress'] = {
-        "tags": tags,
-        "semantic": tags,
-        "semantic_words": words,
-        "semantic_hrases": hrases,
-        "text": text[0:1024] + "...",
-        'num_iterations': 4,
-        'iteration': 4,
-        'percent': 100
-    }    
-    self_job.save_meta()
-
-    return_obj = {
-            "step": step['number'],
-            "code": step['status_code'],
-            "ip": ip,
-            "url": step['url'],
-            "src_url": step['src'],
-            "tags": words,
-            "semantic": words,
-            "semantic_words": words,
-            "semantic_hrases": hrases,
-            "text": text[0:1024] + "...",
-            "pod": POD_NAME,
-        }
-
-    return return_obj
-
-
-
-
-
-
-
 
 
 
@@ -432,7 +313,7 @@ def save(data):
 @job('default', connection=redis_connection, timeout=90, result_ttl=270)
 @with_trace_context
 def analyze(html, step_number=None, step_url=None):
-    """Analyze HTML content using spaCy NER."""
+    """Analyze HTML: NER + tags via semantic-service (no local spaCy)."""
     self_job = get_current_job()
     self_job.meta['type'] = "analyze"
     self_job.save_meta()
@@ -443,42 +324,32 @@ def analyze(html, step_number=None, step_url=None):
         text = remove_special_characters(text)
 
     entities = []
-    with sentry_sdk.start_span(op="ml", description="spacy NER") as span:
-        span.set_data("text_length", len(text))
-        try:
-            nlp = _get_nlp()
-            doc = nlp(text[:100000])
-            entities = [{"text": ent.text, "label": ent.label_} for ent in doc.ents]
-            span.set_data("entities_count", len(entities))
-        except Exception as e:
-            sentry_sdk.logger.warning(f"analyze error: {e}")
-
     tags = []
     words = []
     hrases = []
     noun_phrases = []
     sim = []
 
-    if len(text) > 128:
+    if len(text) > 0:
         with sentry_sdk.start_span(op="http.client", description="semantic_service /tags/"):
             url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
             headers = {'content-type': 'application/json'}
             rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
+            rr.raise_for_status()
             sem_data = rr.json()
             sentry_sdk.logger.info(f"semantic_service data: {sem_data}")
-            words = sem_data.get('words', []) or []
-            hrases = sem_data.get('hrases', []) or []
-            noun_phrases = hrases
-            sim = sem_data.get('sim', []) or []
-            tags = words
+            entities = sem_data.get("entities", []) or []
+            if len(text) > 128:
+                words = sem_data.get('words', []) or []
+                hrases = sem_data.get('hrases', []) or []
+                noun_phrases = hrases
+                sim = sem_data.get('sim', []) or []
+                tags = words
 
-        with sentry_sdk.start_span(op="http.client", description="tags_service add tags") as span:
-            span.set_data("tags_count", len(tags))
-            for tagg in tags:
-                url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
-                headers = {'content-type': 'application/json'}
-                tag_data = {'name': tagg, "count": 0}
-                response = requests.post(url, data=json.dumps(tag_data), headers=headers, timeout=15)
+        if len(text) > 128 and tags:
+            with sentry_sdk.start_span(op="http.client", description="tags_service bulk") as span:
+                span.set_data("tags_count", len(tags))
+                _tags_bulk_post(tags, timeout=60)
 
     self_job = get_current_job()
     self_job.meta['tags'] = tags

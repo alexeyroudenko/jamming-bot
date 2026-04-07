@@ -95,7 +95,7 @@ updated: 2026-04-07
 
 **Семантика по куче фраз:** `POST /api/tags/combine/` → `semantic_service` `combine/` (лимит `max_phrases`).
 
-**Граф по словам:** `POST /api/tags/embeddings/` — `tag_embeddings.build_embeddings_response` (spaCy `en_core_web_md`), 2D/3D и связи по сходству; слова могут быть собраны с многих шагов.
+**Граф по словам:** `POST /api/tags/embeddings/` — прокси в **semantic-service** `POST /api/v1/semantic/tag-embeddings/` (векторы spaCy `en_core_web_lg`), 2D/3D и связи по сходству; слова могут быть собраны с многих шагов.
 
 **Очередь URL у бота (другой срез):** `data-service` читает SQLite `Urls`: `/api/urls/stats` (всего / посещено / хосты), `/api/urls`, `/api/urls/hostnames`.
 
@@ -116,7 +116,7 @@ updated: 2026-04-07
 - `storage-service/app/api/db_manager.py` — запросы к БД, `STEP_FIELDS`, `get_latest`, `iter_all_steps`, `get_image_rows`
 - `app-service/flask/app.py` — приём шага, `_patch_storage`, `_store_step_analysis`, `_poll_job_and_emit`
 - `app-service/flask/jobs.py` — `dostep`, `do_geo`, `analyze`, `do_screenshot`, `image_analyze`
-- `app-service/flask/tag_embeddings.py` — эмбеддинги тегов для визуализаций
+- `semantic-service/app/api/tag_embeddings.py` — эмбеддинги тегов для визуализаций (Flask только проксирует)
 - `bot-service/bot/bot.py` — класс `Step`, `to_data`, `do_step`
 - `data-service/app/main.py` — статистика и списки URL очереди бота
 - `steps-service/app/main.py` — снимки CSV/PNG для presence

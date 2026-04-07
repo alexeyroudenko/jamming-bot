@@ -120,7 +120,7 @@ tags:
 | `POST /api/tags/sentiment-vortex/` | Собрать phrases и sentiment stats для vortex page. |
 | `POST /api/tags/add_one/` | Добавить один tag. |
 | `GET /api/tags/add/` | Добавить один или несколько tag batch-ами. |
-| `POST /api/tags/add/` | Добавить один или несколько tag batch-ами. |
+| `POST /api/tags/add/` | Добавить теги списком (прокси в tags-service `POST .../tags/bulk/`). |
 | `GET /api/tags/add_tags_from_steps/` | Фоновая пересборка тегов из steps. |
 | `GET /api/tags/clean/` | Фоновая очистка tag storage. |
 
@@ -182,6 +182,7 @@ tags:
 | `GET /tags/api/api/v1/tags/openapi.json` | OpenAPI schema tags-service. |
 | `GET /tags/api/api/v1/tags/` | Получить все tags. |
 | `POST /tags/api/api/v1/tags/` | Создать tag напрямую в tags-service. |
+| `POST /tags/api/api/v1/tags/bulk/` | Массовое добавление: тело `{"names": [...]}` (та же семантика count, что у POST /). |
 | `GET /tags/api/api/v1/tags/{id}/` | Получить tag по id. |
 | `PUT /tags/api/api/v1/tags/{id}/` | Обновить tag по id. |
 | `DELETE /tags/api/api/v1/tags/{id}/` | Удалить tag по id. |

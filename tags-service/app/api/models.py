@@ -1,5 +1,11 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
+
+
+class TagBulkIn(BaseModel):
+    """Массовое добавление тегов с той же семантикой, что POST / (increment count при существующем name)."""
+    names: List[str] = Field(default_factory=list, max_length=800)
+
 
 class TagIn(BaseModel):
     name: str

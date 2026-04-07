@@ -28,7 +28,6 @@ from rq_helpers import queue, get_all_jobs, redis_connection
 from config import Config, getConfig, getRedis
 from telemetry import init_telemetry, inject_trace_context_into_job, set_step_span_attributes, step_span, enqueue_with_trace
 import jobs
-from tag_embeddings import build_embeddings_response
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -1233,7 +1232,7 @@ def clean_tags():
 @app.route("/api/tags/embeddings/", methods=["POST"])
 @cross_origin()
 def tags_embeddings():
-    """spaCy vectors + similarity links for tag visualizations (en_core_web_md)."""
+    """Proxy to semantic-service: word vectors + similarity links for tag visualizations."""
     try:
         body = request.get_json(silent=True) or {}
         words = body.get("words") or []
@@ -1245,10 +1244,20 @@ def tags_embeddings():
         min_sim = max(0.15, min(min_sim, 0.99))
         max_links = int(body.get("max_links", 160))
         max_links = max(8, min(max_links, 400))
-        out = build_embeddings_response(
-            words, max_words=max_words, min_sim=min_sim, max_links=max_links
-        )
-        return jsonify(out), 200
+        url = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tag-embeddings/"
+        headers = {"content-type": "application/json"}
+        payload = {
+            "words": words,
+            "max_words": max_words,
+            "min_sim": min_sim,
+            "max_links": max_links,
+        }
+        resp = requests.post(url, data=json.dumps(payload), headers=headers, timeout=120)
+        try:
+            out = resp.json() if resp.content else {}
+        except ValueError:
+            out = {"ok": False, "error": (resp.text or "")[:500] or "invalid JSON from semantic-service"}
+        return jsonify(out), resp.status_code
     except Exception as e:
         logger.exception("tags_embeddings failed")
         return jsonify({"ok": False, "error": str(e), "words": [], "vectors2d": [], "links": []}), 500
@@ -1366,16 +1375,8 @@ def step():
                 pending_jobs = []
 
                 # PASS — semantic analysis via worker
-                if float(current_cfg['do_pass']) == 1.0:
-                    if not is_silent:
-                        socketio.emit('step', data)
-                    if len(data['text']) > 0:
-                        job = enqueue_with_trace(queue, redis_connection, jobs.dostep, data, timeout=90, result_ttl=270)
-                        _poll_job_and_emit(job, 'tags_updated', timeout=90, step_key=step_key, silent=is_silent)
-                        pending_jobs.append(job)
-                else:
-                    if not is_silent:
-                        socketio.emit('step', data)
+                if not is_silent:
+                    socketio.emit('step', data)
 
                 # GEO — fire-and-forget with background poll
                 if float(current_cfg['do_geo']) == 1.0:
@@ -1772,16 +1773,23 @@ def add_tags():
         if not tags:
             return jsonify({"error": "No tags provided"}), 400
         try:
-            for tag in tags:
-                url = f"{TAGS_SERVICE_URL}/api/v1/tags/"
-                headers = {'content-type': 'application/json'}
-                data = {'name': tag, "count": 0}
-                last_r = requests.post(url, data=json.dumps(data), headers=headers, timeout=15)
-                if not last_r.ok:
-                    body = _tags_response_json(last_r)
-                    return jsonify({"error": "Tags service error", "status": last_r.status_code, "tag": tag, "detail": body or last_r.text[:200]}), 502
+            url = f"{TAGS_SERVICE_URL}/api/v1/tags/bulk/"
+            headers = {'content-type': 'application/json'}
+            last_r = requests.post(
+                url,
+                data=json.dumps({"names": tags}),
+                headers=headers,
+                timeout=60,
+            )
+            body = _tags_response_json(last_r)
+            if not last_r.ok:
+                return jsonify({
+                    "error": "Tags service error",
+                    "status": last_r.status_code,
+                    "detail": body or last_r.text[:200],
+                }), 502
             socketio.emit('tags_updated')
-            return jsonify({"ok": True, "tags": tags})
+            return jsonify({"ok": True, "tags": tags, "bulk": body})
         except requests.exceptions.RequestException as e:
             return jsonify({"error": "Tags service unreachable", "detail": str(e)}), 503
 

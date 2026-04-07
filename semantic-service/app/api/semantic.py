@@ -2,8 +2,6 @@ from typing import List
 
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException
-from app.api.models import TagIn, TagOut
-
 from collections import Counter
 from itertools import combinations
 import spacy
@@ -117,16 +115,22 @@ class SemanticCalculate(BaseModel):
 @semantic.post('/tags/')
 async def get_geo(text_data: SemanticCalculate):
     if not text_data:
-        raise HTTPException(status_code=404, detail="text not found")    
-    
+        raise HTTPException(status_code=404, detail="text not found")
+
     text = text_data.text
-    out = TagOut()
-    out.text = text
-    words, hrases, sim = analyze_text(text)    
-    out.words = words
-    out.hrases = hrases
-    out.sim = sim
-    return out
+    entities: List[dict] = []
+    if nlp_lg is not None:
+        edoc = nlp_lg(text[:100000])
+        entities = [{"text": ent.text, "label": ent.label_} for ent in edoc.ents]
+
+    words, hrases, sim = analyze_text(text)
+    return {
+        "text": text,
+        "words": words,
+        "hrases": hrases,
+        "sim": sim,
+        "entities": entities,
+    }
 
 
 @semantic.get('/analyze_all/')
