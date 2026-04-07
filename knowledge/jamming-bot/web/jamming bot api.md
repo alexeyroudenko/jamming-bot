@@ -17,6 +17,7 @@ tags:
 
 > [!note]
 > В таблицах ниже указан внешний путь в том виде, в каком он доступен снаружи.
+> Swagger UI у сервисов использует **относительный** `openapi.json`, чтобы за ingress с strip-префиксом схема подтягивалась с того же префикса (`/tags/openapi.json`, `/semantic/openapi.json`, …), а не с корня сайта.
 > `sublink`-события для bot page теперь в штатном режиме идут через Redis Pub/Sub (`bot-service -> redis -> app-service -> Socket.IO`).
 > `POST /bot/sublink/add/` оставлен как legacy fallback для совместимости.
 
@@ -178,8 +179,8 @@ tags:
 | --- | --- |
 | `GET /tags/api/` | Корень tags-service; API info / redirect target. |
 | `GET /tags/api/healthz` | Health-check tags-service. |
-| `GET /tags/api/api/v1/tags/docs` | Swagger docs tags-service. |
-| `GET /tags/api/api/v1/tags/openapi.json` | OpenAPI schema tags-service. |
+| `GET /tags/docs` | Swagger UI tags-service (после strip `/tags` → `/docs` у сервиса). |
+| `GET /tags/openapi.json` | OpenAPI schema tags-service. |
 | `GET /tags/api/api/v1/tags/` | Получить все tags. |
 | `POST /tags/api/api/v1/tags/` | Создать tag напрямую в tags-service. |
 | `POST /tags/api/api/v1/tags/bulk/` | Массовое добавление: тело `{"names": [...]}` (та же семантика count, что у POST /). |
@@ -195,8 +196,8 @@ tags:
 | endpoint | описание |
 | --- | --- |
 | `GET /semantic/health` | Health-check semantic-service. |
-| `GET /semantic/api/v1/semantic/docs` | Swagger docs semantic-service. |
-| `GET /semantic/api/v1/semantic/openapi.json` | OpenAPI schema semantic-service. |
+| `GET /semantic/docs` | Swagger UI semantic-service (после strip `/semantic` → `/docs`). |
+| `GET /semantic/openapi.json` | OpenAPI schema semantic-service. |
 | `POST /semantic/api/v1/semantic/tags/` | Извлечь words / phrases / sim из текста. |
 | `GET /semantic/api/v1/semantic/analyze_all/` | Полный semantic analysis по query param `text`. |
 | `POST /semantic/api/v1/semantic/analyze_all/` | Полный semantic analysis по JSON body. |
@@ -215,6 +216,8 @@ tags:
 
 | endpoint | описание |
 | --- | --- |
+| `GET /storage/docs` | Swagger UI storage-service (после strip `/storage` → `/docs`). |
+| `GET /storage/openapi.json` | OpenAPI schema storage-service. |
 | `POST /storage/store` | Сохранить step в storage-service. |
 | `PATCH /storage/update/step/{number}` | Частично обновить сохранённый step. |
 | `POST /storage/exists/batch` | Проверить набор step numbers на существование. |
@@ -227,6 +230,8 @@ tags:
 
 | endpoint | описание |
 | --- | --- |
+| `GET /data/docs` | Swagger UI data-service (после strip `/data` → `/docs`). |
+| `GET /data/openapi.json` | OpenAPI schema data-service. |
 | `GET /data/healthz` | Health-check data-service. |
 | `GET /data/api/urls/stats` | Статистика по таблице URL. |
 | `GET /data/api/urls` | Список URL c пагинацией и фильтрами. |

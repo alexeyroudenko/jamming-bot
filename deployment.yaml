@@ -1510,6 +1510,21 @@ spec:
   - host: jamming-bot.arthew0.online
     http:
       paths:
+      # OpenAPI/Swagger at service root (/docs, /openapi.json) after strip /tags
+      - path: /tags/docs
+        pathType: Prefix
+        backend:
+          service:
+            name: tags-service
+            port:
+              number: 80
+      - path: /tags/openapi.json
+        pathType: Prefix
+        backend:
+          service:
+            name: tags-service
+            port:
+              number: 80
       - path: /tags/api
         pathType: Prefix
         backend:
@@ -1654,6 +1669,76 @@ spec:
               name: app-service
               port:
                 number: 80
+---
+# ===================== Microservice subdomains (no strip-prefix middleware) =====================
+# One host per service; paths reach backends as-is (/api/v1/..., /health, ...).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jamming-bot-svc-subdomains-ingress
+  namespace: jamming-bot
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+  - hosts:
+    - tags.jamming-bot.arthew0.online
+    - semantic.jamming-bot.arthew0.online
+    - storage.jamming-bot.arthew0.online
+    - data.jamming-bot.arthew0.online
+    - keywords.jamming-bot.arthew0.online
+    secretName: jamming-bot-svc-subdomains-tls
+  rules:
+  - host: tags.jamming-bot.arthew0.online
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: tags-service
+            port:
+              number: 80
+  - host: semantic.jamming-bot.arthew0.online
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: semantic-service
+            port:
+              number: 80
+  - host: storage.jamming-bot.arthew0.online
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: storage-service
+            port:
+              number: 80
+  - host: data.jamming-bot.arthew0.online
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: data-service
+            port:
+              number: 80
+  - host: keywords.jamming-bot.arthew0.online
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: keywords-service
+            port:
+              number: 80
 ---
 # ===================== KEDA: worker-service autoscaler =====================
 apiVersion: keda.sh/v1alpha1

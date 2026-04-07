@@ -1,7 +1,7 @@
 ```
-http://localhost:8005/api/v1/semantic/docs
+http://localhost:8005/docs
 ```
 
 ```
-http://localhost:8005/api/v1/semantic/openapi.json
+http://localhost:8005/openapi.json
 ```

@@ -573,6 +573,11 @@ def _ordered_step(data):
     return out
 
 
+def step_payload_for_store(data):
+    """Canonical STEP_FIELDS projection for POST storage-service /store (same as do_storage)."""
+    return _ordered_step(data)
+
+
 @job('default', connection=redis_connection, timeout=120, result_ttl=270)
 @with_trace_context
 def do_storage(data):
@@ -589,7 +594,7 @@ def do_storage(data):
     current_url = data.get('current_url', data.get('url', ''))
     set_step_span_attributes(step_number=step_number, step_url=current_url)
 
-    payload = _ordered_step(data)
+    payload = step_payload_for_store(data)
 
     url = f"{STORAGE_SERVICE_URL}/store"
     headers = {'content-type': 'application/json'}

@@ -38,12 +38,12 @@ updated: 2026-04-07
 ## Поток записи
 
 1. **Краулер** (`bot-service`) — `POST` на [[jamming bot flask|Flask]] ` /bot/step/` (form-data).
-2. **Flask** (`app.py`, маршрут `step`) кладёт черновик в Redis (`_save_to_step_hash`). При `do_storage == 1` сразу делает **`POST` JSON** на `storage-service` **`/store`** — ранняя запись с полями вроде `number`, `url`, `src`, `ip`, `status_code`, `timestamp`, усечённый `text`.
+2. **Flask** (`app.py`, маршрут `step`) кладёт черновик в Redis (`_save_to_step_hash`). При **`do_save == 1` или `do_storage == 1`** сразу делает **`POST` JSON** на `storage-service` **`/store`** — ранняя запись с проекцией на `STEP_FIELDS` (`step_payload_for_store` / тот же порядок, что у джоба `do_storage`), а не только узкий набор полей с усечённым `text`.
 3. **RQ workers** (`app-service/flask/jobs.py`) — семантика, гео, analyze, screenshot и др. Результаты **дописываются** через **`PATCH /update/step/{number}`** (`_patch_storage` в `app.py`). Палитра и подобное — **`POST /analysis/store`**.
 4. **Backfill-worker** читает URL из **data-service**, сверяет с storage (**`/exists/batch`**), затем прогоняет страницы через app-service в тихом режиме — та же цепочка записи.
 
 > [!note]
-> Отдельный путь: при `do_save` воркер семантики может писать в `/store` из `jobs.py` — это пересекается с общей политикой «сначала store, потом patch»; смотри актуальный `dostep` и флаги в Redis.
+> Ранний `/store` в `step()` и джоб `do_storage` в `jobs.py` используют одну и ту же сборку payload (`step_payload_for_store`); после воркеров поля дополняются через `PATCH` (`_patch_storage`).
 
 ## Данные одного шага от краулера
 

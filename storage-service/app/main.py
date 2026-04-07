@@ -9,6 +9,7 @@ import zlib
 from typing import List
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from starlette.status import HTTP_400_BAD_REQUEST
@@ -20,7 +21,19 @@ from app.api.models import StepAnalysisIn
 logger = logging.getLogger("storage_service")
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI()
+app = FastAPI(
+    title="Storage Service",
+    docs_url=None,
+    openapi_url="/openapi.json",
+)
+
+
+@app.get("/docs", include_in_schema=False)
+async def swagger_ui_html():
+    return get_swagger_ui_html(
+        openapi_url="openapi.json",
+        title=f"{app.title} - Swagger UI",
+    )
 
 DEFAULT_IMAGE_TYPE = "presence"
 SUPPORTED_IMAGE_TYPES = {

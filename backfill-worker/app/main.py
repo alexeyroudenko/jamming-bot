@@ -389,48 +389,85 @@ async def main():
         )
 
         while True:
-            try:
-                rows, pagination = get_visited_urls(page, per_page=BATCH_SIZE)
-                total_pages = int(pagination.get("total_pages", 0))
-            except Exception as e:
-                logger.error("data-service error page=%s: %s", page, e)
-                update_backfill_status(state="failed", cycle=cycle, current_page=page, last_error=f"data-service error: {e}")
-                break
+            
+            # every 10 minutes
+            if cycle % (64) == 0:
+            # get image from https://storage.jamming-bot.arthew0.online/export/img?width=0&type=presence
+            # and save it to /tmp/presence.png
+                resp = requests.get("https://storage.jamming-bot.arthew0.online/export/img?width=0&type=presence")
+                resp.raise_for_status()
+                with open("/tmp/presence.png", "wb") as f:
+                    f.write(resp.content)
+            
+            # get random black pixel
+            # pixwel_number = random_x + random_y * width            
+            from PIL import Image
+            # check if step is black
+            with Image.open("/tmp/presence.png") as img:
+                width, height = img.size
+                total_pages = width * height
+                px = random.randint(0, width - 1)
+                py = random.randint(0, height - 1)
+                pixwel_number = px + py * width
+                while img.getpixel((px, py)) != (0, 0, 0):
+                    px = random.randint(0, width - 1)
+                    py = random.randint(0, height - 1)
+            
+            # get step from data-service
+            rows, pagination = get_visited_urls(page, per_page=BATCH_SIZE)
+            total_pages = int(pagination.get("total_pages", 0))
 
-            if not rows:
-                break
-            if int(rows[0]["id"]) > BACKFILL_MAX_ID:
-                logger.info("page=%s starts above max id (%s > %s), stopping cycle", page, rows[0]["id"], BACKFILL_MAX_ID)
-                break
+            # try:
+            #     rows, pagination = get_visited_urls(page, per_page=BATCH_SIZE)
+            #     total_pages = int(pagination.get("total_pages", 0))
+            # except Exception as e:
+            #     logger.error("data-service error page=%s: %s", page, e)
+            #     update_backfill_status(state="failed", cycle=cycle, current_page=page, last_error=f"data-service error: {e}")
+            #     break
 
-            rows = [r for r in rows if id_in_range(r["id"])]
-            if not rows:
-                if page >= total_pages:
-                    break
-                page += 1
-                continue
+            # if not rows:
+            #     break
+            # if int(rows[0]["id"]) > BACKFILL_MAX_ID:
+            #     logger.info("page=%s starts above max id (%s > %s), stopping cycle", page, rows[0]["id"], BACKFILL_MAX_ID)
+            #     break
 
-            ids = [backfill_step_number(r["id"]) for r in rows]
-            try:
-                missing = set(check_missing(ids))
-            except Exception as e:
-                logger.error("storage exists/batch error: %s", e)
-                update_backfill_status(
-                    state="failed",
-                    cycle=cycle,
-                    current_page=page,
-                    total_pages=total_pages,
-                    processed=total_processed,
-                    skipped=total_skipped,
-                    cycle_processed=cycle_processed,
-                    cycle_skipped=cycle_skipped,
-                    last_error=f"storage exists/batch error: {e}",
-                )
-                break
+            # rows = [r for r in rows if id_in_range(r["id"])]
+            # if not rows:
+            #     if page >= total_pages:
+            #         break
+            #     page += 1
+            #     continue
 
-            skipped = len(ids) - len(missing)
-            total_skipped += skipped
-            cycle_skipped += skipped
+            # ids = [backfill_step_number(r["id"]) for r in rows]
+            # try:
+            #     missing = set(check_missing(ids))
+            # except Exception as e:
+            #     logger.error("storage exists/batch error: %s", e)
+            #     update_backfill_status(
+            #         state="failed",
+            #         cycle=cycle,
+            #         current_page=page,
+            #         total_pages=total_pages,
+            #         processed=total_processed,
+            #         skipped=total_skipped,
+            #         cycle_processed=cycle_processed,
+            #         cycle_skipped=cycle_skipped,
+            #         last_error=f"storage exists/batch error: {e}",
+            #     )
+            #     break
+
+            row = {
+                "id": pixwel_number,
+                "url": f"https://data.jamming-bot.arthew0.online/data/{pixwel_number}/",
+            }
+            ok = await process_row(row)
+
+            # skipped = len(ids) - len(missing)
+            # total_skipped += skipped
+            # cycle_skipped += skipped            
+            total_processed = cycle
+            page = cycle
+            cycle += 1
             update_backfill_status(
                 state="running",
                 cycle=cycle,
@@ -442,29 +479,29 @@ async def main():
                 cycle_skipped=cycle_skipped,
             )
 
-            for row in order_rows_for_backfill(rows, missing):
-                while not backfill_is_active():
-                    update_backfill_status(
-                        state="paused",
-                        finished_at=now_ts(),
-                        last_error="backfill выключен (backfill_active=0, /ctrl/)",
-                    )
-                    await asyncio.sleep(1.0)
-                ok = await process_row(row)
-                if ok:
-                    total_processed += 1
-                    cycle_processed += 1
-                    update_backfill_status(
-                        state="running",
-                        cycle=cycle,
-                        current_page=page,
-                        total_pages=total_pages,
-                        processed=total_processed,
-                        skipped=total_skipped,
-                        cycle_processed=cycle_processed,
-                        cycle_skipped=cycle_skipped,
-                    )
-                await asyncio.sleep(current_backfill_sleep())
+            # for row in order_rows_for_backfill(rows, missing):
+            #     while not backfill_is_active():
+            #         update_backfill_status(
+            #             state="paused",
+            #             finished_at=now_ts(),
+            #             last_error="backfill выключен (backfill_active=0, /ctrl/)",
+            #         )
+            #         await asyncio.sleep(1.0)
+            #     ok = await process_row(row)
+            #     if ok:
+            #         total_processed += 1
+            #         cycle_processed += 1
+            #         update_backfill_status(
+            #             state="running",
+            #             cycle=cycle,
+            #             current_page=page,
+            #             total_pages=total_pages,
+            #             processed=total_processed,
+            #             skipped=total_skipped,
+            #             cycle_processed=cycle_processed,
+            #             cycle_skipped=cycle_skipped,
+            #         )
+            #     await asyncio.sleep(current_backfill_sleep())
 
             logger.info(
                 "cycle %s page %s/%s done - total_processed=%s total_skipped=%s cycle_processed=%s cycle_skipped=%s",

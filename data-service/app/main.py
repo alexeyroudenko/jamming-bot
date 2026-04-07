@@ -6,11 +6,25 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, Query, HTTPException
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import StreamingResponse
 
 DB_PATH = Path("/app/data/database.db")
 
-app = FastAPI(title="Data Service", version="0.1.0")
+app = FastAPI(
+    title="Data Service",
+    version="0.1.0",
+    docs_url=None,
+    openapi_url="/openapi.json",
+)
+
+
+@app.get("/docs", include_in_schema=False)
+def swagger_ui_html():
+    return get_swagger_ui_html(
+        openapi_url="openapi.json",
+        title=f"{app.title} - Swagger UI",
+    )
 
 
 @app.get("/healthz")
@@ -84,6 +98,23 @@ def get_urls(
             "total_pages": max(1, (total + per_page - 1) // per_page),
         },
     }
+
+
+@app.get("/data/{row_id:int}/")
+@app.get("/{row_id:int}/", include_in_schema=False)
+def get_url_row_full(row_id: int):
+    """
+    Вся строка из SQLite `Urls` по `id` (в контексте бота обычно совпадает с номером шага).
+
+    Снаружи: `https://data.jamming-bot.../data/1/` (путь на сервисе `/data/1/`).
+
+    На основном хосте `https://jamming-bot.../data/1/` после strip префикса `/data` запрос приходит как `/1/`.
+    """
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM Urls WHERE id = ?", (row_id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"No row with id={row_id}")
+    return dict(row)
 
 
 @app.get("/api/urls/hostnames")

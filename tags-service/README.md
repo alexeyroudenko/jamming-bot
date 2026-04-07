@@ -1,7 +1,7 @@
 ```
-http://localhost:8003/api/v1/tags/docs
+http://localhost:8003/docs
 ```
 
 ```
-http://localhost:8003/api/v1/tags/openapi.json
+http://localhost:8003/openapi.json
 ```

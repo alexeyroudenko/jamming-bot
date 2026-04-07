@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import JSONResponse, RedirectResponse
 from app.api.tags import tags
 from app.api.db import metadata, database, engine
@@ -34,7 +35,20 @@ if SENTRY_DSN:
 logger = logging.getLogger("tags_service")
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(openapi_url="/api/v1/tags/openapi.json", docs_url="/api/v1/tags/docs")
+app = FastAPI(
+    title="tags-service",
+    docs_url=None,
+    openapi_url="/openapi.json",
+)
+
+
+@app.get("/docs", include_in_schema=False)
+async def swagger_ui_html():
+    # Relative openapi_url so /tags/docs on main host resolves to /tags/openapi.json, not site root.
+    return get_swagger_ui_html(
+        openapi_url="openapi.json",
+        title=f"{app.title} - Swagger UI",
+    )
 
 origins = [
     "http://localhost:3000",
@@ -108,7 +122,8 @@ async def root():
         {
             "service": "tags-service",
             "api": "/api/v1/tags/",
-            "docs": "/api/v1/tags/docs",
+            "docs": "/docs",
+            "openapi": "/openapi.json",
         }
     )
 

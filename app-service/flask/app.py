@@ -318,8 +318,8 @@ def _ctrl_log(action: str, source: str):
 
 def _ensure_redis_defaults():
     defaults = {'value': 0.5, 'do_pass': 0.5, 'do_geo': 0.5,
-                'do_save': 0.5, 'do_analyze': 0.5, 'do_screenshot': 0.5,
-                'do_image_analyze': 1.0, 'do_storage': 0.5, 'sleep_time': 2.0,
+                'do_save': 1.0, 'do_analyze': 1.0, 'do_screenshot': 0.5,
+                'do_image_analyze': 1.0, 'do_storage': 1.0, 'sleep_time': 2.0,
                 'random_time': 2.0, 'backfill_sleep': 2.0, 'backfill_timeout': 4.0,
                 'backfill_active': 1.0}
     for key, default in defaults.items():
@@ -1385,8 +1385,13 @@ def step():
         }
         _save_to_step_hash(step_key, partial_data)
 
-        if float(current_cfg.get('do_storage', 0)) == 1.0 and data.get('url'):
+        early_store = (
+            float(current_cfg.get('do_save', 0)) == 1.0
+            or float(current_cfg.get('do_storage', 0)) == 1.0
+        )
+        if early_store and data.get('url'):
             try:
+                store_payload = jobs.step_payload_for_store(data)
                 store_resp = None
                 last_error = None
                 for idx, delay in enumerate((0.0, 0.8, 1.6)):
@@ -1395,7 +1400,8 @@ def step():
                     try:
                         store_resp = requests.post(
                             f"{STORAGE_SERVICE_URL}/store",
-                            json=partial_data,
+                            data=json.dumps(store_payload, default=str),
+                            headers={'content-type': 'application/json'},
                             timeout=12,
                         )
                         store_resp.raise_for_status()
