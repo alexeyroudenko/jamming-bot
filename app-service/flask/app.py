@@ -1024,6 +1024,38 @@ def metrics_endpoint():
     return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
 
 
+def _infer_queue_step_number(job):
+    """Best-effort step number for queue list (meta, kwargs, first-arg dict, result)."""
+    try:
+        meta = job.meta or {}
+        for key in ("step", "number"):
+            v = meta.get(key)
+            if v is not None and v != "":
+                return v
+        kwargs = getattr(job, "kwargs", None) or {}
+        if isinstance(kwargs, dict):
+            for key in ("step_number", "step", "number"):
+                v = kwargs.get(key)
+                if v is not None and v != "":
+                    return v
+        args = getattr(job, "args", None) or ()
+        if args and isinstance(args[0], dict):
+            d = args[0]
+            for key in ("number", "step"):
+                v = d.get(key)
+                if v is not None and v != "":
+                    return v
+        res = job.result
+        if isinstance(res, dict):
+            for key in ("step", "number"):
+                v = res.get(key)
+                if v is not None and v != "":
+                    return v
+    except Exception:
+        pass
+    return None
+
+
 @app.route('/delete_job/<job_id>', methods=["GET"])
 def deletejob(job_id):
     job = queue.fetch_job(job_id)
@@ -1083,6 +1115,7 @@ def queue_page():
         l.append({
             'id': job.get_id(),
             'state': job.get_status(),
+            'step_number': _infer_queue_step_number(job),
             'type': job.meta.get('type'),
             'progress': job.meta.get('progress'),
             'result': job.result,

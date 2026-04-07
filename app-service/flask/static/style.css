@@ -457,6 +457,18 @@ button.jb-btn {
   font-size: 14px;
 }
 
+.jb-table--queue {
+  table-layout: fixed;
+  min-width: 800px;
+}
+
+.jb-table--queue .jb-table__col-id {
+  width: 10%;
+  max-width: 10%;
+  word-break: break-all;
+  vertical-align: top;
+}
+
 .jb-table caption {
   caption-side: top;
   text-align: left;

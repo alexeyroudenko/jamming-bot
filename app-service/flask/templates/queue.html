@@ -22,12 +22,13 @@
 </div>
 
 <div class="jb-table-scroll">
-  <table class="jb-table">
+  <table class="jb-table jb-table--queue">
     <caption class="jb-visually-hidden">RQ job list</caption>
     <thead>
       <tr>
         <th scope="col">State</th>
-        <th scope="col">Id</th>
+        <th scope="col" class="jb-table__col-id">Id</th>
+        <th scope="col">Step number</th>
         <th scope="col">Type</th>
         <th scope="col">Time</th>
         <th scope="col">Meta</th>
@@ -39,7 +40,8 @@
       {% for job in joblist %}
       <tr>
         <td>{{ job_badge(job.state) }}</td>
-        <td><a href="/queue/job/{{ job.id }}/" title="Открыть описание джоба"><code class="jb-code">{{ job.id }}</code></a></td>
+        <td class="jb-table__col-id"><a href="/queue/job/{{ job.id }}/" title="Открыть описание джоба"><code class="jb-code">{{ job.id }}</code></a></td>
+        <td>{% if job.step_number is not none %}{{ job.step_number }}{% else %}—{% endif %}</td>
         <td>{{ job.type }}</td>
         <td>
           {% if job.duration_sec is not none %}
