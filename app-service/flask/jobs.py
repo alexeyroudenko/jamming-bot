@@ -456,7 +456,9 @@ def analyze(html, step_number=None, step_url=None):
     tags = []
     words = []
     hrases = []
-        
+    noun_phrases = []
+    sim = []
+
     if len(text) > 128:
         with sentry_sdk.start_span(op="http.client", description="semantic_service /tags/"):
             url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
