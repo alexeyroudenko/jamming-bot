@@ -1,0 +1,4 @@
+{% macro job_badge(state) -%}
+{% set s = state | default('', true) | string %}
+<span class="jb-badge{% if s == 'finished' %} jb-badge--finished{% elif s == 'started' %} jb-badge--started{% elif s == 'failed' %} jb-badge--failed{% elif s == 'queued' %} jb-badge--queued{% endif %}" role="status">{{ s }}</span>
+{%- endmacro %}

@@ -4,184 +4,35 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Login — Jamming Bot</title>
-    <style>
-        :root {
-            --bot-surface: rgba(12, 12, 12, 0.96);
-            --bot-border: rgba(255, 255, 255, 0.18);
-            --bot-border-strong: rgba(255, 0, 0, 0.72);
-            --bot-text: #ffffff;
-            --bot-muted: #9a9a9a;
-            --bot-accent: #ff0000;
-            --bot-shadow: 0 18px 44px rgba(0, 0, 0, 0.4);
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 10px;
-            background:
-                linear-gradient(180deg, rgba(255, 0, 0, 0.08), transparent 24%),
-                #000000;
-            color: var(--bot-text);
-            font-family: "Segoe UI", Arial, sans-serif;
-        }
-
-        .login-shell {
-            width: min(980px, 100%);
-            display: grid;
-            grid-template-columns: minmax(0, 1.1fr) minmax(320px, 420px);
-            gap: 8px;
-        }
-
-        .login-copy,
-        .login-box {
-            background: var(--bot-surface);
-            box-shadow: var(--bot-shadow);
-        }
-
-        .login-copy {
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            gap: 8px;
-        }
-
-        .login-kicker {
-            color: var(--bot-accent);
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-        }
-
-        .login-copy h1 {
-            margin-top: 4px;
-            font-size: clamp(2rem, 4vw, 3.2rem);
-            line-height: 1.02;
-        }
-
-        .login-copy p {
-            max-width: 38ch;
-            color: var(--bot-muted);
-            font-size: 15px;
-            line-height: 1.25;
-        }
-
-        .login-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-        }
-
-        .login-tag {
-            padding: 2px 8px;
-            background: rgba(22, 22, 22, 0.96);
-            color: var(--bot-muted);
-            font-size: 12px;
-        }
-
-        .login-box {
-            padding: 10px;
-            width: 100%;
-        }
-
-        .login-box h2 {
-            font-size: 1.6rem;
-            margin-bottom: 4px;
-        }
-
-        .login-box p {
-            color: var(--bot-muted);
-            font-size: 14px;
-            margin-bottom: 6px;
-            line-height: 1.2;
-        }
-
-        .login-box input {
-            width: 100%;
-            padding: 4px 8px;
-            margin-bottom: 4px;
-            background: rgba(18, 18, 18, 0.96);
-            color: var(--bot-text);
-            font-size: 14px;
-        }
-
-        .login-box input:focus {
-            outline: none;
-            border-color: var(--bot-border-strong);
-            box-shadow: 0 0 0 1px rgba(255, 0, 0, 0.18);
-        }
-
-        .login-box button {
-            width: 100%;
-            margin-top: 4px;
-            padding: 2px 8px;
-            background: rgba(34, 0, 0, 0.98);
-            color: var(--bot-text);
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .login-box button:hover {
-            background: rgba(52, 0, 0, 0.98);
-        }
-
-        .error {
-            color: #fca5a5;
-            font-size: 0.9rem;
-            margin-bottom: 12px;
-        }
-
-        .login-meta {
-            margin-top: 6px;
-            color: var(--bot-muted);
-            font-size: 12px;
-            display: flex;
-            justify-content: space-between;
-            gap: 4px;
-        }
-
-        @media (max-width: 860px) {
-            .login-shell {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="/flask_static/style.css">
 </head>
-<body>
-    <div class="login-shell">
-        <section class="login-copy">
+<body class="jb-login-page">
+    <a class="jb-skip-link" href="#jb-login-form">К форме входа</a>
+    <div class="jb-login-shell">
+        <section class="jb-login-copy" aria-labelledby="login-heading">
             <div>
-                <div class="login-kicker">Jamming Bot</div>
-                <h1>Control room for live visualizations</h1>
+                <div class="jb-login-kicker">Jamming Bot</div>
+                <h1 id="login-heading">Control room for live visualizations</h1>
                 <p>Единая точка входа в визуализации, мониторинг и служебные операции без декоративных карточек и округлых форм.</p>
             </div>
-            <div class="login-tags">
-                <span class="login-tag">tag cloud</span>
-                <span class="login-tag">3D cloud</span>
-                <span class="login-tag">path map</span>
-                <span class="login-tag">queue dashboard</span>
+            <div class="jb-login-tags" aria-label="Разделы">
+                <span class="jb-login-tag">tag cloud</span>
+                <span class="jb-login-tag">3D cloud</span>
+                <span class="jb-login-tag">path map</span>
+                <span class="jb-login-tag">queue dashboard</span>
             </div>
         </section>
 
-        <form class="login-box" method="post">
-            <h2>Login</h2>
+        <form id="jb-login-form" class="jb-login-box" method="post" aria-labelledby="login-form-title">
+            <h2 id="login-form-title">Login</h2>
             <p>Войди, чтобы открыть admin controls и служебные маршруты.</p>
-            {% if error %}<div class="error">{{ error }}</div>{% endif %}
-            <input type="text" name="username" placeholder="username" autofocus required>
-            <input type="password" name="password" placeholder="password" required>
-            <button type="submit">Continue</button>
-            <div class="login-meta">
+            {% if error %}<div class="jb-login-error" role="alert">{{ error }}</div>{% endif %}
+            <label class="jb-visually-hidden" for="username">Username</label>
+            <input type="text" name="username" id="username" placeholder="username" autocomplete="username" autofocus required>
+            <label class="jb-visually-hidden" for="password">Password</label>
+            <input type="password" name="password" id="password" placeholder="password" autocomplete="current-password" required>
+            <button type="submit" class="jb-btn jb-btn--primary">Continue</button>
+            <div class="jb-login-meta">
                 <span>secure access</span>
                 <span>visualization dashboard</span>
             </div>

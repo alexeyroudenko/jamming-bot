@@ -1,0 +1,11 @@
+<nav class="jb-nav-bar" aria-label="Control room navigation">
+  <span class="jb-nav__brand" id="jb-nav-heading">Jamming Bot</span>
+  <ul class="jb-nav" aria-labelledby="jb-nav-heading">
+    <li><a href="/" {% if nav_active == 'home' %}aria-current="page"{% endif %}>Home</a></li>
+    <li><a href="/steps/" {% if nav_active == 'steps' %}aria-current="page"{% endif %}>Steps</a></li>
+    <li><a href="/path/map/" {% if nav_active == 'path' %}aria-current="page"{% endif %}>Path map</a></li>
+    <li><a href="/ctrl/" {% if nav_active == 'ctrl' %}aria-current="page"{% endif %}>Control</a></li>
+    <li><a href="/queue/" {% if nav_active == 'queue' %}aria-current="page"{% endif %}>Queue</a></li>
+    <li><a href="/tags/">Tags</a></li>
+  </ul>
+</nav>

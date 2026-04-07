@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Control room{% endblock %} — Jamming Bot</title>
+  <link rel="stylesheet" href="/flask_static/style.css">
+  {% block head_extra %}{% endblock %}
+</head>
+<body class="jb-page">
+  <a class="jb-skip-link" href="#jb-main">К основному содержимому</a>
+  <header class="jb-header">
+    {% include "components/nav_control.html" %}
+    {% include "components/status_strip.html" %}
+  </header>
+  <main id="jb-main" class="jb-main" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

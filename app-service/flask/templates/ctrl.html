@@ -1,273 +1,156 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>jammingbot : console</title>
-    <meta http-equiv="refresh" content="4" />
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
-    <script src="https://code.jquery.com/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
-    <!--<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script> -->
-</head>
-<body>
+{% extends "base_control.html" %}
+{% set nav_active = 'ctrl' %}
+{% block title %}Control{% endblock %}
+{% block head_extra %}
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
+{% endblock %}
 
+{% block content %}
+<h1>Control</h1>
+<p>Запуск, шаг и параметры пайплайна. Изменения чекбоксов и слайдеров уходят на сервер через WebSocket.</p>
 
+<section class="jb-toolbar jb-toolbar--spaced" aria-label="Transport controls">
+  <a href="/ctrl/start/" class="jb-btn jb-btn--primary jb-btn--sm">start</a>
+  <a href="/ctrl/stop/" class="jb-btn jb-btn--primary jb-btn--sm">stop</a>
+  <a href="/ctrl/step/" class="jb-btn jb-btn--primary jb-btn--sm">step</a>
+  <a href="/ctrl/restart/" class="jb-btn jb-btn--primary jb-btn--sm">restart</a>
+  <a href="/queue/" class="jb-btn jb-btn--sm">queue</a>
+  <a href="/all_jobs/" class="jb-btn jb-btn--ghost jb-btn--sm">API all_jobs</a>
+</section>
 
-<div class="jumbotron text-center">
-    
-    <div  class="col-md-6 offset-3">
-        <a href="/">counter:<span id="counter"></span> | latency:<span id="latency"></span>
+<fieldset class="jb-fieldset">
+  <legend>Pipeline flags</legend>
+  <ul class="jb-check-grid">
+    <li><label class="jb-check"><input type="checkbox" id="do_pass" name="do_pass" {% if cfg.do_pass == 1 %}checked{% endif %}> do_pass</label></li>
+    <li><label class="jb-check"><input type="checkbox" id="do_geo" name="do_geo" {% if cfg.do_geo == 1 %}checked{% endif %}> do_geo</label></li>
+    <li><label class="jb-check"><input type="checkbox" id="do_save" name="do_save" {% if cfg.do_save == 1 %}checked{% endif %}> do_save</label></li>
+    <li><label class="jb-check"><input type="checkbox" id="do_analyze" name="do_analyze" {% if cfg.do_analyze == 1 %}checked{% endif %}> do_analyze</label></li>
+    <li><label class="jb-check"><input type="checkbox" id="do_screenshot" name="do_screenshot" {% if cfg.do_screenshot == 1 %}checked{% endif %}> do_screenshot</label></li>
+    <li><label class="jb-check"><input type="checkbox" id="do_image_analyze" name="do_image_analyze" {% if cfg.do_image_analyze == 1 %}checked{% endif %}> do_image_analyze</label></li>
+    <li><label class="jb-check"><input type="checkbox" id="do_storage" name="do_storage" {% if cfg.do_storage == 1 %}checked{% endif %}> do_storage</label></li>
+  </ul>
+</fieldset>
+
+<fieldset class="jb-fieldset">
+  <legend>Bot YAML flags</legend>
+  <ul class="jb-check-grid">
+    <li><label class="jb-check"><input type="checkbox" id="send_events" name="send_events" {% if bot_flags['send_events'] %}checked{% endif %}> send_events</label></li>
+    <li><label class="jb-check"><input type="checkbox" id="send_sublinks" name="send_sublinks" {% if bot_flags['send_sublinks'] %}checked{% endif %}> send_sublinks</label></li>
+    <li><label class="jb-check"><input type="checkbox" id="log_events" name="log_events" {% if bot_flags['log_events'] %}checked{% endif %}> log_events</label></li>
+  </ul>
+</fieldset>
+
+<fieldset class="jb-fieldset">
+  <legend>Timing &amp; tick</legend>
+  <p class="jb-muted" style="margin-bottom:var(--jb-space-2);">GET <code class="jb-code">/set_tick/?tick=…</code> по-прежнему доступен; слайдер шлёт значение через WebSocket.</p>
+  <div class="jb-range-row">
+    <label for="pi_input">tick <output id="value" for="pi_input">{{ cfg.value }}</output></label>
+    <input class="jb-range" type="range" min="0" max="1" id="pi_input" name="tick" step="any" value="{{ cfg.value }}">
+  </div>
+  <div class="jb-range-row">
+    <label for="sleep_time_input">sleep_time: <output id="sleep_time_value" for="sleep_time_input">{{ cfg.sleep_time }}</output>s</label>
+    <input class="jb-range" type="range" min="0" max="10" step="0.1" id="sleep_time_input" value="{{ cfg.sleep_time }}">
+  </div>
+  <div class="jb-range-row">
+    <label for="random_time_input">random_time: <output id="random_time_value" for="random_time_input">{{ cfg.random_time }}</output>s</label>
+    <input class="jb-range" type="range" min="0" max="5" step="0.1" id="random_time_input" value="{{ cfg.random_time }}">
+  </div>
+  <div class="jb-range-row">
+    <label for="backfill_sleep_input">backfill_sleep: <output id="backfill_sleep_value" for="backfill_sleep_input">{{ cfg.backfill_sleep }}</output>s</label>
+    <input class="jb-range" type="range" min="0" max="10" step="0.1" id="backfill_sleep_input" value="{{ cfg.backfill_sleep }}">
+  </div>
+  <div class="jb-range-row">
+    <label for="backfill_timeout_input">backfill_timeout: <output id="backfill_timeout_value" for="backfill_timeout_input">{{ cfg.backfill_timeout }}</output>s</label>
+    <input class="jb-range" type="range" min="0" max="10" step="0.1" id="backfill_timeout_input" value="{{ cfg.backfill_timeout }}">
+  </div>
+</fieldset>
+
+<section class="jb-stack" aria-label="Debug jobs">
+  <div class="jb-panel">
+    <div class="jb-panel__body">
+      <a href="/add_wait_job/15" class="jb-btn jb-btn--sm jb-btn--primary">Enqueue wait job</a>
     </div>
-
-    <br>
-
-    <div class="col-md-6 offset-3">
-        <a href="/ctrl/start/" class="btn btn-sm btn-primary">start</a>
-        <a href="/ctrl/stop/" class="btn btn-sm btn-primary">stop</a>
-        <a href="/ctrl/step/" class="btn btn-sm btn-primary">step</a>
-        <a href="/ctrl/restart/" class="btn btn-sm btn-primary">restart</a> 
-        |||| <a href="/queue/" class="btn btn-sm btn-primary">queue</a>
-        |||| <a href="/all_jobs/" class="btn btn-sm btn-primary">API all_jobs</a>
+  </div>
+  <div class="jb-panel">
+    <div class="jb-panel__body jb-form-actions">
+      <form action="/add_analyze_job/" method="post" class="jb-form-actions">
+        <input class="jb-input-text" name="text" id="text" value="Telegram bot parsing" aria-label="Text to analyze">
+        <button type="submit" class="jb-btn jb-btn--sm jb-btn--primary">analyze</button>
+      </form>
     </div>
+  </div>
+</section>
+{% endblock %}
 
-    <br>
-
-    <fieldset style="float:righleftt;">
-        <span>
-            <input type="checkbox" id="do_pass" name="do_pass" {% if cfg.do_pass == 1 %}checked{% endif %} />
-            <label for="do_pass">do_pass</label>
-        </span>        
-        <span>
-            <input type="checkbox" id="do_geo" name="do_geo" {% if cfg.do_geo == 1 %}checked{% endif %} />
-            <label for="do_geo">do_geo</label>
-        </span>        
-        <span>
-            <input type="checkbox" id="do_save" name="do_save" {% if cfg.do_save == 1 %}checked{% endif %} />
-            <label for="do_save">do_save</label>
-        </span>
-        <span>
-            <input type="checkbox" id="do_analyze" name="do_analyze"  {% if cfg.do_analyze == 1 %}checked{% endif %} />
-            <label for="do_analyze">do_analyze</label>
-        </span>
-        <span>
-            <input type="checkbox" id="do_screenshot" name="do_screenshot" {% if cfg.do_screenshot == 1 %}checked{% endif %} />
-            <label for="do_screenshot">do_screenshot</label>
-        </span>
-        <span>
-            <input type="checkbox" id="do_image_analyze" name="do_image_analyze" {% if cfg.do_image_analyze == 1 %}checked{% endif %} />
-            <label for="do_image_analyze">do_image_analyze</label>
-        </span>
-        <span>
-            <input type="checkbox" id="do_storage" name="do_storage" {% if cfg.do_storage == 1 %}checked{% endif %} />
-            <label for="do_storage">do_storage</label>
-        </span>
-        <br>
-        <span>
-            <input type="checkbox" id="send_events" name="send_events" {% if bot_flags['send_events'] %}checked{% endif %} />
-            <label for="send_events">send_events</label>
-        </span>
-        <span>
-            <input type="checkbox" id="send_sublinks" name="send_sublinks" {% if bot_flags['send_sublinks'] %}checked{% endif %} />
-            <label for="send_sublinks">send_sublinks</label>
-        </span>
-        <span>
-            <input type="checkbox" id="log_events" name="log_events" {% if bot_flags['log_events'] %}checked{% endif %} />
-            <label for="log_events">log_events</label>
-        </span>
-        <span>
-        <form action="set_tick" method="get">                
-            <input  style="width:300px"  type="range" class="form-range" min="0" max="1" id="pi_input" name="tick" id="tick" step="any" value={{ cfg.value }}><br>                   
-            <label for="pi_input"><output id="value"></output></label>                
-        </form>   
-        
-        </span>
-
-        <span>
-            <label for="sleep_time_input">sleep_time: <output id="sleep_time_value">{{ cfg.sleep_time }}</output>s</label><br>
-            <input style="width:300px" type="range" class="form-range" min="0" max="10" step="0.1" id="sleep_time_input" value={{ cfg.sleep_time }}>
-        </span>
-        <span>
-            <label for="random_time_input">random_time: <output id="random_time_value">{{ cfg.random_time }}</output>s</label><br>
-            <input style="width:300px" type="range" class="form-range" min="0" max="5" step="0.1" id="random_time_input" value={{ cfg.random_time }}>
-        </span>
-        <span>
-            <label for="backfill_sleep_input">backfill_sleep: <output id="backfill_sleep_value">{{ cfg.backfill_sleep }}</output>s</label><br>
-            <input style="width:300px" type="range" class="form-range" min="0" max="10" step="0.1" id="backfill_sleep_input" value={{ cfg.backfill_sleep }}>
-        </span>
-        <span>
-            <label for="backfill_timeout_input">backfill_timeout: <output id="backfill_timeout_value">{{ cfg.backfill_timeout }}</output>s</label><br>
-            <input style="width:300px" type="range" class="form-range" min="0" max="10" step="0.1" id="backfill_timeout_input" value={{ cfg.backfill_timeout }}>
-        </span>
-
-    </fieldset>
-    <br><br>
-
-    <h1>Jamming bot</h1>
-
-
-</div>
-
-
-
-
+{% block scripts %}
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-NSBDJ2XRN8"></script>
 <script>
-    var counter = 0;
-    var start_time = (new Date).getTime()
-
-    var socket = io();
-    socket.on('connect', function() {  
-        window.setInterval(function () {
-            counter += 1
-            socket.emit('my_ping');
-        }, 250);
-    });
-
-    socket.on('my_pong', function () {
-        const latency = (new Date).getTime() - start_time;
-        $('#latency').html(latency);
-        $('#counter').html(counter);
-    });
-
-    const do_pass = document.querySelector("#do_pass");
-    do_pass.addEventListener("input", (event) => {
-        socket.emit('do_pass', (event.target.checked)?1.:0.);
-    });
-
-    const do_geo = document.querySelector("#do_geo");
-    do_geo.addEventListener("input", (event) => {
-        socket.emit('do_geo', (event.target.checked)?1.:0.);
-    });
-
-    const do_save = document.querySelector("#do_save");
-    do_save.addEventListener("input", (event) => {
-        socket.emit('do_save', (event.target.checked)?1.:0.);
-    });
-
-    const do_analyze = document.querySelector("#do_analyze");
-    do_analyze.addEventListener("input", (event) => {
-        socket.emit('do_analyze', (event.target.checked)?1.:0.);
-    });
-
-    const do_screenshot = document.querySelector("#do_screenshot");
-    do_screenshot.addEventListener("input", (event) => {
-        socket.emit('do_screenshot', (event.target.checked)?1.:0.);
-    });
-
-    const do_image_analyze = document.querySelector("#do_image_analyze");
-    do_image_analyze.addEventListener("input", (event) => {
-        socket.emit('do_image_analyze', (event.target.checked)?1.:0.);
-    });
-
-    const do_storage = document.querySelector("#do_storage");
-    do_storage.addEventListener("input", (event) => {
-        socket.emit('do_storage', (event.target.checked)?1.:0.);
-    });
-
-    const send_events = document.querySelector("#send_events");
-    send_events.addEventListener("input", (event) => {
-        socket.emit('bot_send_events', (event.target.checked)?1.:0.);
-    });
-
-    const send_sublinks = document.querySelector("#send_sublinks");
-    send_sublinks.addEventListener("input", (event) => {
-        socket.emit('bot_send_sublinks', (event.target.checked)?1.:0.);
-    });
-
-    const log_events = document.querySelector("#log_events");
-    log_events.addEventListener("input", (event) => {
-        socket.emit('bot_log_events', (event.target.checked)?1.:0.);
-    });
-
-    const value = document.querySelector("#value");
-    const input = document.querySelector("#pi_input");
-    value.textContent = input.value;
-    input.addEventListener("input", (event) => {
-        value.textContent = event.target.value;
-        socket.emit('value', parseFloat(event.target.value));
-    });
-
-    const sleep_time_value = document.querySelector("#sleep_time_value");
-    const sleep_time_input = document.querySelector("#sleep_time_input");
-    sleep_time_value.textContent = sleep_time_input.value;
-    sleep_time_input.addEventListener("input", (event) => {
-        sleep_time_value.textContent = event.target.value;
-        socket.emit('sleep_time', parseFloat(event.target.value));
-    });
-
-    const random_time_value = document.querySelector("#random_time_value");
-    const random_time_input = document.querySelector("#random_time_input");
-    random_time_value.textContent = random_time_input.value;
-    random_time_input.addEventListener("input", (event) => {
-        random_time_value.textContent = event.target.value;
-        socket.emit('random_time', parseFloat(event.target.value));
-    });
-
-    const backfill_sleep_value = document.querySelector("#backfill_sleep_value");
-    const backfill_sleep_input = document.querySelector("#backfill_sleep_input");
-    backfill_sleep_value.textContent = backfill_sleep_input.value;
-    backfill_sleep_input.addEventListener("input", (event) => {
-        backfill_sleep_value.textContent = event.target.value;
-        socket.emit('backfill_sleep', parseFloat(event.target.value));
-    });
-
-    const backfill_timeout_value = document.querySelector("#backfill_timeout_value");
-    const backfill_timeout_input = document.querySelector("#backfill_timeout_input");
-    backfill_timeout_value.textContent = backfill_timeout_input.value;
-    backfill_timeout_input.addEventListener("input", (event) => {
-        backfill_timeout_value.textContent = event.target.value;
-        socket.emit('backfill_timeout', parseFloat(event.target.value));
-    });
-
-    socket.on('disconnect', function() {
-        console.log('Disconnected from server');
-    });
-
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-NSBDJ2XRN8');
 </script>
+<script>
+(function () {
+  var counter = 0;
+  var start_time = Date.now();
+  var socket = io();
 
+  socket.on('connect', function () {
+    window.setInterval(function () {
+      counter += 1;
+      start_time = Date.now();
+      socket.emit('my_ping');
+    }, 250);
+  });
 
+  socket.on('my_pong', function () {
+    var latency = Date.now() - start_time;
+    var latEl = document.getElementById('latency');
+    var ctrEl = document.getElementById('counter');
+    if (latEl) latEl.textContent = latency;
+    if (ctrEl) ctrEl.textContent = counter;
+  });
 
+  function bindCheckbox(id, eventName) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', function (event) {
+      socket.emit(eventName, event.target.checked ? 1 : 0);
+    });
+  }
 
+  bindCheckbox('do_pass', 'do_pass');
+  bindCheckbox('do_geo', 'do_geo');
+  bindCheckbox('do_save', 'do_save');
+  bindCheckbox('do_analyze', 'do_analyze');
+  bindCheckbox('do_screenshot', 'do_screenshot');
+  bindCheckbox('do_image_analyze', 'do_image_analyze');
+  bindCheckbox('do_storage', 'do_storage');
+  bindCheckbox('send_events', 'bot_send_events');
+  bindCheckbox('send_sublinks', 'bot_send_sublinks');
+  bindCheckbox('log_events', 'bot_log_events');
 
+  function bindRangeOutput(inputId, outputId, eventName, parser) {
+    var input = document.getElementById(inputId);
+    var output = document.getElementById(outputId);
+    if (!input || !output) return;
+    output.textContent = input.value;
+    input.addEventListener('input', function (event) {
+      output.textContent = event.target.value;
+      if (eventName) socket.emit(eventName, parser(event.target.value));
+    });
+  }
 
-<div class="container mt-5">
-    <div class="row">
-        <div class="col-md-6 offset-3">
+  bindRangeOutput('pi_input', 'value', 'value', parseFloat);
+  bindRangeOutput('sleep_time_input', 'sleep_time_value', 'sleep_time', parseFloat);
+  bindRangeOutput('random_time_input', 'random_time_value', 'random_time', parseFloat);
+  bindRangeOutput('backfill_sleep_input', 'backfill_sleep_value', 'backfill_sleep', parseFloat);
+  bindRangeOutput('backfill_timeout_input', 'backfill_timeout_value', 'backfill_timeout', parseFloat);
 
-        
-            <div class="card" style="float:left">
-                <div class="card-body">
-                    <form action="add_wait_job" method="get">
-                        <td><a href="/add_wait_job/15" class="btn btn-sm btn-primary">Enqueue wait job</a></td>
-                    </form>
-                </div>
-            </div>
-
-            <div class="card" style="float:left">
-                <div class="card-body">
-                    <form action="/add_analyze_job/" method="post">
-                        <input name="text" id="text" value="Telegram bot parsing" />
-                        <td><input type="submit" value="analyze"  class="btn btn-sm btn-primary"></td>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-
-
-
-
-
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-NSBDJ2XRN8"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-        gtag('config', 'G-NSBDJ2XRN8');
-    </script>
-
-</div>
-</body>
+  socket.on('disconnect', function () {
+    console.log('Disconnected from server');
+  });
+})();
+</script>
+{% endblock %}

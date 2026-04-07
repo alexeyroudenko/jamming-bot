@@ -1,86 +1,70 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Job {{ job.id if job else 'Not found' }} — jammingbot</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="https://bootswatch.com/4/cyborg/bootstrap.min.css">
-    <style>
-        .queue-job-detail .card-body,
-        .queue-job-detail .table,
-        .queue-job-detail .table td,
-        .queue-job-detail .table th { color: #fff; }
-        .queue-job-detail pre { color: #e0e0e0; background: #2a2a2a !important; }
-        .queue-job-detail .card { background: #323232; border-color: #444; }
-        .queue-job-detail .card-header { background: #2a2a2a; color: #fff; border-color: #444; }
-    </style>
-</head>
-<body class="queue-job-detail">
+{% extends "base_control.html" %}
+{% from "macros/jb.html" import job_badge %}
+{% set nav_active = 'queue' %}
+{% block title %}Job {{ job.id if job else 'Not found' }}{% endblock %}
 
-<div class="jumbotron text-center py-4">
-    <h1>Job details</h1>
-    <p class="lead"><a href="/queue/">← Back to queue</a></p>
+{% block content %}
+<h1>Job details</h1>
+<p><a href="/queue/" class="jb-btn jb-btn--sm jb-btn--ghost">← Back to queue</a></p>
+
+{% if not_found %}
+<div class="jb-alert jb-alert--warning" role="alert">
+  Job <code class="jb-code">{{ request.view_args.get('job_id', '') }}</code> not found (expired or invalid id).
+</div>
+{% else %}
+
+<div class="jb-panel">
+  <div class="jb-panel__header">
+    <span><strong>Id</strong> <code class="jb-code">{{ job.id }}</code></span>
+    <span>
+      {{ job_badge(job.state) }}
+      {% if job.type %}<span class="jb-badge jb-badge--neutral" role="status">{{ job.type }}</span>{% endif %}
+    </span>
+  </div>
+  <div class="jb-panel__body">
+    <table class="jb-table jb-table--kv">
+      <tbody>
+        <tr><th scope="row">Function</th><td><code class="jb-code">{{ job.func_name }}</code></td></tr>
+        <tr><th scope="row">Created</th><td>{{ job.created_at }}</td></tr>
+        <tr><th scope="row">Started</th><td>{{ job.started_at or '—' }}</td></tr>
+        <tr><th scope="row">Ended</th><td>{{ job.ended_at or '—' }}</td></tr>
+        <tr><th scope="row">Duration</th><td>{% if job.duration_sec is not none %}{{ "%.2f"|format(job.duration_sec) }}s{% else %}—{% endif %}</td></tr>
+        <tr><th scope="row">Result</th><td><pre class="jb-code-block">{{ job.result_repr }}</pre></td></tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 
-<div class="container">
-    {% if not_found %}
-    <div class="alert alert-warning">
-        Job <code>{{ request.view_args.get('job_id', '') }}</code> not found (expired or invalid id).
-    </div>
-    {% else %}
-    <div class="card mb-3">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <span><strong>Id</strong> <code>{{ job.id }}</code></span>
-            <span>
-                <span class="badge {{ {'finished': 'badge-success', 'started': 'badge-info', 'failed': 'badge-danger', 'queued': 'badge-secondary'}[job.state] | default('badge-dark') }}">{{ job.state }}</span>
-                {% if job.type %}<span class="badge badge-light">{{ job.type }}</span>{% endif %}
-            </span>
-        </div>
-        <div class="card-body">
-            <table class="table table-sm table-borderless mb-0">
-                <tr><th style="width:12em;">Function</th><td><code>{{ job.func_name }}</code></td></tr>
-                <tr><th>Created</th><td>{{ job.created_at }}</td></tr>
-                <tr><th>Started</th><td>{{ job.started_at or '—' }}</td></tr>
-                <tr><th>Ended</th><td>{{ job.ended_at or '—' }}</td></tr>
-                <tr><th>Duration</th><td>{% if job.duration_sec is not none %}{{ "%.2f"|format(job.duration_sec) }}s{% else %}—{% endif %}</td></tr>
-                <tr><th>Result</th><td><pre class="mb-0 p-2 rounded" style="max-height:200px;overflow:auto;">{{ job.result_repr }}</pre></td></tr>
-            </table>
-        </div>
-    </div>
-
-    <div class="card mb-3">
-        <div class="card-header">Arguments</div>
-        <div class="card-body">
-            <p class="mb-1"><strong>args</strong></p>
-            <pre class="p-2 rounded small" style="max-height:150px;overflow:auto;">{{ job.args }}</pre>
-            <p class="mb-1 mt-2"><strong>kwargs</strong></p>
-            <pre class="p-2 rounded small" style="max-height:150px;overflow:auto;">{{ job.kwargs }}</pre>
-        </div>
-    </div>
-
-    <div class="card mb-3">
-        <div class="card-header">Meta</div>
-        <div class="card-body">
-            <pre class="p-2 rounded mb-0 small" style="max-height:300px;overflow:auto;">{{ job.meta }}</pre>
-        </div>
-    </div>
-
-    {% if job.exc_info %}
-    <div class="card border-danger mb-3">
-        <div class="card-header bg-danger text-white">Exception / Traceback</div>
-        <div class="card-body">
-            <pre class="p-2 rounded small" style="max-height:400px;overflow:auto;white-space:pre-wrap;color:#f8b4b4;">{{ job.exc_info }}</pre>
-        </div>
-    </div>
-    {% endif %}
-
-    <p class="mb-4">
-        <a href="/queue/">← Back to queue</a>
-        &nbsp;·&nbsp;
-        <a href="/delete_job/{{ job.id }}" class="text-danger" onclick="return confirm('Delete this job?');">Delete job</a>
-    </p>
-    {% endif %}
+<div class="jb-panel">
+  <div class="jb-panel__header">Arguments</div>
+  <div class="jb-panel__body">
+    <p><strong>args</strong></p>
+    <pre class="jb-code-block" style="max-height:150px;">{{ job.args }}</pre>
+    <p style="margin-top:var(--jb-space-3);"><strong>kwargs</strong></p>
+    <pre class="jb-code-block" style="max-height:150px;">{{ job.kwargs }}</pre>
+  </div>
 </div>
 
-</body>
-</html>
+<div class="jb-panel">
+  <div class="jb-panel__header">Meta</div>
+  <div class="jb-panel__body">
+    <pre class="jb-code-block" style="max-height:300px;">{{ job.meta }}</pre>
+  </div>
+</div>
+
+{% if job.exc_info %}
+<div class="jb-panel">
+  <div class="jb-panel__header jb-panel__header--danger">Exception / Traceback</div>
+  <div class="jb-panel__body">
+    <pre class="jb-code-block jb-code-block--tall jb-code-block--error">{{ job.exc_info }}</pre>
+  </div>
+</div>
+{% endif %}
+
+<p class="jb-actions-row">
+  <a href="/queue/">← Back to queue</a>
+  <span class="jb-muted" aria-hidden="true">·</span>
+  <a href="/delete_job/{{ job.id }}" class="jb-btn jb-btn--sm jb-btn--danger" onclick="return confirm('Delete this job?');">Delete job</a>
+</p>
+{% endif %}
+{% endblock %}

@@ -1,163 +1,109 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>jammingbot : console</title>
-    <meta http-equiv="refresh" content="4" />
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="https://bootswatch.com/4/cyborg/bootstrap.min.css">
-    <script src="https://code.jquery.com/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
-    <!--<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script> -->
-</head>
-<body>
+{% extends "base_control.html" %}
+{% from "macros/jb.html" import job_badge %}
+{% set nav_active = 'queue' %}
+{% block title %}Queue{% endblock %}
+{% block head_extra %}
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
+{% endblock %}
 
+{% block content %}
+<h1>Queue</h1>
+<p>Finished and failed jobs remain until result_ttl or failure_ttl expires.</p>
 
+{% if queue_error %}
+<div class="jb-alert jb-alert--danger" role="alert">
+  <strong>Queue unavailable:</strong> {{ queue_error }} — Redis may be down or unreachable.
+</div>
+{% endif %}
 
-<div class="jumbotron text-center">
-    
-    <div  class="col-md-6 offset-3">
-        <a href="/">counter:<span id="counter"></span> | latency:<span id="latency"></span></a>
-    </div>
-
-
-
-    <h1>Jamming bot</h1>
-
-
+<div class="jb-actions-row">
+  <a href="/queue/clear_failed/" class="jb-btn jb-btn--sm jb-btn--danger" onclick="return confirm('Clear all failed jobs?');">Clear failed jobs</a>
+  <a href="/queue/clear_all/" class="jb-btn jb-btn--sm jb-btn--warning" onclick="return confirm('Clear ALL jobs?');">Clear all jobs</a>
 </div>
 
+<div class="jb-table-scroll">
+  <table class="jb-table">
+    <caption class="jb-visually-hidden">RQ job list</caption>
+    <thead>
+      <tr>
+        <th scope="col">State</th>
+        <th scope="col">Id</th>
+        <th scope="col">Type</th>
+        <th scope="col">Time</th>
+        <th scope="col">Meta</th>
+        <th scope="col">Result</th>
+        <th scope="col">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for job in joblist %}
+      <tr>
+        <td>{{ job_badge(job.state) }}</td>
+        <td><a href="/queue/job/{{ job.id }}/" title="Открыть описание джоба"><code class="jb-code">{{ job.id }}</code></a></td>
+        <td>{{ job.type }}</td>
+        <td>
+          {% if job.duration_sec is not none %}
+          {{ "%.1f"|format(job.duration_sec) }}s
+          {% elif job.created_at %}
+          queued
+          {% else %}
+          —
+          {% endif %}
+        </td>
+        <td>
+          {% if job.progress %}
+          <div class="jb-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ job.progress.percent | default(0) | int }}">
+            <div class="jb-progress__bar" style="width: {{ job.progress.percent | default(0) }}%;">{{ job.progress.iteration | default(0) }}/{{ job.progress.num_iterations | default(0) }}</div>
+          </div>
+          {% else %}
+          —
+          {% endif %}
+        </td>
+        <td>{{ job.result }}</td>
+        <td>
+          <a href="/queue/job/{{ job.id }}/" class="jb-btn jb-btn--sm jb-btn--ghost">Описание</a>
+          <a href="/delete_job/{{ job.id }}" class="jb-btn jb-btn--sm jb-btn--primary">Delete</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
 
+{% block scripts %}
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-NSBDJ2XRN8"></script>
 <script>
-    var counter = 0;
-    var start_time = (new Date).getTime()
-
-    var socket = io();
-    socket.on('connect', function() {  
-        window.setInterval(function () {
-            counter += 1
-            socket.emit('my_ping');
-        }, 250);
-    });
-
-    socket.on('my_pong', function () {
-        const latency = (new Date).getTime() - start_time;
-        $('#latency').html(latency);
-        $('#counter').html(counter);
-    });
-
-    const do_pass = document.querySelector("#do_pass");
-    do_pass.addEventListener("input", (event) => {
-        socket.emit('do_pass', (event.target.checked)?1.:0.);
-    });
-
-    const do_geo = document.querySelector("#do_geo");
-    do_geo.addEventListener("input", (event) => {
-        socket.emit('do_geo', (event.target.checked)?1.:0.);
-    });
-
-    const do_save = document.querySelector("#do_save");
-    do_save.addEventListener("input", (event) => {
-        socket.emit('do_save', (event.target.checked)?1.:0.);
-    });
-
-    const do_analyze = document.querySelector("#do_analyze");
-    do_analyze.addEventListener("input", (event) => {
-        socket.emit('do_analyze', (event.target.checked)?1.:0.);
-    });
-
-    const value = document.querySelector("#value");
-    const input = document.querySelector("#pi_input");
-    value.textContent = input.value;
-    input.addEventListener("input", (event) => {
-        value.textContent = event.target.value;
-        socket.emit('value', parseFloat(event.target.value));
-    });
-
-    socket.on('disconnect', function() {
-        console.log('Disconnected from server');
-    });
-
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-NSBDJ2XRN8');
 </script>
+<script>
+(function () {
+  var counter = 0;
+  var start_time = Date.now();
+  var socket = io();
 
+  socket.on('connect', function () {
+    window.setInterval(function () {
+      counter += 1;
+      start_time = Date.now();
+      socket.emit('my_ping');
+    }, 250);
+  });
 
+  socket.on('my_pong', function () {
+    var latency = Date.now() - start_time;
+    var latEl = document.getElementById('latency');
+    var ctrEl = document.getElementById('counter');
+    if (latEl) latEl.textContent = latency;
+    if (ctrEl) ctrEl.textContent = counter;
+  });
 
-
-
-
-<div class="container mt-5">
-
-
-
-
-
-    <div class="row mt-3">
-        <div class="col-md-12">
-            {% if queue_error %}
-            <div class="alert alert-danger" role="alert">
-                <strong>Queue unavailable:</strong> {{ queue_error }} — Redis may be down or unreachable.
-            </div>
-            {% endif %}
-            <h3>Job list</h3>
-            <p>Finished and failed jobs will linger around until their result_ttl or failure_ttl has expired and they will be deleted.</p>
-            <a href="/queue/clear_failed/" class="btn btn-sm btn-danger" onclick="return confirm('Clear all failed jobs?')" style="margin-bottom:12px;">Clear failed jobs</a>
-            <a href="/queue/clear_all/" class="btn btn-sm btn-warning" onclick="return confirm('Clear ALL jobs?')" style="margin-bottom:12px;">Clear all jobs</a>
-            <table class="table">
-                <thead><tr>
-                    <th>State</th>
-                    <th>Id</th>
-                    <th>Type</th>
-                    <th>Time</th>
-                    <th style="width: 20%;">Meta</th>
-                    <th>Result</th>
-                    <th>Actions</th>
-                </tr></thead>
-                <tbody>
-                    {% for job in joblist %}
-                    <tr>
-                       <td><span class="badge {{ {'finished': 'badge-success', 'started': 'badge-info', 'failed': 'badge-danger'}[job.state] | default('badge-dark') }}">{{ job.state }}</td>
-                       <td style="font-size: 12px;"><a href="/queue/job/{{ job.id }}/" title="Открыть описание джоба">{{ job.id }}</a></td>
-                       <td>{{ job.type }}</td>
-                       <td style="font-size: 12px;">
-                           {% if job.duration_sec is not none %}
-                           {{ "%.1f"|format(job.duration_sec) }}s
-                           {% elif job.created_at %}
-                           queued
-                           {% else %}
-                           —
-                           {% endif %}
-                       </td>
-                       <td>
-                           {% if job.progress %}
-                           <div class="progress" style="height: 24px;">
-                              <div class="progress-bar" role="progressbar" style="width: {{ job.progress.percent | default(0) }}%;">{{ job.progress.iteration | default(0) }}/{{ job.progress.num_iterations | default(0) }}</div>
-                            </div>
-                           {% else %}
-                           —
-                           {% endif %}
-                       </td>
-                       <td style="font-size: 14px;">{{ job.result }}</td>
-                       <td><a href="/queue/job/{{ job.id }}/" class="btn btn-sm btn-outline-info mr-1">Описание</a> <a href="/delete_job/{{ job.id }}" class="btn btn-sm btn-primary">Delete</a></td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-
-
-</div>
-
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-NSBDJ2XRN8"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-        gtag('config', 'G-NSBDJ2XRN8');
-    </script>
-
-</body>
+  socket.on('disconnect', function () {
+    console.log('Disconnected from server');
+  });
+})();
+</script>
+{% endblock %}

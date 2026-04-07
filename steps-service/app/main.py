@@ -136,23 +136,24 @@ def render_html() -> str:
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Steps Presence</title>
+    <link rel="stylesheet" href="/flask_static/style.css" />
     <style>
       :root {
         color-scheme: dark;
-        --steps-bg: rgba(9, 9, 11, 0.84);
-        --steps-panel: rgba(9, 9, 11, 0.94);
-        --steps-border: rgba(161, 161, 170, 0.22);
-        --steps-text: #f4f4f5;
-        --steps-muted: #a1a1aa;
-        --steps-accent: #22d3ee;
+        --steps-bg: var(--jb-surface-glass);
+        --steps-panel: var(--jb-surface-raised);
+        --steps-border: var(--jb-color-border);
+        --steps-text: var(--jb-color-text);
+        --steps-muted: var(--jb-color-text-muted);
+        --steps-accent: var(--jb-color-accent);
       }
       html, body {
         width: 100%;
         height: 100%;
         margin: 0;
         overflow: hidden;
-        background: #000;
-        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        background: var(--jb-color-bg-page);
+        font-family: var(--jb-font-sans);
       }
       .steps-nav {
         position: fixed;
@@ -406,7 +407,7 @@ def render_html() -> str:
     <nav class="steps-nav" aria-label="Subpages">
       <div>
         <span class="steps-nav-title">Steps</span>
-        <a href="https://jamming-bot.arthew0.online/">← home</a>
+        <a href="/">← home</a>
         <a href="/path/map/">path map</a>
       </div>
     </nav>
