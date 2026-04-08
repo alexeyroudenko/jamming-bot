@@ -35,6 +35,13 @@ def _analysis_record_to_dict(r):
     }
 
 
+async def get_stats():
+    total_steps = await database.fetch_val(
+        query=select(func.count()).select_from(steps)
+    )
+    return {"total_steps": total_steps}
+
+
 async def add_step(data: dict):
     values = {f: str(data.get(f, '')) for f in STEP_FIELDS}
     query = steps.insert().values(**values)

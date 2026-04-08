@@ -252,6 +252,11 @@ async def shutdown():
     await database.disconnect()
 
 
+@app.get("/stats")
+async def stats():
+    return await db_manager.get_stats()
+
+
 @app.post("/store")
 async def store(request: Request):
     try:

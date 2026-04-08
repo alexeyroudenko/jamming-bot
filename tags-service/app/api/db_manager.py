@@ -1,3 +1,5 @@
+from sqlalchemy import func, select
+
 from app.api.models import TagIn, TagOut, TagUpdate
 from app.api.db import tags, database
 
@@ -81,6 +83,52 @@ async def add_tags_bulk(raw_names: list) -> dict:
     if errors:
         out["errors"] = errors
     return out
+
+
+async def sync_tags_bulk(items: list) -> dict:
+    """Upsert tags with exact count values (for sync from remote)."""
+    created = 0
+    updated = 0
+    errors: list = []
+    for item in items:
+        name = str(item.get("name", "")).strip()[:50]
+        count = int(item.get("count", 0))
+        if not name:
+            continue
+        try:
+            query = tags.select().where(tags.c.name == name)
+            result = await database.fetch_all(query=query)
+            if result:
+                existing_id = int(result[0]["id"])
+                query = (
+                    tags.update()
+                    .where(tags.c.id == existing_id)
+                    .values(name=name, count=count)
+                )
+                await database.execute(query=query)
+                updated += 1
+            else:
+                query = tags.insert().values(name=name, count=count)
+                await database.execute(query=query)
+                created += 1
+        except Exception as e:
+            errors.append({"name": name, "error": str(e)})
+    out = {
+        "ok": len(errors) == 0,
+        "created": created,
+        "updated": updated,
+        "input_count": len(items),
+    }
+    if errors:
+        out["errors"] = errors
+    return out
+
+
+async def get_stats():
+    total = await database.fetch_val(
+        query=select(func.count()).select_from(tags)
+    )
+    return {"total": total}
 
 
 async def get_grouped_tags(count: int = 50, page: int = 0):

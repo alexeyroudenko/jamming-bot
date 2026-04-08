@@ -1,7 +1,7 @@
 from typing import List
 from fastapi import APIRouter, HTTPException, Query
 
-from app.api.models import TagOut, TagIn, TagUpdate, TagBulkIn
+from app.api.models import TagOut, TagIn, TagUpdate, TagBulkIn, TagSyncIn
 from app.api import db_manager
 from app.api.service import is_cast_present
 
@@ -21,6 +21,11 @@ async def create_tag(payload: TagIn):
 
     return response
 
+@tags.get('/stats')
+async def get_stats():
+    return await db_manager.get_stats()
+
+
 @tags.get('/', response_model=List[TagOut])
 async def get_tags():
     return await db_manager.get_all_tags()
@@ -30,6 +35,12 @@ async def get_tags():
 async def create_tags_bulk(payload: TagBulkIn):
     """Несколько тегов за один запрос; семантика как у повторных POST /."""
     return await db_manager.add_tags_bulk(payload.names)
+
+
+@tags.post('/sync/', status_code=200)
+async def sync_tags(payload: TagSyncIn):
+    """Upsert tags with exact count values (for sync from remote)."""
+    return await db_manager.sync_tags_bulk([item.dict() for item in payload.items])
 
 
 @tags.get('/{id}/', response_model=TagOut)

@@ -80,6 +80,9 @@ services:
       - BOT_YAML_PATH=/app/bot_config/bot.yaml
       - DATA_SERVICE_URL=http://data_service:8010
       - IMAGE_ANALYZE_SERVICE_URL=http://image_analyze_service:8006
+      - REMOTE_DATA_URL=${REMOTE_DATA_URL:-https://data.jamming-bot.arthew0.online}
+      - REMOTE_STORAGE_URL=${REMOTE_STORAGE_URL:-https://storage.jamming-bot.arthew0.online}
+      - REMOTE_TAGS_URL=${REMOTE_TAGS_URL:-https://tags.jamming-bot.arthew0.online}
     volumes:
       - type: bind
         source: ./app-service/flask
@@ -346,8 +349,12 @@ services:
       - SEMANTIC_SERVICE_URL=http://semantic_service:8005
       - STORAGE_SERVICE_URL=http://storage_service:7781
       - IP_SERVICE_URL=http://ip_service:8004
+      - DATA_SERVICE_URL=http://data_service:8010
       - RENDERER_SERVICE_URL=http://html-renderer-service:3000
       - IMAGE_ANALYZE_SERVICE_URL=http://image_analyze_service:8006
+      - REMOTE_DATA_URL=${REMOTE_DATA_URL:-https://data.jamming-bot.arthew0.online}
+      - REMOTE_STORAGE_URL=${REMOTE_STORAGE_URL:-https://storage.jamming-bot.arthew0.online}
+      - REMOTE_TAGS_URL=${REMOTE_TAGS_URL:-https://tags.jamming-bot.arthew0.online}
       - OTEL_TRACING_ENABLED=${OTEL_TRACING_ENABLED:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=app-service-worker
@@ -384,8 +391,12 @@ services:
       - SEMANTIC_SERVICE_URL=http://semantic_service:8005
       - STORAGE_SERVICE_URL=http://storage_service:7781
       - IP_SERVICE_URL=http://ip_service:8004
+      - DATA_SERVICE_URL=http://data_service:8010
       - RENDERER_SERVICE_URL=http://html-renderer-service:3000
       - IMAGE_ANALYZE_SERVICE_URL=http://image_analyze_service:8006
+      - REMOTE_DATA_URL=${REMOTE_DATA_URL:-https://data.jamming-bot.arthew0.online}
+      - REMOTE_STORAGE_URL=${REMOTE_STORAGE_URL:-https://storage.jamming-bot.arthew0.online}
+      - REMOTE_TAGS_URL=${REMOTE_TAGS_URL:-https://tags.jamming-bot.arthew0.online}
       - OTEL_TRACING_ENABLED=${OTEL_TRACING_ENABLED:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=app-service-worker
@@ -423,8 +434,12 @@ services:
       - SEMANTIC_SERVICE_URL=http://semantic_service:8005
       - STORAGE_SERVICE_URL=http://storage_service:7781
       - IP_SERVICE_URL=http://ip_service:8004
+      - DATA_SERVICE_URL=http://data_service:8010
       - RENDERER_SERVICE_URL=http://html-renderer-service:3000
       - IMAGE_ANALYZE_SERVICE_URL=http://image_analyze_service:8006
+      - REMOTE_DATA_URL=${REMOTE_DATA_URL:-https://data.jamming-bot.arthew0.online}
+      - REMOTE_STORAGE_URL=${REMOTE_STORAGE_URL:-https://storage.jamming-bot.arthew0.online}
+      - REMOTE_TAGS_URL=${REMOTE_TAGS_URL:-https://tags.jamming-bot.arthew0.online}
       - OTEL_TRACING_ENABLED=${OTEL_TRACING_ENABLED:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=app-service-worker

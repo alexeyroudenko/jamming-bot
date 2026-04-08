@@ -28,6 +28,7 @@ from rq_helpers import queue, get_all_jobs, redis_connection
 from config import Config, getConfig, getRedis
 from telemetry import init_telemetry, inject_trace_context_into_job, set_step_span_attributes, step_span, enqueue_with_trace
 import jobs
+import sync_jobs
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -40,6 +41,10 @@ TAGS_SERVICE_URL = os.getenv('TAGS_SERVICE_URL', 'http://tags_service:8000')
 SEMANTIC_SERVICE_URL = os.getenv('SEMANTIC_SERVICE_URL', 'http://semantic_service:8005')
 STORAGE_SERVICE_URL = os.getenv('STORAGE_SERVICE_URL', 'http://storage_service:7781')
 DATA_SERVICE_URL = os.getenv('DATA_SERVICE_URL', 'http://data_service:8010')
+
+REMOTE_DATA_URL = os.getenv('REMOTE_DATA_URL', 'https://data.jamming-bot.arthew0.online')
+REMOTE_STORAGE_URL = os.getenv('REMOTE_STORAGE_URL', 'https://storage.jamming-bot.arthew0.online')
+REMOTE_TAGS_URL = os.getenv('REMOTE_TAGS_URL', 'https://tags.jamming-bot.arthew0.online')
 
 cfg = getConfig()
 redis = getRedis()
@@ -1238,6 +1243,69 @@ def ctrl():
         cfg=_ensure_redis_defaults(),
         bot_flags=_read_bot_yaml_flags(),
     )
+
+
+@app.route("/ctrl/sync/", methods=["GET"])
+def ctrl_sync():
+    return render_template("sync.html")
+
+
+@app.route("/api/sync/counts/", methods=["GET"])
+def sync_counts():
+    """Fetch record counts from local and remote services."""
+    result = {}
+    for key, local_url, remote_url, path in [
+        ("bot", DATA_SERVICE_URL, REMOTE_DATA_URL, "/api/urls/stats"),
+        ("storage", STORAGE_SERVICE_URL, REMOTE_STORAGE_URL, "/stats"),
+        ("tags", TAGS_SERVICE_URL, REMOTE_TAGS_URL, "/api/v1/tags/stats"),
+    ]:
+        local_count = None
+        remote_count = None
+        try:
+            resp = requests.get(f"{local_url}{path}", timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            if key == "bot":
+                local_count = data.get("total", 0)
+            elif key == "storage":
+                local_count = data.get("total_steps", 0)
+            elif key == "tags":
+                local_count = data.get("total", 0)
+        except Exception as e:
+            logger.warning("sync_counts local %s: %s", key, e)
+        try:
+            resp = requests.get(f"{remote_url}{path}", timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+            if key == "bot":
+                remote_count = data.get("total", 0)
+            elif key == "storage":
+                remote_count = data.get("total_steps", 0)
+            elif key == "tags":
+                remote_count = data.get("total", 0)
+        except Exception as e:
+            logger.warning("sync_counts remote %s: %s", key, e)
+        diff = None
+        if local_count is not None and remote_count is not None:
+            diff = remote_count - local_count
+        result[key] = {"local": local_count, "remote": remote_count, "diff": diff}
+    return jsonify(result)
+
+
+@app.route("/api/sync/start/<service>", methods=["POST"])
+def sync_start(service):
+    """Enqueue a sync job for the given service."""
+    job_map = {
+        "bot": sync_jobs.sync_bot_urls,
+        "storage": sync_jobs.sync_storage_steps,
+        "tags": sync_jobs.sync_tags,
+    }
+    fn = job_map.get(service)
+    if fn is None:
+        return jsonify({"error": f"Unknown service: {service}"}), 400
+    rq_job = fn.delay()
+    inject_trace_context_into_job(rq_job)
+    return jsonify({"job_id": rq_job.get_id()})
 
 
 @app.route("/set/<v>/", methods=["GET"])
