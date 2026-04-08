@@ -21,3 +21,12 @@ class TagOut(TagIn):
 class TagUpdate(TagIn):
     name: Optional[str] = None
     count: Optional[int] = None
+
+
+class TagSyncItem(BaseModel):
+    name: str
+    count: int = 0
+
+
+class TagSyncIn(BaseModel):
+    items: List[TagSyncItem] = Field(default_factory=list, max_length=2000)

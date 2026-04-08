@@ -5,9 +5,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Query, HTTPException
+from typing import List as TypingList
+
+from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 DB_PATH = Path("/app/data/database.db")
 
@@ -42,6 +45,37 @@ def get_db():
         yield conn
     finally:
         conn.close()
+
+
+@contextmanager
+def get_db_rw():
+    """Writable connection for import operations."""
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS Urls "
+        "(id INTEGER PRIMARY KEY, hostname VARCHAR(127), url VARCHAR(127) UNIQUE, "
+        "src_url VARCHAR(127), visited INTEGER)"
+    )
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+class UrlImportItem(BaseModel):
+    hostname: str = ""
+    url: str
+    src_url: str = ""
+    visited: int = 0
+
+
+class UrlImportRequest(BaseModel):
+    items: TypingList[UrlImportItem]
 
 
 @app.get("/api/urls/stats")
@@ -168,3 +202,18 @@ def export_csv(visited: Optional[int] = Query(None, ge=0, le=1)):
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="urls_export.csv"'},
     )
+
+
+@app.post("/api/urls/import")
+def import_urls(payload: UrlImportRequest):
+    """Batch import URLs via INSERT OR IGNORE (skip duplicates by url)."""
+    with get_db_rw() as conn:
+        cur = conn.cursor()
+        before = cur.execute("SELECT COUNT(*) FROM Urls").fetchone()[0]
+        cur.executemany(
+            "INSERT OR IGNORE INTO Urls (hostname, url, src_url, visited) VALUES (?, ?, ?, ?)",
+            [(item.hostname, item.url, item.src_url, item.visited) for item in payload.items],
+        )
+        after = cur.execute("SELECT COUNT(*) FROM Urls").fetchone()[0]
+    inserted = after - before
+    return {"inserted": inserted, "skipped": len(payload.items) - inserted, "total": len(payload.items)}

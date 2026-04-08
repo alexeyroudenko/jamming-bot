@@ -1,0 +1,153 @@
+{% extends "base_control.html" %}
+{% set nav_active = 'sync' %}
+{% block title %}Sync{% endblock %}
+{% block head_extra %}
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
+{% endblock %}
+
+{% block content %}
+<h1>Sync</h1>
+<p>Сравнение количества записей между сервером и локальной средой. Кнопка Sync запускает фоновую задачу по выкачиванию данных.</p>
+
+<div class="jb-actions-row" style="margin-bottom: var(--jb-space-3, 1rem);">
+  <button id="refresh-btn" class="jb-btn jb-btn--sm jb-btn--primary" onclick="loadCounts()">Refresh counts</button>
+  <a href="/queue/" class="jb-btn jb-btn--sm jb-btn--ghost">Queue</a>
+</div>
+
+<div class="jb-table-scroll">
+  <table class="jb-table" id="sync-table">
+    <caption class="jb-visually-hidden">Service sync comparison</caption>
+    <thead>
+      <tr>
+        <th scope="col">Service</th>
+        <th scope="col">Remote</th>
+        <th scope="col">Local</th>
+        <th scope="col">Diff</th>
+        <th scope="col">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr data-service="bot">
+        <td><strong>Bot URLs</strong><br><small class="jb-muted">data-service &middot; SQLite &middot; Urls</small></td>
+        <td class="remote-count">—</td>
+        <td class="local-count">—</td>
+        <td class="diff-count">—</td>
+        <td><button class="jb-btn jb-btn--sm jb-btn--primary sync-btn" data-service="bot" disabled>Sync</button></td>
+      </tr>
+      <tr data-service="storage">
+        <td><strong>Storage Steps</strong><br><small class="jb-muted">storage-service &middot; PostgreSQL &middot; steps</small></td>
+        <td class="remote-count">—</td>
+        <td class="local-count">—</td>
+        <td class="diff-count">—</td>
+        <td><button class="jb-btn jb-btn--sm jb-btn--primary sync-btn" data-service="storage" disabled>Sync</button></td>
+      </tr>
+      <tr data-service="tags">
+        <td><strong>Tags</strong><br><small class="jb-muted">tags-service &middot; PostgreSQL &middot; movies</small></td>
+        <td class="remote-count">—</td>
+        <td class="local-count">—</td>
+        <td class="diff-count">—</td>
+        <td><button class="jb-btn jb-btn--sm jb-btn--primary sync-btn" data-service="tags" disabled>Sync</button></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div id="sync-status" class="jb-muted" style="margin-top: var(--jb-space-3, 1rem);"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var counter = 0;
+  var start_time = Date.now();
+  var socket = io();
+
+  socket.on('connect', function () {
+    window.setInterval(function () {
+      counter += 1;
+      start_time = Date.now();
+      socket.emit('my_ping');
+    }, 250);
+  });
+
+  socket.on('my_pong', function () {
+    var latency = Date.now() - start_time;
+    var latEl = document.getElementById('latency');
+    var ctrEl = document.getElementById('counter');
+    if (latEl) latEl.textContent = latency;
+    if (ctrEl) ctrEl.textContent = counter;
+  });
+
+  socket.on('disconnect', function () {
+    console.log('Disconnected from server');
+  });
+})();
+
+function formatNum(n) {
+  if (n === null || n === undefined) return '?';
+  return n.toLocaleString();
+}
+
+function loadCounts() {
+  var btn = document.getElementById('refresh-btn');
+  btn.disabled = true;
+  btn.textContent = 'Loading\u2026';
+
+  fetch('/api/sync/counts/')
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      ['bot', 'storage', 'tags'].forEach(function (svc) {
+        var row = document.querySelector('tr[data-service="' + svc + '"]');
+        if (!row || !data[svc]) return;
+        var info = data[svc];
+        row.querySelector('.remote-count').textContent = formatNum(info.remote);
+        row.querySelector('.local-count').textContent = formatNum(info.local);
+        var diffCell = row.querySelector('.diff-count');
+        if (info.diff !== null && info.diff !== undefined) {
+          diffCell.textContent = (info.diff > 0 ? '+' : '') + formatNum(info.diff);
+          diffCell.style.color = info.diff > 0 ? 'var(--jb-color-warning, #e67e22)' : '';
+        } else {
+          diffCell.textContent = '?';
+        }
+        row.querySelector('.sync-btn').disabled = false;
+      });
+    })
+    .catch(function (err) {
+      document.getElementById('sync-status').textContent = 'Error loading counts: ' + err;
+    })
+    .finally(function () {
+      btn.disabled = false;
+      btn.textContent = 'Refresh counts';
+    });
+}
+
+document.querySelectorAll('.sync-btn').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var svc = btn.getAttribute('data-service');
+    btn.disabled = true;
+    btn.textContent = 'Starting\u2026';
+    var status = document.getElementById('sync-status');
+
+    fetch('/api/sync/start/' + svc, { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.job_id) {
+          status.innerHTML = 'Job started: <a href="/queue/job/' + data.job_id + '/">' + data.job_id.substring(0, 8) + '\u2026</a> &mdash; <a href="/queue/">open queue</a>';
+          btn.textContent = 'Queued';
+        } else {
+          status.textContent = 'Error: ' + (data.error || 'unknown');
+          btn.disabled = false;
+          btn.textContent = 'Sync';
+        }
+      })
+      .catch(function (err) {
+        status.textContent = 'Error: ' + err;
+        btn.disabled = false;
+        btn.textContent = 'Sync';
+      });
+  });
+});
+
+loadCounts();
+</script>
+{% endblock %}
