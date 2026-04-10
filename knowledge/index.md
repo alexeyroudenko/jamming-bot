@@ -37,3 +37,5 @@ tags:
 - Web surface: [[Jamming bot web|Jamming Bot Web]]
 - Разработка: [[dev/_index|Jamming Bot Dev Index]]
 - Веб-разделы: [[web/_index|Jamming Bot Web Index]]
+
+[[Jamming bot Scenaria.canvas]]

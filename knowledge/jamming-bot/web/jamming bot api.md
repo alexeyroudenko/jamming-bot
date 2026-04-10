@@ -5,6 +5,7 @@ aliases:
 note_type: note
 project: "[[jamming-bot/Jamming Bot]]"
 parent: "[[web/API|Jamming Bot API Index]]"
+updated: 2026-04-08
 tags:
   - api
   - web
@@ -47,6 +48,9 @@ tags:
 | `GET /steps/` | Steps page с fullscreen PNG и tooltip по шагам. |
 
 ## Tags
+
+> [!note]
+> Тот же tag-related UI и поток данных можно открывать с выделенного host [https://tags.jamming-bot.arthew0.online/](https://tags.jamming-bot.arthew0.online/) — ingress ведёт на **tags-service**; при настроенном `TAGS_UI_REDIRECT_ORIGIN` корень `/` редиректит на `GET /tags/` основного app. REST API tags-service с этого host — без внешнего префикса `/tags/`, см. [[#Tags service — прямой host]].
 
 ### Tag pages
 
@@ -115,15 +119,27 @@ tags:
 | endpoint | описание |
 | --- | --- |
 | `GET /api/tags/get/` | Получить сгруппированные теги из tags-service. |
-| `POST /api/tags/embeddings/` | Построить embeddings и similarity links для tag visualizations. |
+| `POST /api/tags/embeddings/` | Построить embeddings и similarity links для tag visualizations (прокси к semantic `tag-embeddings/`). Body и ответ — см. [[#Tag embeddings — формат запроса]]. |
 | `POST /api/tags/combine/` | Прокси к semantic combine API. |
-| `GET /api/tags/sentiment-vortex/` | Собрать phrases и sentiment stats для vortex page. |
-| `POST /api/tags/sentiment-vortex/` | Собрать phrases и sentiment stats для vortex page. |
+| `GET /api/tags/sentiment-vortex/` | Собрать phrases и sentiment stats для [[pages/Sentiment vortex|Sentiment vortex]] (см. [[#Sentiment vortex — прокси app-service]]). |
+| `POST /api/tags/sentiment-vortex/` | То же, что GET (тело запроса не используется). |
 | `POST /api/tags/add_one/` | Добавить один tag. |
 | `GET /api/tags/add/` | Добавить один или несколько tag batch-ами. |
 | `POST /api/tags/add/` | Добавить теги списком (прокси в tags-service `POST .../tags/bulk/`). |
 | `GET /api/tags/add_tags_from_steps/` | Фоновая пересборка тегов из steps. |
 | `GET /api/tags/clean/` | Фоновая очистка tag storage. |
+
+#### Sentiment vortex — прокси app-service
+
+`GET` и `POST /api/tags/sentiment-vortex/` без тела выполняют одну цепочку:
+
+1. `GET` …/tags/tags/group/ у **tags-service** → имена тегов, отсортированные по `count`.
+2. `POST` …/semantic/combine/ у **semantic-service** — `words`, `limit: 128`, `max_phrases: 256` → список фраз.
+3. `POST` …/semantic/sentiment-phrases/ — те же фразы, `limit: 256` → VADER: у каждой фразы `polarity` = `compound`, `subjectivity` = `1 - neu` (см. `semantic-service`).
+
+Успешный JSON: `{ "phrases": [ { "text", "polarity", "subjectivity" }, ... ], "stats": { "mean_polarity", "pct_positive", "pct_negative", "pct_neutral", "count" } }`. Ошибка любого шага — ответ **502**, `phrases: []`, ослабленный `stats`, поле `error`.
+
+Страница визуализации: [[pages/Sentiment vortex|Sentiment vortex]].
 
 ### Analyze
 
@@ -173,6 +189,18 @@ tags:
 
 ## Direct service APIs on main host
 
+### Tags service — прямой host
+
+На основном сайте к tags-service обращаются с префиксом `/tags/` (после strip у сервиса пути без этого префикса). На отдельном ingress host префикса нет:
+
+| URL | описание |
+| --- | --- |
+| `https://tags.jamming-bot.arthew0.online/` | Корень tags-service: при редиректе — на UI `.../tags/` app-service; иначе JSON с `api`, `docs`, `openapi`. |
+| `https://tags.jamming-bot.arthew0.online/docs` | Swagger UI tags-service. |
+| `https://tags.jamming-bot.arthew0.online/openapi.json` | OpenAPI schema. |
+| `https://tags.jamming-bot.arthew0.online/api/v1/tags/...` | Те же REST-методы, что в таблице ниже для путей вида `/tags/api/...` на основном host (см. маппинг путей в `tags-service`). |
+| `https://tags.jamming-bot.arthew0.online/healthz` | Health-check. |
+
 ### Tags service
 
 | endpoint | описание |
@@ -191,6 +219,18 @@ tags:
 | `GET /tags/api/3d/` | Legacy redirect / 404 для старого UI path. |
 | `GET /tags/api/phrases/` | Legacy redirect / 404 для старого UI path. |
 
+### Semantic service — прямой host
+
+На основном сайте к semantic-service обращаются с префиксом `/semantic/` (после strip у сервиса путь без этого префикса). На отдельном ingress host префикса нет:
+
+| URL | описание |
+| --- | --- |
+| `https://semantic.jamming-bot.arthew0.online/health` | Health-check semantic-service. |
+| `https://semantic.jamming-bot.arthew0.online/docs` | Swagger UI. |
+| `https://semantic.jamming-bot.arthew0.online/openapi.json` | OpenAPI schema. |
+| `https://semantic.jamming-bot.arthew0.online/api/v1/semantic/tag-embeddings/` | **POST** — embeddings для массива слов (см. [[#Tag embeddings — формат запроса]]). |
+| `https://semantic.jamming-bot.arthew0.online/api/v1/semantic/...` | Остальные методы из таблицы ниже, без внешнего префикса `/semantic/`. |
+
 ### Semantic service
 
 | endpoint | описание |
@@ -203,6 +243,7 @@ tags:
 | `POST /semantic/api/v1/semantic/analyze_all/` | Полный semantic analysis по JSON body. |
 | `POST /semantic/api/v1/semantic/combine/` | Сгенерировать phrases из списка words. |
 | `POST /semantic/api/v1/semantic/sentiment-phrases/` | Sentiment analysis для phrases. |
+| `POST /semantic/api/v1/semantic/tag-embeddings/` | Embeddings + similarity links для массива слов. Тот же **POST** на прямом host: `https://semantic.jamming-bot.arthew0.online/api/v1/semantic/tag-embeddings/`. Body и ответ — см. [[#Tag embeddings — формат запроса]]. |
 
 ### IP service
 
@@ -252,8 +293,52 @@ tags:
 | --- | --- |
 | `https://app.jamming-bot.arthew0.online/...` | Тот же `app-service`, что и на основном host, без дополнительных prefix-ов сервисов. |
 | `https://b0ts.arthew0.online/...` | Альтернативный host для `app-service`. |
+| `https://tags.jamming-bot.arthew0.online/...` | **tags-service** на корневом path `/` (не путать с HTML-страницами `GET /tags/...` у app-service на основном host). Подробнее — [[#Tags service — прямой host]]. |
+| `https://semantic.jamming-bot.arthew0.online/...` | **semantic-service** на корневом path `/`. Embeddings: `POST .../api/v1/semantic/tag-embeddings/`. Подробнее — [[#Semantic service — прямой host]]. |
 | `https://rq.jamming-bot.arthew0.online/` | RQ dashboard ingress. |
 | `https://jaeger.jamming-bot.arthew0.online/` | Jaeger UI ingress. |
+
+## Tag embeddings — формат запроса
+
+**Эндпоинты:**
+- `POST https://semantic.jamming-bot.arthew0.online/api/v1/semantic/tag-embeddings/` — напрямую semantic-service (выделенный host, без префикса `/semantic/`)
+- `POST /semantic/api/v1/semantic/tag-embeddings/` — тот же сервис на основном host (после strip `/semantic/`)
+- `POST /api/tags/embeddings/` — через app-service прокси
+
+**Request body (JSON):**
+
+| поле | тип | default | описание |
+| --- | --- | --- | --- |
+| `words` | `string[]` | `[]` | Массив слов для embedding. |
+| `max_words` | `int` | `48` | Максимум слов (clamp 4–80). |
+| `min_sim` | `float` | `0.38` | Порог cosine similarity для links (clamp 0.15–0.99). |
+| `max_links` | `int` | `160` | Максимум similarity links (clamp 8–400). |
+
+**Пример запроса:**
+```json
+{
+  "words": ["love", "chaos", "rhythm", "light"],
+  "max_words": 48,
+  "min_sim": 0.38,
+  "max_links": 160
+}
+```
+
+**Response (JSON):**
+
+| поле | тип | описание |
+| --- | --- | --- |
+| `ok` | `bool` | Успешность. |
+| `mode` | `string` | `"vectors"` — полный режим, `"sparse"` — < 2 валидных слов, `"unavailable"` — spaCy не загружен. |
+| `words` | `string[]` | Отфильтрованный список слов, для которых есть вектор. |
+| `vectors2d` / `vectors3d` | `float[][]` | 2D/3D проекции (первые компоненты spaCy-вектора, нормализованные). |
+| `vectors2d_current` / `vectors3d_current` | `float[][]` | То же, что `vectors2d`/`vectors3d`. |
+| `vectors2d_alt` / `vectors3d_alt` | `float[][]` | Альтернативная проекция (компоненты 3–5 вектора). |
+| `directions2d` / `directions3d` | `float[][]` | Направления (нормализованные). |
+| `links` | `{i, j, sim}[]` | Пары индексов слов с similarity ≥ `min_sim`, отсортированные по убыванию `sim`. |
+
+> [!note]
+> При батчевом экспорте всех тегов (`analyze/embed_tags.py`) слова отправляются порциями по `--batch-size` (default 80), т.к. `max_words` имеет ограничение 80. Подробнее — [[2026-03-31_Embed всех тэгов]].
 
 ## Related
 

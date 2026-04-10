@@ -1250,46 +1250,37 @@ def ctrl_sync():
     return render_template("sync.html")
 
 
-@app.route("/api/sync/counts/", methods=["GET"])
-def sync_counts():
-    """Fetch record counts from local and remote services."""
-    result = {}
-    for key, local_url, remote_url, path in [
-        ("bot", DATA_SERVICE_URL, REMOTE_DATA_URL, "/api/urls/stats"),
-        ("storage", STORAGE_SERVICE_URL, REMOTE_STORAGE_URL, "/stats"),
-        ("tags", TAGS_SERVICE_URL, REMOTE_TAGS_URL, "/api/v1/tags/stats"),
-    ]:
-        local_count = None
-        remote_count = None
-        try:
-            resp = requests.get(f"{local_url}{path}", timeout=10)
-            resp.raise_for_status()
-            data = resp.json()
-            if key == "bot":
-                local_count = data.get("total", 0)
-            elif key == "storage":
-                local_count = data.get("total_steps", 0)
-            elif key == "tags":
-                local_count = data.get("total", 0)
-        except Exception as e:
-            logger.warning("sync_counts local %s: %s", key, e)
-        try:
-            resp = requests.get(f"{remote_url}{path}", timeout=15)
-            resp.raise_for_status()
-            data = resp.json()
-            if key == "bot":
-                remote_count = data.get("total", 0)
-            elif key == "storage":
-                remote_count = data.get("total_steps", 0)
-            elif key == "tags":
-                remote_count = data.get("total", 0)
-        except Exception as e:
-            logger.warning("sync_counts remote %s: %s", key, e)
-        diff = None
-        if local_count is not None and remote_count is not None:
-            diff = remote_count - local_count
-        result[key] = {"local": local_count, "remote": remote_count, "diff": diff}
-    return jsonify(result)
+_SYNC_SERVICES = {
+    "bot":     {"local": (DATA_SERVICE_URL, "/api/urls/stats"),
+                "remote": (REMOTE_DATA_URL, "/api/urls/stats"),
+                "field": "total"},
+    "storage": {"local": (STORAGE_SERVICE_URL, "/stats"),
+                "remote": (REMOTE_STORAGE_URL, "/stats"),
+                "field": "total_steps"},
+    "tags":    {"local": (TAGS_SERVICE_URL, "/api/v1/tags/stats"),
+                "remote": (REMOTE_TAGS_URL, "/api/v1/tags/stats"),
+                "field": "total"},
+}
+
+
+@app.route("/api/sync/count/<service>/<side>", methods=["GET"])
+def sync_count_one(service, side):
+    """Return a single count: service ∈ {bot,storage,tags}, side ∈ {local,remote}."""
+    svc = _SYNC_SERVICES.get(service)
+    if not svc or side not in ("local", "remote"):
+        return jsonify({"error": "bad params"}), 400
+    base_url, path = svc[side]
+    timeout = 10 if side == "local" else 15
+    try:
+        resp = requests.get(f"{base_url}{path}", timeout=timeout)
+        resp.raise_for_status()
+        count = resp.json().get(svc["field"], 0)
+    except Exception as e:
+        logger.warning("sync_count %s/%s: %s", service, side, e)
+        count = None
+    r = jsonify({"service": service, "side": side, "count": count})
+    r.headers["Cache-Control"] = "no-store"
+    return r
 
 
 @app.route("/api/sync/start/<service>", methods=["POST"])
