@@ -9,6 +9,34 @@ from pathlib import Path
 CSV_PATH = Path(__file__).resolve().parent / "data" / "steps_export.csv"
 OUTPUT_DIR = Path(__file__).resolve().parent / "out"
 
+# Timeline strip: column-major step index n → (col, row); col maps to tiles along X.
+TIMELINE_TILE_W = 1000
+TIMELINE_TILE_H = 128
+TIMELINE_N_TILES = 10
+# Extended: 100×1000×128 → analyze/timeline/; step presence + B/W vertical patterns (full fill).
+TIMELINE_EXT_N_TILES = 100
+TIMELINE_EXT_DIR = Path(__file__).resolve().parent / "timeline"
+
+
+def timeline_capacity(n_tiles: int = TIMELINE_N_TILES) -> int:
+    return n_tiles * TIMELINE_TILE_W * TIMELINE_TILE_H
+
+
+def decode_timeline_pixel_status(r: int, g: int) -> int:
+    """
+    Recover uint16 from R,G (big-endian). Current timeline strips use grayscale
+    presence pixels; use timeline_tile_xy_to_step + CSV for step n / status.
+    """
+    return (r & 0xFF) * 256 + (g & 0xFF)
+
+
+def timeline_tile_xy_to_step(tile_idx: int, x: int, y: int, n_tiles: int) -> int:
+    """Inverse column-major: pixel (tile,x,y) → step number n."""
+    if not (0 <= tile_idx < n_tiles and 0 <= x < TIMELINE_TILE_W and 0 <= y < TIMELINE_TILE_H):
+        raise ValueError("coordinates outside strip")
+    col = tile_idx * TIMELINE_TILE_W + x
+    return col * TIMELINE_TILE_H + y
+
 
 def _ensure_csv_field_limit() -> None:
     limit = sys.maxsize
@@ -132,6 +160,80 @@ def rasterize_statuses(numbers, statuses, width, height):
     return rows
 
 
+def _empty_timeline_tiles(n_tiles: int) -> list:
+    w, h = TIMELINE_TILE_W, TIMELINE_TILE_H
+    return [[bytearray(w * 3) for _ in range(h)] for _ in range(n_tiles)]
+
+
+def _timeline_data_bw_rgb(
+    present: bool, x: int, y: int, n: int, tile_idx: int
+) -> tuple[int, int, int]:
+    """
+    Grayscale (R=G=B): step presence like steps_data.png, but every slot is drawn.
+    Vertical line / broken-grid phase + horizontal bands of varying density (static-like).
+    """
+    col_id = n // TIMELINE_TILE_H
+    band = min(6, (y * 7) // TIMELINE_TILE_H)
+    # Broken vertical alignment between rows
+    stagger = (band * 17 + (col_id % 29) * 2 + (tile_idx * 5)) % 9 - 4
+    bx = x + stagger
+    period = 2 + (col_id % 5) + (band % 3)
+    vline = (bx % max(1, period)) == 0
+
+    # Band bias: top darker, lower bands brighter (horizontal strata)
+    band_floor = (22, 48, 78, 115, 150, 195, 225)[band]
+    h = (n * 2654435761 + x * 1597334677 + y * 2246822519 + tile_idx * 374761393) & 0xFFFFFFFF
+    noise = ((h % 127) - 63) // 4
+
+    if present:
+        base = min(252, band_floor + 55)
+        if vline:
+            base = min(255, base + 38)
+        v = max(0, min(255, base + noise))
+    else:
+        base = max(10, band_floor // 5)
+        if vline:
+            base = min(200, base + 72)
+        v = max(0, min(255, base + noise))
+
+    return (v, v, v)
+
+
+def _rasterize_timeline_data_strip(number_set: set[int], n_tiles: int):
+    """
+    Full fill: one pixel per step index n in column-major order (same as timeline_tile_xy_to_step).
+    Bright vertical texture where CSV has that number; darker banded field elsewhere.
+    Returns (tiles, 1, 0).
+    """
+    w, h = TIMELINE_TILE_W, TIMELINE_TILE_H
+    tiles = _empty_timeline_tiles(n_tiles)
+    for tile_idx in range(n_tiles):
+        for y in range(h):
+            row_buf = tiles[tile_idx][y]
+            for x in range(w):
+                n = timeline_tile_xy_to_step(tile_idx, x, y, n_tiles)
+                present = n in number_set
+                rr, gg, bb = _timeline_data_bw_rgb(present, x, y, n, tile_idx)
+                off = x * 3
+                row_buf[off] = rr
+                row_buf[off + 1] = gg
+                row_buf[off + 2] = bb
+    return tiles, 1, 0
+
+
+def rasterize_statuses_timeline_tiles(numbers, statuses, max_val: int):
+    """
+    Ten RGB rasters: step presence along column-major strip (same indexing as steps_data n).
+    statuses/max_val ignored; kept for call compatibility.
+    """
+    return _rasterize_timeline_data_strip(set(numbers), TIMELINE_N_TILES)
+
+
+def rasterize_statuses_timeline_ext_decodable(numbers, statuses, max_val: int):
+    """100-tile strip in analyze/timeline/: same data logic, full fill."""
+    return _rasterize_timeline_data_strip(set(numbers), TIMELINE_EXT_N_TILES)
+
+
 def rasterize_presence_set(number_set, width, height):
     rows = [bytearray(width) for _ in range(height)]
     for n in number_set:
@@ -203,6 +305,40 @@ def main():
     status_path = OUTPUT_DIR / "steps_statuses.png"
     write_rgb_png(status_path, rasterize_statuses(numbers, data["statuses"], width, height), width, height)
     print(f"saved:   {status_path}")
+
+    cap = timeline_capacity()
+    tiles, k, skipped = rasterize_statuses_timeline_tiles(
+        numbers, data["statuses"], max_val
+    )
+    print(
+        f"timeline: capacity={cap} slots, step presence (steps_data semantics), "
+        f"1 px per step, full fill; k={k}, skipped={skipped}"
+    )
+    if max_val >= cap:
+        print(f"warning: max step {max_val} >= timeline capacity {cap}; strip clips.")
+    for i, rows in enumerate(tiles):
+        out = OUTPUT_DIR / f"steps_statuses_{i + 1}.png"
+        write_rgb_png(out, rows, TIMELINE_TILE_W, TIMELINE_TILE_H)
+        print(f"saved:   {out}")
+
+    cap_ext = timeline_capacity(TIMELINE_EXT_N_TILES)
+    tiles_ext, k_ext, skipped_ext = rasterize_statuses_timeline_ext_decodable(
+        numbers, data["statuses"], max_val
+    )
+    TIMELINE_EXT_DIR.mkdir(parents=True, exist_ok=True)
+    print(
+        f"timeline_ext: dir={TIMELINE_EXT_DIR}, capacity={cap_ext} slots, "
+        f"step presence full fill; k={k_ext}, skipped={skipped_ext}; "
+        f"n = timeline_tile_xy_to_step(tile_i,x,y,100)"
+    )
+    if max_val >= cap_ext:
+        print(
+            f"warning: max step {max_val} >= extended timeline capacity {cap_ext}."
+        )
+    for i, rows in enumerate(tiles_ext):
+        out = TIMELINE_EXT_DIR / f"steps_statuses_{i + 1}.png"
+        write_rgb_png(out, rows, TIMELINE_TILE_W, TIMELINE_TILE_H)
+        print(f"saved:   {out}")
 
     _save_grayscale("steps_tags.png", rasterize_presence_set(data["has_tags"], width, height), width, height)
     _save_grayscale("steps_screenshot.png", rasterize_presence_set(data["has_screenshot"], width, height), width, height)

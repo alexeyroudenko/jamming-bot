@@ -12,6 +12,10 @@ tags:
 
 # Jamming Bot Музыкальная подборка
 
+- 5'nizza — Jammin' (кавер на Bob Marley — «Jamming»; *Анплаггед* / *Unplugged*)
+  https://www.youtube.com/watch?v=i42rDLK5-G8
+- Bob Marley & The Wailers — Jamming (оригинал)
+  https://www.youtube.com/watch?v=oqVy6eRXc7Q
 - Planet Funk - Unhuman Perfection
   https://www.youtube.com/watch?v=WQ7p2OkzswU
 - Miss Kittin - I Come.com
