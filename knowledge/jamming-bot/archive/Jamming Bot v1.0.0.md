@@ -20,6 +20,7 @@ tags:
 
 - Проект: [[jamming-bot/Jamming Bot]]
 - Карта содержания: [[Jamming Bot MOC]]
+- Ранний конспект периода v1: [[Jamming_bot_v1.0]]
 - Выставки: [[exhibitions/_index|Выставки]]
 
 ## Материалы

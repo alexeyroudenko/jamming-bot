@@ -22,7 +22,7 @@ description: Карта содержания проекта Jamming Bot в vault
 - [[Scene 3. Texts]]
 - [[Scene 4. Geo]]
 - [[Scene 5. Cloud]]
-- [[Scene 6. Embedings|Scene 6. Embeddings]]
+- [[Scene 6. Embeddings]]
 - [[Jamming bot scenes]]
 - [[jamming_bot_en]]
 - [[Jamming Bot Развитие мысли]]
@@ -35,6 +35,7 @@ description: Карта содержания проекта Jamming Bot в vault
 
 ## Разработка и инфраструктура
 - [[dev/_index|Jamming Bot Dev Index]]
+- [[jamming-bot/dev/bot-service|Bot service]] — краулер, ядро обхода
 - [[Jamming bot Dev project|Jamming Bot Dev Project]]
 - [[Jamming bot microservices|Jamming Bot Microservices]]
 - [[Jamming bot данные и хранение|Jamming Bot — данные и хранение]]
@@ -47,6 +48,7 @@ description: Карта содержания проекта Jamming Bot в vault
 - [[Semantic AV Phrase]]
 - [[Tags cloud]]
 - [[шаг|Шаг]]
+- [[jamming-bot/Vault link conventions|Vault link conventions]] — соглашения по путям wikilinks
 
 ## Web surface
 - [[web/_index|Jamming Bot Web Index]]

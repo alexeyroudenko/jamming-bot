@@ -16,6 +16,7 @@ tags:
 
 ## Architecture
 
+- [[jamming-bot/dev/bot-service|Bot service]] — краулер, очередь URL, шаги в Flask
 - [[Jamming bot microservices|Jamming Bot Microservices]]
 - [[Jamming bot данные и хранение|Jamming Bot — данные и хранение]]
 - [[jamming bot flask|Jamming Bot Flask]]
@@ -37,3 +38,7 @@ tags:
 - [[Semantic AV Phrase]]
 - [[Tags cloud]]
 - [[Jamming bot posts|Jamming Bot Posts]]
+
+## Vault
+
+- [[jamming-bot/Vault link conventions|Соглашения по wikilinks]] — префиксы путей и stub при переносе

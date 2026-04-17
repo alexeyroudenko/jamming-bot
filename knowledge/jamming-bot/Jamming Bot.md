@@ -60,7 +60,7 @@ tags:
 
 ## Ключевые блоки проекта
 
-- Сцены: [[Scene 1. Path]], [[Scene 2. Dependency Parsing]], [[Scene 3. Texts]], [[Scene 4. Geo]], [[Scene 5. Cloud]], [[Scene 6. Embedings|Scene 6. Embeddings]]
+- Сцены: [[Scene 1. Path]], [[Scene 2. Dependency Parsing]], [[Scene 3. Texts]], [[Scene 4. Geo]], [[Scene 5. Cloud]], [[Scene 6. Embeddings]]
 - Нарратив: [[Jamming bot экспликация]], [[Jamming bot scenes]], [[jamming_bot_en]], [[Вырыпаев — Путь домой]], [[Voitenkov — Философия постмодерна (транскрипт лекции)]]
 - Разработка: [[Jamming bot Dev project|Jamming Bot Dev Project]], [[Jamming bot microservices|Jamming Bot Microservices]], [[Jamming bot Tasks|Jamming Bot Tasks]]
 - Архив: [[Jamming Bot v1.0.0]], [[Jamming_bot_v1.0]]

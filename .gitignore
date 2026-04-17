@@ -1,5 +1,6 @@
 
 knowledge/.obsidian/workspace*
+knowledge/.obsidian/workspace.json
 
 .obsidian/plugins/*/
 !.obsidian/plugins/*/data.json     # оставляем настройки плагинов

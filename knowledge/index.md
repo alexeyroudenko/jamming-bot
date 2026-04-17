@@ -34,8 +34,9 @@ tags:
 
 - Карточка проекта: [[jamming-bot/Jamming Bot]]
 - Карта содержания: [[Jamming Bot MOC]]
+- Краулер: [[jamming-bot/dev/bot-service|Bot service]]
 - Web surface: [[Jamming bot web|Jamming Bot Web]]
-- Разработка: [[dev/_index|Jamming Bot Dev Index]]
-- Веб-разделы: [[web/_index|Jamming Bot Web Index]]
+- Разработка: [[jamming-bot/dev/_index|Jamming Bot Dev Index]]
+- Веб-разделы: [[jamming-bot/web/_index|Jamming Bot Web Index]]
 
 [[Jamming bot Scenaria.canvas]]
