@@ -124,12 +124,16 @@ async def get_geo(text_data: SemanticCalculate):
         entities = [{"text": ent.text, "label": ent.label_} for ent in edoc.ents]
 
     words, hrases, sim = analyze_text(text)
+    dependency = []
+    for token in edoc:
+        dependency.append(f"{token.text}>{token.head}")
     return {
         "text": text,
         "words": words,
         "hrases": hrases,
         "sim": sim,
         "entities": entities,
+        "dependency": dependency,
     }
 
 

@@ -22,3 +22,4 @@ Dependency parsing нужен в [[jamming-bot/Jamming Bot|Jamming Bot]] для 
 
 - [[Spacy]]
 - [[Semantic dev notes]]
+- [[Semantic AV Phrase]]
