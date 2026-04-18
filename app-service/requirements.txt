@@ -5,6 +5,8 @@ python-engineio==4.11.2
 Flask-SocketIO==5.6.0
 Flask-Cors==5.0.0
 Flask==3.1.0
+# Werkzeug ad-hoc HTTPS (FLASK_SSL_ADHOC=1 / run_https.ps1)
+cryptography>=42.0.0
 rq==1.16.2
 rq-dashboard==0.6.1
 gunicorn==23.0.0

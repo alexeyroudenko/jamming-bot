@@ -225,7 +225,24 @@ def _cors_headers_on_all_responses(response):
         response.headers.setdefault("Access-Control-Allow-Credentials", "true")
     return response
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet", manage_session=False)
+
+def _socketio_async_mode() -> str:
+    """eventlet.wsgi.server does not accept ssl_context; threading uses Werkzeug app.run() which does."""
+    explicit = os.getenv("SOCKETIO_ASYNC_MODE", "").strip().lower()
+    if explicit in ("eventlet", "threading", "gevent"):
+        return explicit
+    ssl_adhoc = os.getenv("FLASK_SSL_ADHOC", "").strip().lower() in ("1", "true", "yes")
+    ssl_files = bool(
+        os.getenv("FLASK_SSL_CERTFILE", "").strip() and os.getenv("FLASK_SSL_KEYFILE", "").strip()
+    )
+    if ssl_adhoc or ssl_files:
+        return "threading"
+    return "eventlet"
+
+
+socketio = SocketIO(
+    app, cors_allowed_origins="*", async_mode=_socketio_async_mode(), manage_session=False
+)
 viewers_lock = threading.Lock()
 active_viewers = {}
 
@@ -286,7 +303,7 @@ AUTH_USER = os.getenv("AUTH_USER", "x")
 AUTH_PASS = os.getenv("AUTH_PASS", "x")
 
 PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
-                   "/tags/", "/geo/", "/screenshots/", "/semantic", "/api/semantic/",
+                   "/rytm", "/tags/", "/geo/", "/screenshots/", "/semantic", "/api/semantic/",
                    "/api/tags/get/", "/api/tags/combine/",
                    "/api/tags/sentiment-vortex/", "/api/tags/embeddings/", "/api/tags/add/",
                    "/api/step/", "/api/steps", "/api/storage_step/", "/api/storage_latest/",
@@ -1287,6 +1304,17 @@ def combine_tags_proxy():
 @app.route('/help/')
 def help_page():
     return render_template('help.html')
+
+
+@app.route("/rytm/")
+@cross_origin()
+def rytm_page():
+    return render_template("rytm.html")
+
+
+@app.route("/rytm")
+def rytm_redirect():
+    return redirect("/rytm/", code=302)
 
 
 @app.route('/metrics')
@@ -2384,10 +2412,20 @@ if __name__ == '__main__':
     # debug=True defaults use_reloader=True in Flask-SocketIO; the reloader breaks
     # Engine.IO (polling GET /socket.io/ → ERR_EMPTY_RESPONSE / connection reset).
     _dev_debug = os.getenv("FLASK_DEBUG", "1").strip().lower() in ("1", "true", "yes")
-    socketio.run(
-        app,
-        host="0.0.0.0",
+    _run_kw = dict(
+        host=os.getenv("FLASK_HOST", "0.0.0.0"),
+        port=int(os.getenv("FLASK_PORT", "5000")),
         allow_unsafe_werkzeug=True,
         debug=_dev_debug,
         use_reloader=False,
     )
+    # Локальный HTTPS: FLASK_SSL_ADHOC=1 (самоподписанный, браузер спросит доверие)
+    # или FLASK_SSL_CERTFILE + FLASK_SSL_KEYFILE (например mkcert localhost).
+    if os.getenv("FLASK_SSL_ADHOC", "").strip().lower() in ("1", "true", "yes"):
+        _run_kw["ssl_context"] = "adhoc"
+    else:
+        _cert = os.getenv("FLASK_SSL_CERTFILE", "").strip()
+        _key = os.getenv("FLASK_SSL_KEYFILE", "").strip()
+        if _cert and _key:
+            _run_kw["ssl_context"] = (_cert, _key)
+    socketio.run(app, **_run_kw)
