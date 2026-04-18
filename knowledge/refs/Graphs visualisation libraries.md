@@ -13,9 +13,9 @@ tags:
 Подборка библиотек и примеров для графовых и force-directed визуализаций.
 
 ## Ссылки
-
 - https://github.com/vasturiano/react-force-graph
 - https://vasturiano.github.io/react-force-graph/example/large-graph/
+- https://neo4j.com/blog/developer/visualizing-graphs-in-3d-with-webgl/
 
 ## В Jamming Bot
 
