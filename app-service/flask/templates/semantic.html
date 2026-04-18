@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+  <title>Jamming bot — semantic demo</title>
+  <link rel="manifest" href="/flask_static/manifest.json">
+  <link rel="icon" href="/flask_static/favicon.ico" type="image/x-icon">
+  <meta name="theme-color" content="#000000">
+  <meta name="description" content="Semantic dependency graph demo (same D3 style as main dashboard)">
+  <link rel="stylesheet" href="/flask_static/semantic_page.css">
+</head>
+<body>
+
+<div id="nodes"></div>
+<div id="log_semantic" class="text"></div>
+
+<div id="debug">
+  <section class="bot-panel bot-primary-panel bot-move-target">
+    <div class="bot-primary-head">
+      <div class="bot-brand">
+        <span class="bot-brand-kicker">Jamming Bot v2.1.0</span>
+        <div class="bot-nav-grid">
+          <a class="bot-link-chip" href="/">dashboard</a>
+          <a class="bot-link-chip is-primary" href="/semantic/">semantic demo</a>
+          <a class="bot-link-chip" href="/tags/">tag cloud</a>
+          <a class="bot-link-chip" href="/path/map/">path map</a>
+        </div>
+      </div>
+    </div>
+    <div class="semantic-demo-row">
+      <button type="button" class="bot-action" id="semantic-play">play</button>
+      <button type="button" class="bot-action" id="semantic-step-once">step</button>
+      <button type="button" class="bot-action" id="semantic-reset">reset</button>
+      <span class="semantic-demo-meta" id="semantic-status">loading…</span>
+      <div class="semantic-demo-metrics" aria-live="polite">
+        <div class="bot-metric">
+          <span class="bot-metric-label">Counter</span>
+          <span class="bot-metric-value" id="semantic-socket-counter"></span>
+        </div>
+        <div class="bot-metric">
+          <span class="bot-metric-label">Latency</span>
+          <span class="bot-metric-value" id="semantic-socket-latency"></span>
+        </div>
+      </div>
+    </div>
+    <div class="semantic-worker-row">
+      <span class="semantic-demo-meta" id="semantic-worker-hint">Socket.IO + HTTP: ожидание данных воркеров…</span>
+    </div>
+    <div id="semantic-source-panel" aria-label="Source text excerpt"></div>
+  </section>
+</div>
+
+<div id="semantic-force-panel" class="semantic-force-panel" aria-label="Параметры силового графа">
+  <div class="semantic-force-head">Сила / расстояния</div>
+  <div class="semantic-force-row">
+    <label>Длина ребра <span class="semantic-force-val" data-force-display="v1"></span>
+      <input type="range" data-force-key="v1" id="semantic-f-v1" min="5" max="100" step="1" value="25"/>
+    </label>
+  </div>
+  <div class="semantic-force-row">
+    <label>Сила связи <span class="semantic-force-val" data-force-display="v4"></span>
+      <input type="range" data-force-key="v4" id="semantic-f-v4" min="5" max="100" step="1" value="25"/>
+    </label>
+  </div>
+  <div class="semantic-force-row">
+    <label>Гравитация (к центру) <span class="semantic-force-val" data-force-display="v2"></span>
+      <input type="range" data-force-key="v2" id="semantic-f-v2" min="5" max="100" step="1" value="25"/>
+    </label>
+  </div>
+  <div class="semantic-force-row">
+    <label>Заряд (отталкивание) <span class="semantic-force-val" data-force-display="v3"></span>
+      <input type="range" data-force-key="v3" id="semantic-f-v3" min="5" max="100" step="1" value="25"/>
+    </label>
+  </div>
+  <div class="semantic-force-row">
+    <label>Трение <span class="semantic-force-val" data-force-display="v5"></span>
+      <input type="range" data-force-key="v5" id="semantic-f-v5" min="5" max="100" step="1" value="25"/>
+    </label>
+  </div>
+  <div class="semantic-force-row">
+    <label>Theta (Barnes–Hut) <span class="semantic-force-val" data-force-display="theta"></span>
+      <input type="range" data-force-key="theta" id="semantic-f-theta" min="15" max="95" step="1" value="80"/>
+    </label>
+  </div>
+  <div class="semantic-force-row">
+    <label>Дистанция заряда <span class="semantic-force-val" data-force-display="chargeDist"></span>
+      <input type="range" data-force-key="chargeDist" id="semantic-f-chargeDist" min="400" max="10000" step="100" value="10000"/>
+    </label>
+  </div>
+  <div class="semantic-force-actions">
+    <button type="button" class="bot-action" id="semantic-force-reset">сброс по умолчанию</button>
+  </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+<script>
+(function () {
+    function loadD3Script(src, isFallback) {
+        return new Promise(function (resolve, reject) {
+            var script = document.createElement("script");
+            script.src = src;
+            script.onload = function () {
+                if (typeof d3 !== "undefined") {
+                    resolve();
+                } else {
+                    reject(new Error("d3 object not defined after script load"));
+                }
+            };
+            script.onerror = function () {
+                reject(new Error("Failed to load script: " + src));
+            };
+            document.head.appendChild(script);
+        });
+    }
+    loadD3Script("/flask_static/d3.v3.min.js", false)
+        .catch(function () {
+            return loadD3Script("https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js", true);
+        })
+        .then(function () {
+            return new Promise(function (resolve) {
+                var sc = document.createElement("script");
+                sc.src = "https://cdn.socket.io/4.7.5/socket.io.min.js";
+                sc.crossOrigin = "anonymous";
+                sc.onload = function () { resolve(); };
+                sc.onerror = function () {
+                    console.warn("socket.io failed; semantic_collect disabled");
+                    resolve();
+                };
+                document.head.appendChild(sc);
+            });
+        })
+        .then(function () {
+            var s = document.createElement("script");
+            s.src = "/flask_static/semantic_demo.js";
+            document.body.appendChild(s);
+        })
+        .catch(function (e) {
+            console.error(e);
+            var el = document.getElementById("semantic-status");
+            if (el) el.textContent = "d3 load failed";
+        });
+})();
+</script>
+</body>
+</html>

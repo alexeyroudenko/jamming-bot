@@ -1,0 +1,1 @@
+Jammingbot is a fantasy on the theme of a post-apocalyptic future, when the main functions of the Internet and assistant bots will be defeated and only one self-replicating bot will remain, aimlessly plowing the Internet. This is a bot that has no goal, but only a path.

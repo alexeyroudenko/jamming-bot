@@ -15,8 +15,6 @@ tags:
 ## Берем за основу:
 ```
 Jammingbot is a fantasy about a post-apocalyptic future, when the main functions of the Internet and assistant bots are defeated and only one self-replicating bot remains, aimlessly plowing the Internet. This is a bot that has no goal, only a path.
-
-Currently, spiders, crawlers and bots have a service purpose. They act as search engines, collect information, automate Internet infrastructure. Jammingbot is a fantasy about a post-apocalyptic future, when the main functions of the Internet and assistant bots are defeated and only one self-replicating bot remains, aimlessly plowing the Internet, perhaps studying the general mood of humanity in the scraps of meaning on the pages of the Internet. This is a bot that has no goal, but only a path.
 ```
 
 # Noun phrases, Verbs
@@ -26,8 +24,8 @@ Verbs ['defeat', 'replicate', 'remain', 'plow', 'have']
 Entities [{'PERSON': 'Jammingbot'}, {'CARDINAL': 'only one'}]
 ```
 
-# 
-```
+## Full Data 
+```json
 
 {
    "noun_phrases":[
@@ -151,15 +149,10 @@ Entities [{'PERSON': 'Jammingbot'}, {'CARDINAL': 'only one'}]
 
 ```
 
-### В папке
-```
-Z:\YandexDisk\Projects\2025\2025-Jamming_bot\AV\TD_JammingBot_AV\TD_JammingBot_AV\Data\03_Semantic
-```
-
-## В Jamming Bot
+## 1. В Jamming Bot строим граф
 
 Эта заметка фиксирует пример формата для noun phrases, verbs, entities, keywords и dependency-связей, которые затем могут использоваться в [[jamming-bot/Jamming Bot|Jamming Bot]] как входные данные для визуализации и семантической обработки.
-
+[[Scene 2. Dependency Parsing]]
 ## Есть такое
 ```
 Jammingbot>is
@@ -219,3 +212,83 @@ a>path
 path>is
 .>is
 ```
+
+
+
+
+С этими данными из **spaCy** (noun_phrases, verbs, entities, keywords, subjects, objects, dependency) можно делать очень много полезного в NLP-задачах. Это классический «структурированный» вывод из текста, который превращает сырой текст в данные, с которыми легко работать алгоритмами.
+
+Вот основные вещи, которые можно делать, и какие **выводы**/результаты из этого обычно получают:
+
+### 1. Ключевые слова и тематический анализ (Keyword & Topic Analysis)
+
+- **Что делать**:
+    - Брать noun_phrases + keywords + verbs и считать частоту (TF-IDF, если много текстов).
+    - Объединять noun_phrases с глаголами (например, "self-replicating bot" + "remain/plow").
+    - Фильтровать по subjects и objects.
+- **Выводы, которые можно получить**:
+    - Основные темы текста: здесь явно **Jammingbot**, **post-apocalyptic future**, **self-replicating bot**, **Internet**, **no goal / only a path**.
+    - Ключевые концепции: одиночный бот, который бесцельно "пашет" интернет после апокалипсиса.
+    - Можно сделать **word cloud**, топ-10 ключевых фраз или кластеризацию ключевых слов.
+
+### 2. Информационная экстракция (Information Extraction)
+
+- **Что делать**:
+    
+    - Использовать entities (NER) — здесь слабовато (только "Jammingbot" как PERSON и "only one" как CARDINAL), но в нормальных текстах вытаскивает PERSON, ORG, DATE и т.д.
+    - Комбинировать subjects + verbs + objects → строить **SVO-triples** (Subject-Verb-Object).
+- **Пример из твоего текста**:
+    
+    - Jammingbot **is** a fantasy
+    - main functions **defeated**
+    - only one self-replicating bot **remain**
+    - bot **plowing** the Internet
+    - bot **has** no goal
+    - (only) a path **is**
+    
+    **Вывод**: Это история про одинокого бота без цели, который продолжает существовать после краха интернета.
+    
+- Можно строить **knowledge graph** (граф знаний): узлы = entities + noun_phrases, рёбра = verbs или dependency-отношения.
+    
+
+### 3. Анализ структуры предложения (Syntax & Relations)
+
+- **Dependency parse** — самый мощный элемент здесь.
+    - Он показывает, кто от кого зависит (head → dependent).
+    - Можно вытаскивать отношения типа:
+        - amod (adjective modifier): post-apocalyptic → future
+        - nsubj (nominal subject)
+        - dobj (direct object)
+        - prep, pobj и т.д.
+- **Что можно делать**:
+    - Строить дерево зависимостей и визуализировать (displaCy).
+    - Извлекать сложные отношения: "bot that has no goal, but only a path".
+    - Relation Extraction: "кто что делает с кем/чем".
+
+**Выводы**: Текст поэтический и философский — акцент на контрасте ("no goal, only a path"), на одиночестве бота и на бессмысленном продолжении движения.
+
+### 4. Суммаризация и упрощение текста
+
+- Брать самые важные noun_phrases + главные subjects + основные verbs.
+- Фильтровать по частоте или по centrality в dependency graph.
+- **Вывод**: Короткое summary: "Jammingbot — это фантазия о постапокалиптическом будущем, где после поражения интернета и помощников остаётся один самовоспроизводящийся бот, который бесцельно пашет сеть. У него нет цели, только путь."
+
+### 5. Другие продвинутые применения
+
+- **Классификация / Sentiment** — добавлять polarity глаголов ("defeated" — негатив, "remain/plow" — нейтрально-упорное).
+- **Вопрос-ответ системы** (Question Answering) — на основе SVO и dependency можно отвечать на "Что делает бот?" или "Какая у него цель?".
+- **Chatbot / Intent detection** — subjects + verbs помогают понять намерение описания.
+- **Сравнение текстов** — если обработать много таких описаний ботов/историй, можно находить похожие по noun_phrases и verb-паттернам.
+- **Графовый анализ** — превратить dependency в граф (NetworkX) и считать centrality (какие слова самые "важные" в тексте).
+
+### Конкретно для твоего примера "Jammingbot"
+
+Из данных хорошо видно **основную идею**:
+
+- Главный субъект: **Jammingbot** / **bot**
+- Действия: **defeated** (интернет и боты), **remain**, **plowing** (Internet), **has** (no goal)
+- Ключевой контраст: **no goal** — **only a path**
+
+Это идеально для генерации тегов, мета-описания, поиска похожих историй или даже для создания промптов для ИИ-генерации изображений/продолжения истории.
+
+Хочешь, я покажу, как на Python дальше обработать такой JSON (например, построить SVO-triples или простой граф)? Или нужно улучшить сам парсинг (твой вывод выглядит немного сырым — глаголы в базовой форме, dependency не совсем стандартный)?

@@ -6,7 +6,7 @@ kanban-plugin: board
 
 ## Tasks
 
-- [ ] Таймлайн из событий
+- [ ] Добавить на страницу http://localhost:5000/semantic/ связь по web-socket, как на главной странице. Только слушать событи
 
 
 ## Proceed

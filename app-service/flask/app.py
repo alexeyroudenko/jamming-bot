@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import time
 import json
@@ -50,6 +51,8 @@ cfg = getConfig()
 redis = getRedis()
 BACKFILL_STATUS_KEY = os.getenv("BACKFILL_STATUS_KEY", "backfill:status")
 SUBLINK_CHANNEL = os.getenv("SUBLINK_CHANNEL", "sublink")
+SEMANTIC_LAST_COLLECT_KEY = "semantic:last_collect"
+SEMANTIC_LAST_COLLECT_TTL = int(os.getenv("SEMANTIC_LAST_COLLECT_TTL", "86400"))
 _sublink_listener_started = False
 _sublink_listener_lock = threading.Lock()
 
@@ -281,7 +284,8 @@ AUTH_USER = os.getenv("AUTH_USER", "x")
 AUTH_PASS = os.getenv("AUTH_PASS", "x")
 
 PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
-                   "/tags/", "/geo/", "/screenshots/", "/api/tags/get/", "/api/tags/combine/",
+                   "/tags/", "/geo/", "/screenshots/", "/semantic", "/api/semantic/",
+                   "/api/tags/get/", "/api/tags/combine/",
                    "/api/tags/sentiment-vortex/", "/api/tags/embeddings/", "/api/tags/add/",
                    "/api/step/", "/api/steps", "/api/storage_step/", "/api/storage_latest/",
                    "/api/rq/workers/",
@@ -448,6 +452,20 @@ def _emit_presence_step(step_number, phase="update"):
     )
 
 
+def _persist_semantic_last_collect(payload):
+    """Store last semantic_collect payload so /semantic/ can poll after a missed Socket.IO event."""
+    if not isinstance(payload, dict):
+        return
+    try:
+        redis.setex(
+            SEMANTIC_LAST_COLLECT_KEY,
+            SEMANTIC_LAST_COLLECT_TTL,
+            json.dumps(payload, default=str),
+        )
+    except Exception as exc:
+        logger.warning("semantic last_collect redis: %s", exc)
+
+
 def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                        step_key=None, silent=False):
     """Poll an RQ job in a background thread and emit result via SocketIO."""
@@ -462,8 +480,18 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                 logger.debug(f"Job {job.id} no longer exists for event {event_name}")
                 return
             if job.is_finished:
+                emit_payload = job.result
+                if event_name == "semantic_collect" and isinstance(job.result, dict):
+                    received_at = datetime.now(timezone.utc).isoformat()
+                    emit_payload = {**job.result, "received_at": received_at}
+                    _persist_semantic_last_collect(emit_payload)
+                    logger.info(
+                        "semantic_collect step=%s dependency_lines=%s",
+                        emit_payload.get("number"),
+                        len(emit_payload.get("dependency_lines") or []),
+                    )
                 if not silent:
-                    socketio.emit(event_name, job.result)
+                    socketio.emit(event_name, emit_payload)
                 _save_to_step_hash(step_key, job.result)
                 if event_name == "image_analyzed":
                     _store_step_analysis(step_key, job.result)
@@ -473,6 +501,46 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                         _emit_presence_step(step_key.split(":")[-1], phase=event_name)
                 if event_name == "screenshot":
                     _enqueue_image_analysis_followup(step_key, job.result, silent=silent)
+                if event_name == "analyzed" and step_key and not silent:
+                    try:
+                        result = job.result or {}
+                        seg = _snippet_for_analyze_semantic(
+                            step_key, result if isinstance(result, dict) else {}
+                        )
+                        if seg:
+                            step_num = step_key.split(":", 1)[-1]
+                            row = _read_step_hash(step_key) or {}
+                            step_url = row.get("url") or ""
+                            j2 = enqueue_with_trace(
+                                queue,
+                                redis_connection,
+                                jobs.analyze_semantic,
+                                seg,
+                                timeout=60,
+                                result_ttl=270,
+                                step_number=step_num,
+                                step_url=step_url,
+                            )
+                            inject_trace_context_into_job(j2)
+                            _poll_job_and_emit(
+                                j2,
+                                "semantic_collect",
+                                timeout=60,
+                                step_key=step_key,
+                                silent=False,
+                            )
+                        else:
+                            logger.info(
+                                "analyze_semantic not enqueued (empty snippet) for %s",
+                                step_key,
+                            )
+                    except Exception as exc:
+                        logger.exception("analyze_semantic enqueue failed: %s", exc)
+                if event_name == "analyzed" and step_key and silent:
+                    logger.info(
+                        "analyze_semantic chain skipped (silent step) %s",
+                        step_key,
+                    )
                 return
             if job.is_failed:
                 logger.warning(f"Job {job.id} failed for event {event_name}")
@@ -480,6 +548,37 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                 return
         logger.warning(f"Job {job.id} timed out after {timeout}s for event {event_name}")
     threading.Thread(target=_poll, daemon=True).start()
+
+
+def _first_two_sentences(text):
+    """Return up to the first two sentences (by . ? !) capped for semantic snippet."""
+    if not text or not str(text).strip():
+        return ""
+    text = str(text).strip()
+    parts = re.split(r"(?<=[.!?])\s+", text, maxsplit=3)
+    joined = " ".join(parts[:2]).strip()
+    out = joined if joined else text
+    return out[:2500]
+
+
+def _snippet_for_analyze_semantic(step_key, analyze_result):
+    """1–2 sentences from step text in Redis, else noun_phrases / words from analyze result."""
+    try:
+        merged = _read_step_hash(step_key) or {}
+        body = (merged.get("text") or "")[:12000]
+        sn = _first_two_sentences(body)
+        if sn:
+            return sn
+        if isinstance(analyze_result, dict):
+            np = analyze_result.get("noun_phrases")
+            if isinstance(np, list) and np:
+                return ". ".join(str(x) for x in np[:3])[:2500]
+            words = analyze_result.get("words")
+            if isinstance(words, list) and words:
+                return " ".join(str(x) for x in words[:24])[:2500]
+    except Exception as exc:
+        logger.warning("_snippet_for_analyze_semantic: %s", exc)
+    return ""
 
 
 def _read_step_hash(step_key):
@@ -884,6 +983,78 @@ def tags_cloud_3d():
 @cross_origin()
 def geo_globe():
     return render_template('geo_globe.html')
+
+
+SEMANTIC_DEMO_SOURCE_MAX = 4096
+
+
+def _semantic_demo_payload():
+    """Dependency edges from semantic/semantic.txt (governor>head) plus optional source excerpt."""
+    semantic_path = os.path.join(base_dir, "semantic", "semantic.txt")
+    source_path = os.path.join(base_dir, "semantic", "source.txt")
+    edges = []
+    try:
+        with open(semantic_path, encoding="utf-8") as f:
+            for raw in f:
+                line = raw.strip()
+                if not line or ">" not in line:
+                    continue
+                src, head = line.split(">", 1)
+                src, head = src.strip(), head.strip()
+                if not src or not head:
+                    continue
+                edges.append({
+                    "src": src,
+                    "head": head,
+                    "step": len(edges) + 1,
+                })
+    except OSError as exc:
+        logger.warning("semantic demo: cannot read %s: %s", semantic_path, exc)
+    source_text = ""
+    try:
+        with open(source_path, encoding="utf-8") as f:
+            source_text = f.read(SEMANTIC_DEMO_SOURCE_MAX)
+    except OSError:
+        pass
+    return {"edges": edges, "source_text": source_text, "edge_count": len(edges)}
+
+
+@app.route("/api/semantic/demo-edges/", methods=["GET"])
+@cross_origin()
+def api_semantic_demo_edges():
+    return jsonify(_semantic_demo_payload())
+
+
+@app.route("/api/semantic/last-collect/", methods=["GET"])
+@cross_origin()
+def api_semantic_last_collect():
+    """Latest semantic_collect payload (Redis) for clients that missed Socket.IO."""
+    try:
+        raw = redis.get(SEMANTIC_LAST_COLLECT_KEY)
+    except Exception as exc:
+        logger.warning("semantic last_collect get: %s", exc)
+        return jsonify({"ok": False, "error": "redis"}), 503
+    if not raw:
+        return jsonify({"ok": False, "empty": True})
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8")
+    try:
+        data = json.loads(raw)
+    except (TypeError, json.JSONDecodeError) as exc:
+        logger.warning("semantic last_collect json: %s", exc)
+        return jsonify({"ok": False, "error": "parse"}), 500
+    return jsonify({"ok": True, "data": data})
+
+
+@app.route("/semantic/")
+@cross_origin()
+def semantic_demo_page():
+    return render_template("semantic.html")
+
+
+@app.route("/semantic")
+def semantic_demo_redirect():
+    return redirect("/semantic/", code=302)
 
 
 @app.route('/tags/phrases/')
@@ -2123,4 +2294,13 @@ def my_ping():
 
 if __name__ == '__main__':
     print("start flask 2.2.0")
-    socketio.run(app, host='0.0.0.0', allow_unsafe_werkzeug=True, debug=True)
+    # debug=True defaults use_reloader=True in Flask-SocketIO; the reloader breaks
+    # Engine.IO (polling GET /socket.io/ → ERR_EMPTY_RESPONSE / connection reset).
+    _dev_debug = os.getenv("FLASK_DEBUG", "1").strip().lower() in ("1", "true", "yes")
+    socketio.run(
+        app,
+        host="0.0.0.0",
+        allow_unsafe_werkzeug=True,
+        debug=_dev_debug,
+        use_reloader=False,
+    )

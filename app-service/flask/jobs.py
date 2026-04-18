@@ -371,6 +371,85 @@ def analyze(html, step_number=None, step_url=None):
     }
 
 
+MAX_SEMANTIC_SNIPPET_CHARS = 2500
+
+
+@job("default", connection=redis_connection, timeout=60, result_ttl=270)
+@with_trace_context
+def analyze_semantic(snippet, step_number=None, step_url=None):
+    """Run semantic-service analyze_all on a short snippet; chained after analyze()."""
+    self_job = get_current_job()
+    self_job.meta["type"] = "analyze_semantic"
+    self_job.save_meta()
+    set_step_span_attributes(step_number=step_number, step_url=step_url)
+
+    snippet = (snippet or "").strip()
+    if not snippet:
+        return {
+            "number": str(step_number or ""),
+            "url": step_url or "",
+            "semantic": "",
+            "pod": POD_NAME,
+            "error": "empty_snippet",
+        }
+
+    snippet = snippet[:MAX_SEMANTIC_SNIPPET_CHARS]
+    url = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/analyze_all/"
+    headers = {"content-type": "application/json"}
+    try:
+        with sentry_sdk.start_span(op="http.client", description="semantic analyze_all snippet"):
+            resp = requests.post(
+                url,
+                data=json.dumps({"text": snippet}),
+                headers=headers,
+                timeout=45,
+            )
+            resp.raise_for_status()
+            sem = resp.json()
+    except Exception as e:
+        logger.warning("analyze_semantic: %s", e)
+        return {
+            "number": str(step_number or ""),
+            "url": step_url or "",
+            "semantic": json.dumps({"error": str(e), "snippet": snippet[:500]}, ensure_ascii=False),
+            "pod": POD_NAME,
+            "error": str(e),
+        }
+
+    dep_lines = []
+    for item in sem.get("dependency") or []:
+        if isinstance(item, dict):
+            dep_lines.append(f"{item.get('token', '')}>{item.get('head', '')}")
+        elif isinstance(item, str):
+            dep_lines.append(item)
+
+    payload = {
+        "source": "analyze_semantic",
+        "snippet": snippet,
+        "noun_phrases": sem.get("noun_phrases"),
+        "verbs": sem.get("verbs"),
+        "entities": sem.get("entities"),
+        "keywords": sem.get("keywords"),
+        "subjects": sem.get("subjects"),
+        "objects": sem.get("objects"),
+        "dependency": dep_lines,
+        "dependency_structured": sem.get("dependency"),
+    }
+
+    out = {
+        "number": str(step_number or ""),
+        "url": step_url or "",
+        "semantic": json.dumps(payload, ensure_ascii=False),
+        "semantic_words": snippet[:1024],
+        "snippet": snippet,
+        "dependency_lines": dep_lines,
+        "pod": POD_NAME,
+    }
+    self_job.meta["progress"] = {"num_iterations": 2, "iteration": 2, "percent": 100}
+    self_job.save_meta()
+    return out
+
+
 def _filenamify(url):
     """Convert a URL into a safe filename."""
     import re as _re

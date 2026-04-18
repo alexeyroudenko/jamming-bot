@@ -102,6 +102,7 @@ _JOB_TYPE_MAP = {
     "dostep": "step",
     "do_geo": "geo",
     "analyze": "analyze",
+    "analyze_semantic": "analyze_semantic",
     "do_screenshot": "screenshot",
     "image_analyze": "image_analyze",
     "do_storage": "storage",
