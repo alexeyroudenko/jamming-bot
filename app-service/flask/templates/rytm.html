@@ -13,6 +13,10 @@
       --text: #e8e6e3;
       --muted: #8a8580;
       --frame: #1c1c22;
+      --bot-text: #e8e6e3;
+      --bot-muted: #8a8580;
+      --bot-border: rgba(255, 255, 255, 0.12);
+      --bot-accent: #e85d04;
     }
     * { box-sizing: border-box; }
     body {
@@ -114,6 +118,217 @@
       max-width: 720px;
       line-height: 1.5;
     }
+    .log-wrap {
+      margin-top: 1.25rem;
+      max-width: 720px;
+      background: var(--frame);
+      border: 1px solid #2e2e36;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .log-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid #2e2e36;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .log-head button {
+      background: #2e2e36;
+      color: var(--text);
+      border: 1px solid #3d3d48;
+      border-radius: 6px;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.72rem;
+      cursor: pointer;
+    }
+    .log-head button:hover { background: #3d3d48; }
+    #log {
+      margin: 0;
+      padding: 0.5rem 0.65rem;
+      height: 220px;
+      overflow-y: auto;
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.72rem;
+      line-height: 1.45;
+      color: #c8c4be;
+      word-break: break-word;
+    }
+    #log .logline { margin: 0.1rem 0; }
+    #log .t { color: #6b6a66; }
+    #log .padl { color: #7eb8da; }
+    #log .out { color: #9cdc8c; }
+    #log .in { color: #d4b5ff; }
+    #log .msg { color: #c8c4be; }
+
+    /* Socket.IO logs-panel (как на /, но в потоке страницы) */
+    .socket-stack {
+      margin-top: 1.75rem;
+      max-width: min(1120px, calc(100vw - 2.5rem));
+    }
+    .socket-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 0.65rem;
+    }
+    .socket-toolbar button {
+      background: #3d3d48;
+      color: var(--text);
+      border: 1px solid #4a4a56;
+      border-radius: 8px;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .socket-toolbar button:hover { background: #4a4a56; }
+    .socket-toolbar button.primary { background: #2d6a4f; border-color: #40916c; }
+    .socket-toolbar button.primary:hover { background: #40916c; }
+    #socket-status {
+      font-size: 0.78rem;
+      color: var(--muted);
+      flex: 1;
+      min-width: 160px;
+    }
+    #socket-status.ok { color: #7cb87c; }
+    #socket-status.err { color: #e07a7a; }
+    #socket-save-hint {
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .socket-logs-panel {
+      background: rgba(5, 7, 10, 0.76);
+      border: 1px solid var(--bot-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 1rem;
+      max-height: 240px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .socket-logs-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .socket-section-label {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--bot-muted);
+    }
+    .socket-logs-meta {
+      font-family: ui-monospace, monospace;
+      font-size: 11px;
+      color: var(--bot-muted);
+    }
+    .socket-logs-table {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 186px;
+      overflow: auto;
+    }
+    .socket-logs-row,
+    .socket-logs-empty {
+      display: grid;
+      grid-template-columns: minmax(66px, 0.55fr) minmax(96px, 0.8fr) minmax(110px, 0.9fr) minmax(0, 2.8fr);
+      gap: 8px;
+      align-items: start;
+      padding: 4px 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      line-height: 1.25;
+    }
+    .socket-logs-row.is-head {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: rgba(5, 7, 10, 0.95);
+      color: var(--bot-muted);
+      text-transform: uppercase;
+    }
+    .socket-logs-type.type-bot { color: #fca5a5; }
+    .socket-logs-type.type-analyzer { color: #93c5fd; }
+    .socket-logs-type.type-screenshoter { color: #fcd34d; }
+    .socket-logs-type.type-geo { color: #86efac; }
+    .socket-logs-type.type-controls { color: #c4b5fd; }
+    .socket-logs-type.type-system { color: var(--bot-muted); }
+    .socket-logs-event,
+    .socket-logs-type {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .socket-map-panel {
+      background: rgba(5, 7, 10, 0.76);
+      border: 1px solid var(--bot-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .socket-map-head {
+      margin-bottom: 8px;
+    }
+    .socket-map-desc {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+    .socket-map-table {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 320px;
+      overflow: auto;
+    }
+    .socket-map-row,
+    .socket-map-headrow {
+      display: grid;
+      grid-template-columns: 0.7fr 0.9fr 44px 52px 52px 52px 52px 70px;
+      gap: 6px;
+      align-items: center;
+      font-family: ui-monospace, monospace;
+      font-size: 11px;
+    }
+    .socket-map-headrow {
+      color: var(--bot-muted);
+      text-transform: uppercase;
+      position: sticky;
+      top: 0;
+      background: rgba(5, 7, 10, 0.95);
+      z-index: 1;
+      padding-bottom: 4px;
+    }
+    .socket-map-row input[type="number"] {
+      width: 100%;
+      background: #25252c;
+      border: 1px solid #3d3d48;
+      color: var(--text);
+      border-radius: 4px;
+      padding: 2px 4px;
+      font-size: 11px;
+    }
+    .socket-map-row label.chk {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    @media (max-width: 900px) {
+      .socket-map-row,
+      .socket-map-headrow {
+        grid-template-columns: 1fr 1fr;
+        grid-auto-flow: dense;
+      }
+    }
   </style>
 </head>
 <body>
@@ -126,34 +341,291 @@
       <label for="midiOut">Выход</label><br />
       <select id="midiOut" disabled></select>
     </div>
+    <div>
+      <label for="midiIn">Вход (лог RX)</label><br />
+      <select id="midiIn" disabled>
+        <option value="">— не слушать —</option>
+      </select>
+    </div>
     <div id="status" class="err">Нажмите «Включить MIDI» и разрешите доступ в браузере.</div>
   </div>
 
   <div class="pads" id="pads"></div>
+
+  <div class="log-wrap">
+    <div class="log-head">
+      <span>Лог: пэды · отправлено (TX) · принято (RX)</span>
+      <button type="button" id="btnClearLog" title="Очистить">Очистить</button>
+    </div>
+    <div id="log" aria-live="polite"></div>
+  </div>
+
+  <div class="socket-stack">
+    <div class="socket-toolbar">
+      <button type="button" id="btnSocketConnect">Подключить Socket.IO</button>
+      <button type="button" class="primary" id="btnSocketSave">Сохранить маппинг</button>
+      <span id="socket-status" class="err">Socket.IO не подключён</span>
+    </div>
+    <span id="socket-save-hint">Маппинг хранится в localStorage (ключ <code>rytm_socketio_midi_map_v2</code>).</span>
+
+    <section id="socket-logs-panel" class="socket-logs-panel" aria-live="polite">
+      <div class="socket-logs-head">
+        <span class="socket-section-label">Logs</span>
+        <span id="socket-logs-meta" class="socket-logs-meta">0 events</span>
+      </div>
+      <div id="socket-logs-list" class="socket-logs-table">
+        <div class="socket-logs-empty">Подключите сокет — события появятся здесь (как на главной).</div>
+      </div>
+    </section>
+
+    <section class="socket-map-panel" aria-label="Маппинг Socket.IO на MIDI">
+      <div class="socket-map-head">
+        <span class="socket-section-label">Socket → MIDI</span>
+        <p class="socket-map-desc">
+          Уникальные пары <strong>type — event</strong> (классификация как на главной). Включите «MIDI», задайте канал / ноту / длительность импульса, «Сохранить» — переживёт перезагрузку.
+        </p>
+      </div>
+      <div class="socket-map-headrow" aria-hidden="true">
+        <span>type</span>
+        <span>event</span>
+        <span>on</span>
+        <span>ch</span>
+        <span>note</span>
+        <span>vel</span>
+        <span>ms</span>
+        <span>count</span>
+      </div>
+      <div id="socket-map-table" class="socket-map-table"></div>
+    </section>
+  </div>
 
   <footer>
     Chrome / Edge: работает по HTTPS или на <code>localhost</code>. Если выходов нет — подключите виртуальный MIDI-порт
     (loopMIDI, IAC и т.д.) и обновите страницу.
   </footer>
 
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
   <script>
     (function () {
       const NOTE = 36;
       const NUM_PADS = 12;
+      const LOG_MAX_LINES = 400;
+      const STORAGE_KEY = "rytm_socketio_midi_map_v2";
+      const STORAGE_MIDI_PREFS = "rytm_midi_device_prefs_v1";
+      const STORAGE_SOCKET_PREFS = "rytm_socket_autoconnect_v1";
+      const MAX_SOCKET_LOGS = 200;
+
+      const logEl = document.getElementById("log");
+      const btnClearLog = document.getElementById("btnClearLog");
+
+      function ts() {
+        const d = new Date();
+        return (
+          ("0" + d.getHours()).slice(-2) +
+          ":" +
+          ("0" + d.getMinutes()).slice(-2) +
+          ":" +
+          ("0" + d.getSeconds()).slice(-2) +
+          "." +
+          ("00" + d.getMilliseconds()).slice(-3)
+        );
+      }
+
+      function hexBytes(arr) {
+        return Array.from(arr)
+          .map(function (b) {
+            return ("0" + (b & 255).toString(16)).slice(-2);
+          })
+          .join(" ");
+      }
+
+      function describeMIDI(data) {
+        if (!data || data.length < 1) return "";
+        const status = data[0] & 240;
+        const ch = (data[0] & 15) + 1;
+        if (status === 144 && data.length >= 3) {
+          if (data[2] === 0) return "Note Off ch=" + ch + " note=" + data[1] + " vel=0";
+          return "Note On ch=" + ch + " note=" + data[1] + " vel=" + data[2];
+        }
+        if (status === 128 && data.length >= 3) {
+          return "Note Off ch=" + ch + " note=" + data[1] + " vel=" + data[2];
+        }
+        if (status === 176 && data.length >= 3) return "CC ch=" + ch + " cc=" + data[1] + " val=" + data[2];
+        if (status === 192 && data.length >= 2) return "Program ch=" + ch + " prog=" + data[1];
+        if (status === 224 && data.length >= 3) {
+          const v = (data[2] << 7) | data[1];
+          return "Pitch bend ch=" + ch + " value=" + v;
+        }
+        if (status === 208 && data.length >= 2) return "Aftertouch ch=" + ch + " pressure=" + data[1];
+        if (status === 160 && data.length >= 3) return "Poly aftertouch ch=" + ch + " note=" + data[1] + " press=" + data[2];
+        return "Raw (" + data.length + " bytes)";
+      }
+
+      function logLine(cls, text) {
+        const row = document.createElement("div");
+        row.className = "logline";
+        const spanT = document.createElement("span");
+        spanT.className = "t";
+        spanT.textContent = ts();
+        row.appendChild(spanT);
+        row.appendChild(document.createTextNode(" "));
+        const spanM = document.createElement("span");
+        spanM.className = cls || "msg";
+        spanM.textContent = text;
+        row.appendChild(spanM);
+        logEl.insertBefore(row, logEl.firstChild);
+        while (logEl.children.length > LOG_MAX_LINES) {
+          logEl.removeChild(logEl.lastChild);
+        }
+        console.log("[rytm]", text);
+      }
+
+      btnClearLog.addEventListener("click", function () {
+        logEl.textContent = "";
+      });
+
       /** MIDI channel 1..16 → status lower nibble 0..15 */
       function noteOnStatus(channel) {
         return 0x90 + (channel - 1);
       }
-      function sendNote(output, channel, velocity) {
+
+      function sendMidiNote(output, channel, note, velocity) {
         if (!output) return;
-        output.send([noteOnStatus(channel), NOTE, velocity]);
+        const bytes = [noteOnStatus(channel), note, velocity];
+        output.send(bytes);
+        let outName = output.name || "?";
+        if (midiSelect.selectedIndex >= 0 && midiSelect.options[midiSelect.selectedIndex]) {
+          outName = output.name || midiSelect.options[midiSelect.selectedIndex].text;
+        }
+        logLine(
+          "out",
+          "[→ TX] " +
+            outName +
+            " | " +
+            hexBytes(bytes) +
+            " | " +
+            describeMIDI(bytes)
+        );
+      }
+
+      const midiPulseTimers = {};
+
+      function sendMidiPulse(channel, note, velocity, durationMs) {
+        const out = currentOutput();
+        if (!out) {
+          logLine("", "[socket→MIDI] нет MIDI-выхода (включите MIDI сверху)");
+          return;
+        }
+        const dur = Math.max(10, Math.min(5000, Number(durationMs) || 100));
+        const vel = Math.max(0, Math.min(127, Number(velocity) | 0));
+        const n = Math.max(0, Math.min(127, Number(note) | 0));
+        const ch = Math.max(1, Math.min(16, Number(channel) | 0)) || 1;
+        sendMidiNote(out, ch, n, vel);
+        const tk = ch + ":" + n;
+        clearTimeout(midiPulseTimers[tk]);
+        midiPulseTimers[tk] = setTimeout(function () {
+          sendMidiNote(out, ch, n, 0);
+          delete midiPulseTimers[tk];
+        }, dur);
       }
 
       let midiAccess = null;
       let selectedId = null;
+      let wiredInputId = null;
+      let midiActivated = false;
+
+      function readMidiPrefs() {
+        try {
+          var raw = localStorage.getItem(STORAGE_MIDI_PREFS);
+          if (!raw) {
+            return {
+              midiEnabled: false,
+              outputId: null,
+              inputId: "",
+              outputName: "",
+              inputName: "",
+            };
+          }
+          var o = JSON.parse(raw);
+          return {
+            midiEnabled: !!o.midiEnabled,
+            outputId: o.outputId || null,
+            inputId: o.inputId != null ? String(o.inputId) : "",
+            outputName: o.outputName ? String(o.outputName) : "",
+            inputName: o.inputName ? String(o.inputName) : "",
+          };
+        } catch (e) {
+          return {
+            midiEnabled: false,
+            outputId: null,
+            inputId: "",
+            outputName: "",
+            inputName: "",
+          };
+        }
+      }
+
+      function saveMidiPrefs() {
+        if (!midiAccess || !midiActivated) return;
+        try {
+          var outId = midiSelect.value || selectedId || "";
+          var out = outId ? midiAccess.outputs.get(outId) : null;
+          var outName = out ? out.name : "";
+          if (!outName && midiSelect.selectedIndex >= 0 && midiSelect.options[midiSelect.selectedIndex]) {
+            outName = midiSelect.options[midiSelect.selectedIndex].text || "";
+          }
+          var inId = midiInSelect.value || "";
+          var inName = "";
+          if (inId && midiAccess.inputs.get(inId)) {
+            inName = midiAccess.inputs.get(inId).name || "";
+          }
+          localStorage.setItem(
+            STORAGE_MIDI_PREFS,
+            JSON.stringify({
+              version: 1,
+              midiEnabled: true,
+              outputId: outId || null,
+              inputId: inId,
+              outputName: outName,
+              inputName: inName,
+            })
+          );
+        } catch (e) {}
+      }
+
+      function pickOutputAfterList(outs) {
+        var prefs = readMidiPrefs();
+        if (prefs.outputId) {
+          for (var i = 0; i < outs.length; i++) {
+            if (outs[i].id === prefs.outputId) return prefs.outputId;
+          }
+        }
+        if (prefs.outputName) {
+          for (var j = 0; j < outs.length; j++) {
+            if (outs[j].name === prefs.outputName) return outs[j].id;
+          }
+        }
+        return null;
+      }
+
+      function pickInputAfterList(ins) {
+        var prefs = readMidiPrefs();
+        if (prefs.inputId) {
+          for (var i = 0; i < ins.length; i++) {
+            if (ins[i].id === prefs.inputId) return prefs.inputId;
+          }
+        }
+        if (prefs.inputName) {
+          for (var j = 0; j < ins.length; j++) {
+            if (ins[j].name === prefs.inputName) return ins[j].id;
+          }
+        }
+        return "";
+      }
 
       const padsEl = document.getElementById("pads");
       const midiSelect = document.getElementById("midiOut");
+      const midiInSelect = document.getElementById("midiIn");
       const statusEl = document.getElementById("status");
       const btnInit = document.getElementById("btnInit");
 
@@ -164,29 +636,103 @@
         statusEl.className = ok ? "ok" : "err";
       }
 
-      function fillOutputs() {
+      function wireMidiInput(id) {
+        if (!midiAccess) return;
+        if (wiredInputId && midiAccess.inputs.get(wiredInputId)) {
+          try {
+            midiAccess.inputs.get(wiredInputId).onmidimessage = null;
+          } catch (e) {}
+        }
+        wiredInputId = null;
+        if (!id) {
+          return;
+        }
+        const inp = midiAccess.inputs.get(id);
+        if (!inp) return;
+        wiredInputId = id;
+        inp.onmidimessage = function (ev) {
+          const d = ev.data;
+          const arr = d instanceof Uint8Array ? Array.from(d) : Array.prototype.slice.call(d);
+          logLine(
+            "in",
+            "[← RX] " +
+              (inp.name || id) +
+              " | " +
+              hexBytes(arr) +
+              " | " +
+              describeMIDI(arr)
+          );
+        };
+        logLine("", "[midi] RX listener: " + (inp.name || id));
+      }
+
+      function fillOutputs(preferredInputId) {
         midiSelect.innerHTML = "";
         if (!midiAccess) return;
         const outs = [...midiAccess.outputs.values()];
         if (!outs.length) {
           midiSelect.disabled = true;
           setStatus("Нет MIDI-выходов. Создайте виртуальный порт и перезагрузите страницу.", false);
-          return;
+        } else {
+          outs.forEach(function (o) {
+            const opt = document.createElement("option");
+            opt.value = o.id;
+            opt.textContent = o.name;
+            midiSelect.appendChild(opt);
+          });
+          midiSelect.disabled = false;
+          var pickedOut = null;
+          if (selectedId) {
+            for (var oi = 0; oi < outs.length; oi++) {
+              if (outs[oi].id === selectedId) {
+                pickedOut = selectedId;
+                break;
+              }
+            }
+          }
+          if (!pickedOut) pickedOut = pickOutputAfterList(outs);
+          if (pickedOut && midiAccess.outputs.get(pickedOut)) {
+            midiSelect.value = pickedOut;
+            selectedId = pickedOut;
+          } else {
+            midiSelect.selectedIndex = 0;
+            selectedId = midiSelect.value;
+          }
+          setStatus("Готово. Выход: " + midiSelect.options[midiSelect.selectedIndex].text, true);
         }
-        outs.forEach(function (o) {
+
+        var prevIn =
+          preferredInputId != null && preferredInputId !== ""
+            ? preferredInputId
+            : midiInSelect.value;
+        const firstOpt = midiInSelect.querySelector('option[value=""]');
+        midiInSelect.innerHTML = "";
+        if (firstOpt) midiInSelect.appendChild(firstOpt);
+        else {
+          const z = document.createElement("option");
+          z.value = "";
+          z.textContent = "— не слушать —";
+          midiInSelect.appendChild(z);
+        }
+        const ins = [...midiAccess.inputs.values()];
+        ins.forEach(function (o) {
           const opt = document.createElement("option");
           opt.value = o.id;
           opt.textContent = o.name;
-          midiSelect.appendChild(opt);
+          midiInSelect.appendChild(opt);
         });
-        midiSelect.disabled = false;
-        if (selectedId && midiAccess.outputs.get(selectedId)) {
-          midiSelect.value = selectedId;
-        } else {
-          midiSelect.selectedIndex = 0;
-          selectedId = midiSelect.value;
+        midiInSelect.disabled = ins.length === 0;
+        var wantIn = prevIn;
+        if (!wantIn || !midiAccess.inputs.get(wantIn)) {
+          wantIn = pickInputAfterList(ins);
         }
-        setStatus("Готово. Выход: " + midiSelect.options[midiSelect.selectedIndex].text, true);
+        if (wantIn && midiAccess.inputs.get(wantIn)) {
+          midiInSelect.value = wantIn;
+        } else {
+          midiInSelect.value = "";
+        }
+        wireMidiInput(midiInSelect.value || null);
+        if (midiActivated) saveMidiPrefs();
       }
 
       function currentOutput() {
@@ -196,12 +742,10 @@
       }
 
       function noteOnPad(index1) {
-        const out = currentOutput();
-        sendNote(out, index1, 127);
+        sendMidiNote(currentOutput(), index1, NOTE, 127);
       }
       function noteOffPad(index1) {
-        const out = currentOutput();
-        sendNote(out, index1, 0);
+        sendMidiNote(currentOutput(), index1, NOTE, 0);
       }
 
       function bindPad(el, channel) {
@@ -212,6 +756,10 @@
           down.add(channel);
           el.classList.add("is-down");
           el.setAttribute("aria-pressed", "true");
+          logLine(
+            "padl",
+            "[pad] DOWN Ch " + channel + " note=" + NOTE + " (pointer " + (e.pointerId != null ? e.pointerId : "?") + ")"
+          );
           noteOnPad(channel);
         };
         const end = function () {
@@ -219,6 +767,7 @@
           down.delete(channel);
           el.classList.remove("is-down");
           el.setAttribute("aria-pressed", "false");
+          logLine("padl", "[pad] UP   Ch " + channel + " note=" + NOTE);
           noteOffPad(channel);
         };
         el.addEventListener("pointerdown", start);
@@ -243,7 +792,474 @@
       midiSelect.addEventListener("change", function () {
         selectedId = midiSelect.value;
         setStatus("Выход: " + midiSelect.options[midiSelect.selectedIndex].text, true);
+        logLine("", "[midi] output selected: " + midiSelect.options[midiSelect.selectedIndex].text);
+        saveMidiPrefs();
       });
+
+      midiInSelect.addEventListener("change", function () {
+        wireMidiInput(midiInSelect.value || null);
+        if (midiInSelect.value && midiInSelect.options[midiInSelect.selectedIndex]) {
+          logLine(
+            "",
+            "[midi] listen RX: " + midiInSelect.options[midiInSelect.selectedIndex].text
+          );
+        } else if (!midiInSelect.disabled) {
+          logLine("", "[midi] listen RX: off");
+        }
+        saveMidiPrefs();
+      });
+
+      // --- Socket.IO (как logs-panel на /) + маппинг на MIDI, localStorage ---
+      function escapeHtml(value) {
+        return String(value == null ? "" : value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function classifySocketEvent(eventName) {
+        switch (eventName) {
+          case "event":
+          case "step":
+          case "sublink":
+          case "clear":
+          case "steps_forwards":
+            return "bot";
+          case "analyzed":
+          case "tags_updated":
+            return "analyzer";
+          case "screenshot":
+          case "image_analyzed":
+            return "screenshoter";
+          case "location":
+            return "geo";
+          case "set":
+          case "set_values":
+            return "controls";
+          default:
+            return "system";
+        }
+      }
+
+      function summarizeSocketEvent(eventName, payload) {
+        if (eventName === "connect") return "socket connected";
+        if (eventName === "disconnect") return "socket disconnected";
+        if (eventName === "clear") return "clear state";
+        if (eventName === "my_pong")
+          return "latency " + String(payload && payload.latency_ms != null ? payload.latency_ms : "—") + "ms";
+        if (eventName === "event") return String((payload && payload.event) || "event");
+        if (eventName === "steps_forwards")
+          return "steps " + String(payload && payload.value != null ? payload.value : payload);
+        if (eventName === "sublink") return String((payload && payload.url) || "sublink");
+        if (eventName === "step") {
+          return (
+            "#" +
+            String(payload && payload.step != null ? payload.step : "—") +
+            " " +
+            String((payload && payload.status_code) || "—") +
+            " " +
+            String((payload && payload.url) || "")
+          );
+        }
+        if (eventName === "analyzed") {
+          var wordsCount = Array.isArray(payload && payload.words) ? payload.words.length : 0;
+          var phraseCount = Array.isArray(payload && payload.noun_phrases) ? payload.noun_phrases.length : 0;
+          return "words=" + String(wordsCount) + " noun_phrases=" + String(phraseCount);
+        }
+        if (eventName === "screenshot") {
+          return payload && payload.screenshot_url ? String(payload.screenshot_url) : "screenshot ready";
+        }
+        if (eventName === "image_analyzed") {
+          var paletteCount = Array.isArray(payload && payload.palette) ? payload.palette.length : 0;
+          return "palette=" + String(paletteCount);
+        }
+        if (eventName === "set_values" || eventName === "set") {
+          if (!payload || typeof payload !== "object") return "values updated";
+          var keys = Object.keys(payload).slice(0, 3);
+          return keys.length
+            ? keys
+                .map(function (key) {
+                  return key + "=" + String(payload[key]);
+                })
+                .join(" ")
+            : "values updated";
+        }
+        if (eventName === "location") {
+          if (!payload || typeof payload !== "object") return "geo resolved";
+          return String(payload.country || payload.city || payload.ip || "geo resolved");
+        }
+        if (eventName === "tags_updated") return "tags refreshed";
+        if (eventName === "response") return String((payload && payload.message) || "response");
+        return typeof payload === "string" ? payload : eventName;
+      }
+
+      function formatSocketLogTime(value) {
+        if (!(value instanceof Date)) return "--:--:--";
+        return value.toLocaleTimeString([], { hour12: false });
+      }
+
+      function payloadPreviewSocket(payload) {
+        if (payload == null) return "";
+        if (typeof payload === "string") return payload;
+        try {
+          var raw = JSON.stringify(payload);
+          return raw.length > 280 ? raw.slice(0, 277) + "..." : raw;
+        } catch (err) {
+          return "[payload]";
+        }
+      }
+
+      function compositeKey(type, eventName) {
+        return type + "::" + eventName;
+      }
+
+      function parseCompositeKey(key) {
+        var sep = "::";
+        var i = key.indexOf(sep);
+        if (i <= 0) return { type: "system", eventName: key };
+        return { type: key.slice(0, i), eventName: key.slice(i + sep.length) };
+      }
+
+      function keyToDomId(key) {
+        try {
+          return btoa(unescape(encodeURIComponent(key))).replace(/=+$/g, "");
+        } catch (e) {
+          return "k_" + String(key).replace(/[^a-zA-Z0-9_-]/g, "_");
+        }
+      }
+
+      function domIdToKey(id) {
+        try {
+          var pad = id.length % 4 === 0 ? "" : "=".repeat(4 - (id.length % 4));
+          return decodeURIComponent(escape(atob(id + pad)));
+        } catch (e) {
+          return null;
+        }
+      }
+
+      var socketLogsBuffer = [];
+      var uniqueSocketKeys = new Map();
+      var mappings = {};
+      var socket = null;
+      var mapRenderScheduled = false;
+
+      function loadMappingsFromStorage() {
+        try {
+          var raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return;
+          var o = JSON.parse(raw);
+          if (o && typeof o.mappings === "object") mappings = o.mappings;
+        } catch (e) {}
+        Object.keys(mappings).forEach(function (key) {
+          var p = parseCompositeKey(key);
+          if (!uniqueSocketKeys.has(key)) {
+            uniqueSocketKeys.set(key, { type: p.type, eventName: p.eventName, count: 0 });
+          }
+        });
+      }
+
+      function collectMapFromDom() {
+        document.querySelectorAll("[data-map-id]").forEach(function (row) {
+          var key = domIdToKey(row.getAttribute("data-map-id"));
+          if (!key) return;
+          var enEl = row.querySelector(".js-map-enabled");
+          var chEl = row.querySelector(".js-map-ch");
+          var nEl = row.querySelector(".js-map-note");
+          var vEl = row.querySelector(".js-map-vel");
+          var dEl = row.querySelector(".js-map-dur");
+          if (!key || !enEl || !chEl || !nEl || !vEl || !dEl) return;
+          mappings[key] = {
+            enabled: enEl.checked,
+            channel: Math.max(1, Math.min(16, parseInt(chEl.value, 10) || 1)),
+            note: Math.max(0, Math.min(127, parseInt(nEl.value, 10) || 36)),
+            velocity: Math.max(0, Math.min(127, parseInt(vEl.value, 10) || 127)),
+            durationMs: Math.max(10, Math.min(5000, parseInt(dEl.value, 10) || 120)),
+          };
+        });
+      }
+
+      function saveMappingsToStorage() {
+        collectMapFromDom();
+        try {
+          localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({ version: 2, updated: Date.now(), mappings: mappings })
+          );
+        } catch (e) {
+          logLine("", "[socket] localStorage save failed: " + String(e));
+        }
+        var hint = document.getElementById("socket-save-hint");
+        if (hint) {
+          hint.textContent =
+            "Сохранено " +
+            new Date().toLocaleTimeString() +
+            " · правил: " +
+            Object.keys(mappings).length;
+        }
+      }
+
+      function scheduleMapRender() {
+        if (mapRenderScheduled) return;
+        mapRenderScheduled = true;
+        requestAnimationFrame(function () {
+          mapRenderScheduled = false;
+          renderMapTable();
+        });
+      }
+
+      function renderMapTable() {
+        var tbl = document.getElementById("socket-map-table");
+        if (!tbl) return;
+        tbl.textContent = "";
+        var keys = Array.from(uniqueSocketKeys.keys());
+        keys.sort();
+        if (!keys.length) {
+          var empty = document.createElement("div");
+          empty.style.cssText = "color:var(--muted);font-size:11px;padding:4px 0;";
+          empty.textContent = "Пока нет пар type–event. Подключите Socket.IO.";
+          tbl.appendChild(empty);
+          return;
+        }
+        keys.forEach(function (key) {
+          var u = uniqueSocketKeys.get(key);
+          var m = mappings[key] || {
+            enabled: false,
+            channel: 1,
+            note: 36,
+            velocity: 127,
+            durationMs: 120,
+          };
+          var row = document.createElement("div");
+          row.className = "socket-map-row";
+          row.setAttribute("data-map-id", keyToDomId(key));
+
+          function addSpan(text) {
+            var s = document.createElement("span");
+            s.textContent = text;
+            row.appendChild(s);
+          }
+          addSpan(u.type);
+          addSpan(u.eventName);
+
+          var lab = document.createElement("label");
+          lab.className = "chk";
+          var chk = document.createElement("input");
+          chk.type = "checkbox";
+          chk.className = "js-map-enabled";
+          chk.checked = !!m.enabled;
+          lab.appendChild(chk);
+          lab.appendChild(document.createTextNode("MIDI"));
+          row.appendChild(lab);
+
+          function numInput(cls, val) {
+            var inp = document.createElement("input");
+            inp.type = "number";
+            inp.className = cls;
+            inp.value = String(val);
+            row.appendChild(inp);
+          }
+          numInput("js-map-ch", m.channel);
+          numInput("js-map-note", m.note);
+          numInput("js-map-vel", m.velocity);
+          numInput("js-map-dur", m.durationMs);
+
+          var cnt = document.createElement("span");
+          cnt.textContent = String(u.count || 0);
+          row.appendChild(cnt);
+
+          tbl.appendChild(row);
+        });
+      }
+
+      function renderSocketLogs() {
+        var listEl = document.getElementById("socket-logs-list");
+        var metaEl = document.getElementById("socket-logs-meta");
+        if (!listEl || !metaEl) return;
+        metaEl.textContent = socketLogsBuffer.length + " events";
+        if (!socketLogsBuffer.length) {
+          listEl.innerHTML =
+            '<div class="socket-logs-empty">Waiting for socket events...</div>';
+          return;
+        }
+        var head =
+          '<div class="socket-logs-row is-head"><span>time</span><span>type</span><span>event</span><span>summary</span></div>';
+        var rows = socketLogsBuffer
+          .map(function (entry) {
+            var time = escapeHtml(formatSocketLogTime(entry.time));
+            var type = escapeHtml(entry.type || "system");
+            var ev = escapeHtml(entry.event || "event");
+            var summary = escapeHtml(entry.summary || "");
+            var preview = escapeHtml(payloadPreviewSocket(entry.payload));
+            return (
+              '<div class="socket-logs-row" title="' +
+              preview +
+              '"><span>' +
+              time +
+              '</span><span class="socket-logs-type type-' +
+              type +
+              '">' +
+              type +
+              '</span><span class="socket-logs-event">' +
+              ev +
+              '</span><span>' +
+              summary +
+              "</span></div>"
+            );
+          })
+          .join("");
+        listEl.innerHTML = head + rows;
+      }
+
+      function pushSocketLog(eventName, payload, forcedType) {
+        var type = forcedType || classifySocketEvent(eventName);
+        var summary = summarizeSocketEvent(eventName, payload);
+        socketLogsBuffer.unshift({
+          time: new Date(),
+          type: type,
+          event: eventName,
+          summary: summary,
+          payload: payload,
+        });
+        if (socketLogsBuffer.length > MAX_SOCKET_LOGS) {
+          socketLogsBuffer.length = MAX_SOCKET_LOGS;
+        }
+        renderSocketLogs();
+        var key = compositeKey(type, eventName);
+        var isNewKey = !uniqueSocketKeys.has(key);
+        if (!uniqueSocketKeys.has(key)) {
+          uniqueSocketKeys.set(key, { type: type, eventName: eventName, count: 0 });
+          if (!mappings[key]) {
+            mappings[key] = {
+              enabled: false,
+              channel: 1,
+              note: 36,
+              velocity: 127,
+              durationMs: 120,
+            };
+          }
+        }
+        var u = uniqueSocketKeys.get(key);
+        u.count = (u.count || 0) + 1;
+        if (isNewKey) scheduleMapRender();
+        else {
+          var rid = keyToDomId(key);
+          var row = document.querySelector('[data-map-id="' + rid + '"]');
+          if (row) {
+            var cells = row.querySelectorAll("span");
+            var last = cells[cells.length - 1];
+            if (last) last.textContent = String(u.count);
+          }
+        }
+        var rule = mappings[key];
+        if (rule && rule.enabled) {
+          sendMidiPulse(rule.channel, rule.note, rule.velocity, rule.durationMs);
+        }
+      }
+
+      function setSocketStatus(text, ok) {
+        var el = document.getElementById("socket-status");
+        if (!el) return;
+        el.textContent = text;
+        el.className = ok ? "ok" : "err";
+      }
+
+      function readSocketAutoconnectPrefs() {
+        try {
+          var raw = localStorage.getItem(STORAGE_SOCKET_PREFS);
+          if (!raw) return false;
+          var o = JSON.parse(raw);
+          return !!o.socketAutoconnect;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      function saveSocketAutoconnectPrefs() {
+        try {
+          localStorage.setItem(
+            STORAGE_SOCKET_PREFS,
+            JSON.stringify({ version: 1, socketAutoconnect: true, updated: Date.now() })
+          );
+        } catch (e) {}
+      }
+
+      function connectSocketIO() {
+        if (typeof io === "undefined") {
+          setSocketStatus("Нет библиотеки socket.io (CDN)", false);
+          return;
+        }
+        // Engine.IO на этом Flask всегда с корня (как на /). Не использовать pathname /rytm → …/rytm/socket.io
+        var socketPath = "/socket.io";
+        if (socket) {
+          try {
+            socket.removeAllListeners();
+            socket.close();
+          } catch (e) {}
+          socket = null;
+        }
+        // Werkzeug + ad-hoc HTTPS: апгрейд polling→WebSocket часто даёт «Invalid frame header».
+        // На localhost / 127.0.0.1 оставляем только long-polling (wss поверх XHR — нормально).
+        var h = location.hostname;
+        var isLoopback =
+          h === "localhost" ||
+          h === "127.0.0.1" ||
+          h === "[::1]" ||
+          /^127\.\d+\.\d+\.\d+$/.test(h);
+        var forcePolling = isLoopback || /[?&]socket_polling=1(?:&|$)/.test(location.search);
+        var socketOpts = { path: socketPath };
+        if (forcePolling) {
+          socketOpts.transports = ["polling"];
+        }
+        socket = io(socketOpts);
+        socket.on("connect", function () {
+          setSocketStatus("Socket.IO: " + socket.id, true);
+          saveSocketAutoconnectPrefs();
+        });
+        socket.on("disconnect", function () {
+          setSocketStatus("Socket.IO отключён", false);
+        });
+        socket.on("connect_error", function (err) {
+          setSocketStatus("Socket.IO ошибка: " + (err && err.message ? err.message : String(err)), false);
+        });
+        socket.onAny(function () {
+          var eventName = arguments[0];
+          var rest = Array.prototype.slice.call(arguments, 1);
+          if (eventName === "my_pong") return;
+          var payload = rest.length <= 1 ? rest[0] : rest;
+          pushSocketLog(eventName, payload);
+        });
+        setSocketStatus("Подключение…", false);
+      }
+
+      loadMappingsFromStorage();
+      scheduleMapRender();
+
+      document.getElementById("btnSocketConnect").addEventListener("click", function () {
+        connectSocketIO();
+      });
+
+      if (readSocketAutoconnectPrefs()) {
+        connectSocketIO();
+        logLine("", "[socket] автоподключение (раньше уже успешно подключались)");
+      }
+      document.getElementById("btnSocketSave").addEventListener("click", function () {
+        saveMappingsToStorage();
+        logLine("", "[socket] маппинг сохранён в localStorage");
+      });
+
+      function attachMidiAccess(access, preferredInputId) {
+        midiAccess = access;
+        midiActivated = true;
+        midiAccess.onstatechange = function () {
+          fillOutputs();
+        };
+        fillOutputs(preferredInputId);
+        btnInit.disabled = true;
+        btnInit.textContent = "MIDI активен";
+        saveMidiPrefs();
+      }
 
       btnInit.addEventListener("click", function () {
         if (!navigator.requestMIDIAccess) {
@@ -253,18 +1269,35 @@
         navigator
           .requestMIDIAccess({ sysex: false })
           .then(function (access) {
-            midiAccess = access;
-            fillOutputs();
-            midiAccess.onstatechange = function () {
-              fillOutputs();
-            };
-            btnInit.disabled = true;
-            btnInit.textContent = "MIDI активен";
+            attachMidiAccess(access, null);
+            logLine("", "[midi] access granted (sysex off)");
           })
           .catch(function () {
             setStatus("Доступ к MIDI отклонён или недоступен.", false);
           });
       });
+
+      (function tryRestoreMidiFromStorage() {
+        var prefs = readMidiPrefs();
+        if (!prefs.midiEnabled || !navigator.requestMIDIAccess) return;
+        navigator
+          .requestMIDIAccess({ sysex: false })
+          .then(function (access) {
+            selectedId = prefs.outputId;
+            attachMidiAccess(access, prefs.inputId || null);
+            logLine("", "[midi] восстановлено из сохранения (устройства / включение)");
+            setStatus(
+              "MIDI восстановлен: " + midiSelect.options[midiSelect.selectedIndex].text,
+              true
+            );
+          })
+          .catch(function () {
+            setStatus(
+              "Раньше MIDI был включён — нажмите «Включить MIDI» (браузер может требовать жест)",
+              false
+            );
+          });
+      })();
     })();
   </script>
 </body>

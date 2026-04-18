@@ -249,12 +249,15 @@ active_viewers = {}
 
 def _run_sublink_listener():
     """Forward sublink Pub/Sub messages to Socket.IO clients."""
+    backoff_s = 2.0
+    backoff_max = 60.0
     while True:
         pubsub = None
         try:
             pubsub = redis.pubsub(ignore_subscribe_messages=True)
             pubsub.subscribe(SUBLINK_CHANNEL)
             logger.info("Subscribed to Redis channel %s", SUBLINK_CHANNEL)
+            backoff_s = 2.0
             while True:
                 message = pubsub.get_message(timeout=1.0)
                 if message and message.get("type") == "message":
@@ -266,8 +269,13 @@ def _run_sublink_listener():
                         socketio.emit("sublink", payload)
                 socketio.sleep(0.05)
         except Exception as exc:
-            logger.warning("Sublink Redis listener error: %s", exc)
-            socketio.sleep(2)
+            logger.warning(
+                "Sublink Redis listener error: %s (retry in %.0fs)",
+                exc,
+                backoff_s,
+            )
+            socketio.sleep(backoff_s)
+            backoff_s = min(backoff_max, backoff_s * 2.0)
         finally:
             if pubsub is not None:
                 try:
@@ -278,6 +286,13 @@ def _run_sublink_listener():
 
 def _ensure_sublink_listener_started():
     global _sublink_listener_started
+    if os.getenv("SUBLINK_REDIS_LISTENER", "1").strip().lower() in (
+        "0",
+        "false",
+        "no",
+        "off",
+    ):
+        return
     with _sublink_listener_lock:
         if _sublink_listener_started:
             return
@@ -303,7 +318,7 @@ AUTH_USER = os.getenv("AUTH_USER", "x")
 AUTH_PASS = os.getenv("AUTH_PASS", "x")
 
 PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
-                   "/rytm", "/tags/", "/geo/", "/screenshots/", "/semantic", "/api/semantic/",
+                   "/rytm", "/socket.io", "/tags/", "/geo/", "/screenshots/", "/semantic", "/api/semantic/",
                    "/api/tags/get/", "/api/tags/combine/",
                    "/api/tags/sentiment-vortex/", "/api/tags/embeddings/", "/api/tags/add/",
                    "/api/step/", "/api/steps", "/api/storage_step/", "/api/storage_latest/",

@@ -3,6 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 export FLASK_SSL_ADHOC=1
+export SUBLINK_REDIS_LISTENER="${SUBLINK_REDIS_LISTENER:-0}"
 export FLASK_PORT="${FLASK_PORT:-5000}"
 echo "Starting https://localhost:${FLASK_PORT}/ (Ctrl+C to stop)"
 exec python app.py
