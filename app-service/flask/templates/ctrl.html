@@ -25,6 +25,7 @@
     <li><label class="jb-check"><input type="checkbox" id="do_geo" name="do_geo" {% if cfg.do_geo == 1 %}checked{% endif %}> do_geo</label></li>
     <li><label class="jb-check"><input type="checkbox" id="do_save" name="do_save" {% if cfg.do_save == 1 %}checked{% endif %}> do_save</label></li>
     <li><label class="jb-check"><input type="checkbox" id="do_analyze" name="do_analyze" {% if cfg.do_analyze == 1 %}checked{% endif %}> do_analyze</label></li>
+    <li><label class="jb-check"><input type="checkbox" id="do_mood" name="do_mood" {% if cfg.do_mood == 1 %}checked{% endif %}> do_mood</label></li>
     <li><label class="jb-check"><input type="checkbox" id="do_screenshot" name="do_screenshot" {% if cfg.do_screenshot == 1 %}checked{% endif %}> do_screenshot</label></li>
     <li><label class="jb-check"><input type="checkbox" id="do_image_analyze" name="do_image_analyze" {% if cfg.do_image_analyze == 1 %}checked{% endif %}> do_image_analyze</label></li>
     <li><label class="jb-check"><input type="checkbox" id="do_storage" name="do_storage" {% if cfg.do_storage == 1 %}checked{% endif %}> do_storage</label></li>
@@ -136,6 +137,7 @@
   bindCheckbox('do_geo', 'do_geo');
   bindCheckbox('do_save', 'do_save');
   bindCheckbox('do_analyze', 'do_analyze');
+  bindCheckbox('do_mood', 'do_mood');
   bindCheckbox('do_screenshot', 'do_screenshot');
   bindCheckbox('do_image_analyze', 'do_image_analyze');
   bindCheckbox('do_storage', 'do_storage');

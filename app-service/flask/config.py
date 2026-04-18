@@ -46,6 +46,7 @@ def getConfig():
         'do_geo': 0,
         'do_save': 0,
         'do_analyze': 0,
+        'do_mood': 1,
         'do_screenshot': 0,
         'do_storage': 0,
     }
@@ -63,6 +64,8 @@ def getConfig():
             redis.set('do_save', defaults['do_save'])
         if not redis.get('do_analyze'):
             redis.set('do_analyze', defaults['do_analyze'])
+        if not redis.get('do_mood'):
+            redis.set('do_mood', defaults['do_mood'])
         if not redis.get('do_screenshot'):
             redis.set('do_screenshot', defaults['do_screenshot'])
         if not redis.get('do_storage'):

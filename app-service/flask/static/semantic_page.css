@@ -28,6 +28,11 @@ a:visited {
 }
 
 :root {
+    --mood-c0: #1a1a1a;
+    --mood-c1: #2a2a2a;
+    --mood-c2: #333333;
+    --mood-c3: #3a3a3a;
+    --mood-c4: #404040;
     --bot-bg: #000000;
     --bot-surface: rgba(18, 18, 18, 0.94);
     --bot-surface-strong: rgba(8, 8, 8, 0.98);
@@ -167,6 +172,24 @@ a:visited {
     color: #aaa;
 }
 
+#semantic-mood-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.5;
+    filter: blur(72px);
+    transform: scale(1.08);
+    background:
+        radial-gradient(ellipse 42% 38% at 18% 28%, var(--mood-c0) 0%, transparent 72%),
+        radial-gradient(ellipse 48% 40% at 82% 22%, var(--mood-c1) 0%, transparent 70%),
+        radial-gradient(ellipse 36% 44% at 50% 88%, var(--mood-c2) 0%, transparent 68%),
+        radial-gradient(ellipse 40% 36% at 72% 62%, var(--mood-c3) 0%, transparent 65%),
+        radial-gradient(ellipse 34% 34% at 12% 72%, var(--mood-c4) 0%, transparent 62%),
+        #000000;
+    transition: opacity 0.8s ease, filter 0.8s ease;
+}
+
 #nodes {
     position: absolute;
     z-index: 200;
@@ -175,15 +198,32 @@ a:visited {
     display: none;
 }
 
-/* Как #log_headers на главной: поток зависимостей, добавляемых в граф */
-#log_semantic {
+.semantic-log-row {
     position: absolute;
-    font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
-    top: 200px;
+    top: 120px;
     right: 24px;
-    z-index: 110;
+    z-index: 115;
     width: min(260px, calc(100vw - 48px));
-    height: min(220px, calc(100vh - 280px));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.semantic-log-row .semantic-log-mood,
+.semantic-log-row #log_semantic {
+    pointer-events: auto;
+}
+
+/* Как #log_headers на главной: поток зависимостей, добавляемых в граф */
+.semantic-log-row #log_semantic {
+    position: relative;
+    top: auto;
+    right: auto;
+    font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
+    z-index: 110;
+    width: 100%;
+    height: min(200px, calc(100vh - 320px));
     padding: 12px;
     box-sizing: border-box;
     font-size: 10px;
@@ -196,18 +236,47 @@ a:visited {
     word-break: break-word;
 }
 
+.semantic-log-mood {
+    position: relative;
+    margin: 0;
+    width: 100%;
+    max-height: 140px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 9px;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.82);
+    background: rgba(6, 8, 12, 0.72);
+    border: 1px solid var(--bot-border);
+    border-radius: 4px;
+    white-space: pre-wrap;
+    overflow-x: hidden;
+    overflow-y: auto;
+    word-break: break-word;
+}
+
 #log_semantic.text {
     visibility: visible;
 }
 
 @media screen and (max-width: 844px) {
-    #log_semantic {
-        top: 140px;
+    .semantic-log-row {
+        top: 100px;
         right: 10px;
         width: calc((100% - 20px) / 2);
         max-width: 200px;
-        height: min(180px, calc(100vh - 320px));
+    }
+
+    .semantic-log-row #log_semantic {
+        height: min(160px, calc(100vh - 360px));
         font-size: 9px;
+        padding: 8px;
+    }
+
+    .semantic-log-mood {
+        max-height: 100px;
+        font-size: 8px;
         padding: 8px;
     }
 }

@@ -23,6 +23,7 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
 TAGS_SERVICE_URL = os.getenv('TAGS_SERVICE_URL', 'http://tags_service:8000')
 SEMANTIC_SERVICE_URL = os.getenv('SEMANTIC_SERVICE_URL', 'http://semantic_service:8005')
+MOOD_SERVICE_URL = os.getenv("MOOD_SERVICE_URL", "http://mood_service:8020")
 STORAGE_SERVICE_URL = os.getenv('STORAGE_SERVICE_URL', 'http://storage_service:7781')
 IMAGE_ANALYZE_SERVICE_URL = os.getenv('IMAGE_ANALYZE_SERVICE_URL', 'http://image-analyze-service:8006')
 IP_SERVICE_URL = os.getenv('IP_SERVICE_URL', 'http://bots.arthew0.online:8004')
@@ -448,6 +449,49 @@ def analyze_semantic(snippet, step_number=None, step_url=None):
     self_job.meta["progress"] = {"num_iterations": 2, "iteration": 2, "percent": 100}
     self_job.save_meta()
     return out
+
+
+@job("default", connection=redis_connection, timeout=120, result_ttl=300)
+@with_trace_context
+def mood_snapshot(snippet, semantic_json=None, step_number=None):
+    """Call mood-service with page snippet + semantic JSON; result is emitted as mood_collect."""
+    self_job = get_current_job()
+    self_job.meta["type"] = "mood_snapshot"
+    self_job.save_meta()
+    set_step_span_attributes(step_number=step_number, step_url=None)
+
+    sem = semantic_json if isinstance(semantic_json, dict) else {}
+    snippet = (snippet or "").strip()[:MAX_SEMANTIC_SNIPPET_CHARS]
+    if not snippet and not sem:
+        return {
+            "step_number": str(step_number or ""),
+            "error": "empty_input",
+            "palette": [],
+            "pod": POD_NAME,
+        }
+    url = f"{MOOD_SERVICE_URL.rstrip('/')}/api/v1/mood/snapshot/"
+    try:
+        with sentry_sdk.start_span(op="http.client", description="mood snapshot"):
+            resp = requests.post(
+                url,
+                json={"text": snippet, "semantic": sem},
+                headers={"content-type": "application/json"},
+                timeout=90,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as e:
+        logger.warning("mood_snapshot: %s", e)
+        return {
+            "step_number": str(step_number or ""),
+            "error": str(e),
+            "palette": [],
+            "pod": POD_NAME,
+        }
+    if isinstance(data, dict):
+        data.setdefault("step_number", str(step_number or ""))
+        data.setdefault("pod", POD_NAME)
+    return data
 
 
 def _filenamify(url):

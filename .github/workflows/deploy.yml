@@ -70,6 +70,7 @@ jobs:
             build_and_import html-renderer-service 1325gy/my_dev:v5
             build_and_import keywords-service     keywords-service:latest
             build_and_import semantic-service      semantic-service:latest
+            build_and_import mood-service          mood-service:latest
             build_and_import storage-service       storage-service:latest
             build_and_import steps-service         steps-service:latest
             build_and_import tags-service          tags-service:latest
@@ -97,6 +98,7 @@ jobs:
             restart_if_built html-renderer-service html-renderer     && WAIT="$WAIT html-renderer"
             restart_if_built keywords-service      keywords-service   && WAIT="$WAIT keywords-service"
             restart_if_built semantic-service       semantic-service   && WAIT="$WAIT semantic-service"
+            restart_if_built mood-service           mood-service       && WAIT="$WAIT mood-service"
             restart_if_built storage-service        storage-service    && WAIT="$WAIT storage-service"
             restart_if_built steps-service          steps-service      && WAIT="$WAIT steps-service"
             restart_if_built tags-service           tags-service       && WAIT="$WAIT tags-service"
@@ -111,10 +113,16 @@ jobs:
               echo ">>> No services rebuilt — nothing to restart."
             fi
 
+            if echo "$BUILT" | grep -q "mood-service"; then
+              echo ">>> mood-service rebuilt — restarting app-service and worker-service (MOOD_SERVICE_URL)..."
+              kubectl -n $NS rollout restart deployment app-service worker-service
+              WAIT="$WAIT app-service worker-service"
+            fi
+
             FAILED=0
             for dep in $WAIT; do
               TIMEOUT=120s
-              if [ "$dep" = "html-renderer" ] || [ "$dep" = "app-service" ] || [ "$dep" = "semantic-service" ]; then
+              if [ "$dep" = "html-renderer" ] || [ "$dep" = "app-service" ] || [ "$dep" = "semantic-service" ] || [ "$dep" = "mood-service" ]; then
                 TIMEOUT=300s
               fi
               echo ">>> Waiting for $dep (timeout $TIMEOUT)..."

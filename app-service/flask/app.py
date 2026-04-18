@@ -53,6 +53,8 @@ BACKFILL_STATUS_KEY = os.getenv("BACKFILL_STATUS_KEY", "backfill:status")
 SUBLINK_CHANNEL = os.getenv("SUBLINK_CHANNEL", "sublink")
 SEMANTIC_LAST_COLLECT_KEY = "semantic:last_collect"
 SEMANTIC_LAST_COLLECT_TTL = int(os.getenv("SEMANTIC_LAST_COLLECT_TTL", "86400"))
+MOOD_LAST_COLLECT_KEY = "mood:last_collect"
+MOOD_LAST_COLLECT_TTL = int(os.getenv("MOOD_LAST_COLLECT_TTL", "86400"))
 _sublink_listener_started = False
 _sublink_listener_lock = threading.Lock()
 
@@ -327,7 +329,7 @@ def _ctrl_log(action: str, source: str):
 
 def _ensure_redis_defaults():
     defaults = {'value': 0.5, 'do_pass': 0.5, 'do_geo': 0.5,
-                'do_save': 1.0, 'do_analyze': 1.0, 'do_screenshot': 0.5,
+                'do_save': 1.0, 'do_analyze': 1.0, 'do_mood': 1.0, 'do_screenshot': 0.5,
                 'do_image_analyze': 1.0, 'do_storage': 1.0, 'sleep_time': 2.0,
                 'random_time': 2.0, 'backfill_sleep': 2.0, 'backfill_timeout': 4.0,
                 'backfill_active': 1.0, 'fetch_concurrency': 10.0}
@@ -466,6 +468,19 @@ def _persist_semantic_last_collect(payload):
         logger.warning("semantic last_collect redis: %s", exc)
 
 
+def _persist_mood_last_collect(payload):
+    if not isinstance(payload, dict):
+        return
+    try:
+        redis.setex(
+            MOOD_LAST_COLLECT_KEY,
+            MOOD_LAST_COLLECT_TTL,
+            json.dumps(payload, default=str),
+        )
+    except Exception as exc:
+        logger.warning("mood last_collect redis: %s", exc)
+
+
 def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                        step_key=None, silent=False):
     """Poll an RQ job in a background thread and emit result via SocketIO."""
@@ -490,17 +505,62 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                         emit_payload.get("number"),
                         len(emit_payload.get("dependency_lines") or []),
                     )
+                if event_name == "mood_collect" and isinstance(job.result, dict):
+                    received_at = datetime.now(timezone.utc).isoformat()
+                    emit_payload = {**job.result, "received_at": received_at}
+                    _persist_mood_last_collect(emit_payload)
+                    logger.info(
+                        "mood_collect step=%s",
+                        emit_payload.get("step_number"),
+                    )
                 if not silent:
                     socketio.emit(event_name, emit_payload)
-                _save_to_step_hash(step_key, job.result)
+                if event_name != "mood_collect":
+                    _save_to_step_hash(step_key, job.result)
                 if event_name == "image_analyzed":
                     _store_step_analysis(step_key, job.result)
-                else:
+                elif event_name != "mood_collect":
                     _patch_storage(step_key, job.result)
                     if silent and step_key:
                         _emit_presence_step(step_key.split(":")[-1], phase=event_name)
                 if event_name == "screenshot":
                     _enqueue_image_analysis_followup(step_key, job.result, silent=silent)
+                if event_name == "semantic_collect" and not silent:
+                    try:
+                        if _redis_float("do_mood", 1.0) >= 0.5:
+                            res = job.result or {}
+                            snippet = (res.get("snippet") or "").strip()
+                            sem_raw = res.get("semantic")
+                            sem = {}
+                            if isinstance(sem_raw, str) and sem_raw.strip():
+                                try:
+                                    sem = json.loads(sem_raw)
+                                except (json.JSONDecodeError, TypeError):
+                                    sem = {}
+                            elif isinstance(sem_raw, dict):
+                                sem = sem_raw
+                            snum = res.get("number") or ""
+                            if snippet or sem:
+                                jm = enqueue_with_trace(
+                                    queue,
+                                    redis_connection,
+                                    jobs.mood_snapshot,
+                                    snippet,
+                                    sem,
+                                    timeout=120,
+                                    result_ttl=300,
+                                    step_number=str(snum),
+                                )
+                                inject_trace_context_into_job(jm)
+                                _poll_job_and_emit(
+                                    jm,
+                                    "mood_collect",
+                                    timeout=120,
+                                    step_key=step_key,
+                                    silent=False,
+                                )
+                    except Exception as exc:
+                        logger.warning("mood chain after semantic_collect: %s", exc)
                 if event_name == "analyzed" and step_key and not silent:
                     try:
                         result = job.result or {}
@@ -1042,6 +1102,27 @@ def api_semantic_last_collect():
         data = json.loads(raw)
     except (TypeError, json.JSONDecodeError) as exc:
         logger.warning("semantic last_collect json: %s", exc)
+        return jsonify({"ok": False, "error": "parse"}), 500
+    return jsonify({"ok": True, "data": data})
+
+
+@app.route("/api/semantic/mood-last/", methods=["GET"])
+@cross_origin()
+def api_semantic_mood_last():
+    """Latest mood_collect payload (Redis) for /semantic/ when Socket.IO was missed."""
+    try:
+        raw = redis.get(MOOD_LAST_COLLECT_KEY)
+    except Exception as exc:
+        logger.warning("mood last_collect get: %s", exc)
+        return jsonify({"ok": False, "error": "redis"}), 503
+    if not raw:
+        return jsonify({"ok": False, "empty": True})
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8")
+    try:
+        data = json.loads(raw)
+    except (TypeError, json.JSONDecodeError) as exc:
+        logger.warning("mood last_collect json: %s", exc)
         return jsonify({"ok": False, "error": "parse"}), 500
     return jsonify({"ok": True, "data": data})
 
@@ -2206,6 +2287,12 @@ def handle_do_save(value):
 @socketio.on('do_analyze')
 def handle_do_analyze(value):
     redis.set('do_analyze', float(value))
+
+
+@socketio.on("do_mood")
+def handle_do_mood(value):
+    redis.set("do_mood", float(value))
+
 
 @socketio.on('do_screenshot')
 def handle_do_screenshot(value):

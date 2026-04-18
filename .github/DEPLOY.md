@@ -59,3 +59,10 @@ ssh-keygen -t ed25519 -C "github-actions-deploy" -f deploy_key -N ""
 4. Imports images into K3s (`k3s ctr images import`)
 5. Applies `deployment.yaml`
 6. Restarts all deployments for rolling update
+
+### mood-service (K3s)
+
+- Образ **`mood-service:latest`** собирается из каталога **`mood-service/`** (см. `build_and_import` в [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)).
+- В кластере: Deployment **`mood-service`**, Service **`mood-service`** (ClusterIP, порт 80 → 8020), см. [`deployment.yaml`](deployment.yaml).
+- **Ресурсы:** запрос ~2 Gi RAM, лимит до 6 Gi; первый старт долгий (загрузка Color-Pedia и модели) — readiness с большим `initialDelaySeconds`.
+- **Flask и RQ worker** получают **`MOOD_SERVICE_URL=http://mood-service`** в том же манифесте. Локальная сборка одного образа: `make k3s-mood-service`.

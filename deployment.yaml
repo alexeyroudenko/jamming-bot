@@ -197,6 +197,72 @@ spec:
     port: 80
     targetPort: 8005
 ---
+# ===================== mood-service (mood + palette, torch) =====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mood-service
+  namespace: jamming-bot
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: mood-service
+  template:
+    metadata:
+      labels:
+        app: mood-service
+    spec:
+      containers:
+      - name: mood-service
+        image: mood-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8020
+        command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8020"]
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "2Gi"
+          limits:
+            cpu: "2"
+            memory: "6Gi"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8020
+          initialDelaySeconds: 300
+          periodSeconds: 20
+          timeoutSeconds: 10
+          failureThreshold: 45
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8020
+          initialDelaySeconds: 360
+          periodSeconds: 45
+          timeoutSeconds: 10
+          failureThreshold: 6
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mood-service
+  namespace: jamming-bot
+spec:
+  type: ClusterIP
+  selector:
+    app: mood-service
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8020
+---
 # ===================== image-analyze-service =====================
 apiVersion: apps/v1
 kind: Deployment
@@ -747,6 +813,8 @@ spec:
           value: "http://tags-service"
         - name: SEMANTIC_SERVICE_URL
           value: "http://semantic-service"
+        - name: MOOD_SERVICE_URL
+          value: "http://mood-service"
         - name: STORAGE_SERVICE_URL
           value: "http://storage-service"
         - name: DATA_SERVICE_URL
@@ -1112,6 +1180,8 @@ spec:
           value: "http://tags-service"
         - name: SEMANTIC_SERVICE_URL
           value: "http://semantic-service"
+        - name: MOOD_SERVICE_URL
+          value: "http://mood-service"
         - name: STORAGE_SERVICE_URL
           value: "http://storage-service"
         - name: IP_SERVICE_URL

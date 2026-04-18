@@ -379,6 +379,10 @@ function initGraph() {
 var SEMANTIC_MAX_NODES = 100;
 var SEMANTIC_REPLAY_MS = 420;
 
+function semanticRandomIntInclusive(min, max) {
+    return min + Math.floor(Math.random() * (max - min + 1));
+}
+
 var demoEdges = [];
 var demoIndex = 0;
 var demoTimer = null;
@@ -511,6 +515,8 @@ function semanticTogglePlay() {
 function semanticReset() {
     semanticPause();
     stopLiveCollectReplay();
+    semanticWorkerApplySinceClear = 0;
+    semanticWorkerClearEvery = semanticRandomIntInclusive(10, 20);
     demoIndex = 0;
     demoLinkKeys = {};
     clearSemanticLog();
@@ -653,6 +659,12 @@ var lastAppliedCollectFp = null;
 var semanticLastCollectPollTimer = null;
 var semanticLastCollectPollCount = 0;
 
+var lastAppliedMoodFp = null;
+var semanticMoodPollTimer = null;
+
+var semanticWorkerApplySinceClear = 0;
+var semanticWorkerClearEvery = semanticRandomIntInclusive(10, 20);
+
 function stopSemanticPingLoop() {
     if (semanticPingTimer) {
         clearInterval(semanticPingTimer);
@@ -697,11 +709,6 @@ function applySemanticCollectPayload(data, sourceTag) {
         return;
     }
 
-    graph.removeallLinks();
-    graph.removeAllNodes();
-    demoLinkKeys = {};
-    clearSemanticLog();
-
     var lines = data.dependency_lines;
     var stepLabel = data.number != null ? String(data.number) : "?";
     var src = sourceTag || "event";
@@ -714,6 +721,17 @@ function applySemanticCollectPayload(data, sourceTag) {
             src + ": шаг " + stepLabel + " — нет dependency_lines (проверьте логи / semantic-service)"
         );
         return;
+    }
+
+    semanticWorkerApplySinceClear += 1;
+    var doFullClear = semanticWorkerApplySinceClear >= semanticWorkerClearEvery;
+    if (doFullClear) {
+        graph.removeallLinks();
+        graph.removeAllNodes();
+        demoLinkKeys = {};
+        clearSemanticLog();
+        semanticWorkerApplySinceClear = 0;
+        semanticWorkerClearEvery = semanticRandomIntInclusive(10, 20);
     }
 
     liveCollectStepNum = parseInt(data.number, 10);
@@ -748,8 +766,13 @@ function applySemanticCollectPayload(data, sourceTag) {
         lastAppliedCollectFp = fp;
     }
     var ra = data.received_at ? " @ " + data.received_at : "";
+    var packHint = doFullClear
+        ? " · граф очищен; следующий через " + String(semanticWorkerClearEvery) + " пак."
+        : " · накопление, полный сброс через ~" +
+          String(semanticWorkerClearEvery - semanticWorkerApplySinceClear) +
+          " пак.";
     setSemanticWorkerHint(
-        src + ": шаг " + stepLabel + ", рёбер " + String(liveCollectQueue.length) + ra
+        src + ": шаг " + stepLabel + ", рёбер " + String(liveCollectQueue.length) + ra + packHint
     );
 
     liveCollectTimer = setInterval(function () {
@@ -795,12 +818,114 @@ function pollSemanticLastCollect() {
         });
 }
 
+function moodCollectFingerprint(data) {
+    if (!data || typeof data !== "object") {
+        return "";
+    }
+    return [
+        data.received_at || "",
+        String(data.step_number || ""),
+        String(data.timestamp || ""),
+        String((data.error || "")).slice(0, 80),
+    ].join("\u0001");
+}
+
+function normalizeHex(h) {
+    if (!h) {
+        return "#333333";
+    }
+    var s = String(h).trim();
+    if (s.charAt(0) !== "#") {
+        s = "#" + s;
+    }
+    return s.length === 4 ? s : s.slice(0, 7);
+}
+
+function applyMoodCollectPayload(data, sourceTag) {
+    if (!data || typeof data !== "object") {
+        return;
+    }
+    var fp = moodCollectFingerprint(data);
+    if (fp && fp === lastAppliedMoodFp) {
+        return;
+    }
+    if (fp) {
+        lastAppliedMoodFp = fp;
+    }
+
+    var pals = Array.isArray(data.palette) ? data.palette : [];
+    var root = document.documentElement;
+    for (var i = 0; i < 5; i++) {
+        var hex = pals[i] && pals[i].hex ? normalizeHex(pals[i].hex) : "#1a1a1a";
+        root.style.setProperty("--mood-c" + String(i), hex);
+    }
+
+    var bg = document.getElementById("semantic-mood-bg");
+    if (bg) {
+        bg.style.opacity = data.error ? "0.25" : "0.52";
+    }
+
+    var logEl = document.getElementById("log_mood");
+    if (logEl) {
+        var words = [];
+        if (data.dominant_mood) {
+            words.push(String(data.dominant_mood));
+        }
+        if (data.full_description) {
+            words.push(String(data.full_description));
+        }
+        for (var pi = 0; pi < pals.length; pi++) {
+            if (pals[pi].name) {
+                words.push(String(pals[pi].name));
+            }
+        }
+        var line =
+            "[" +
+            (sourceTag || "mood") +
+            "] " +
+            (data.timestamp || data.received_at || "") +
+            " step=" +
+            (data.step_number != null ? String(data.step_number) : "—") +
+            "\n" +
+            words.join(" · ") +
+            "\n" +
+            pals
+                .map(function (p) {
+                    return (p.hex || "") + " " + (p.mood || "");
+                })
+                .join(" | ");
+        logEl.textContent = line + "\n\n" + logEl.textContent;
+        if (logEl.textContent.length > 12000) {
+            logEl.textContent = logEl.textContent.slice(0, 12000);
+        }
+    }
+}
+
+function pollMoodLastCollect() {
+    fetch("/api/semantic/mood-last/", { credentials: "same-origin", cache: "no-store" })
+        .then(function (r) {
+            return r.json();
+        })
+        .then(function (j) {
+            if (j && j.ok && j.data) {
+                applyMoodCollectPayload(j.data, "HTTP");
+            }
+        })
+        .catch(function () {
+            /* ignore */
+        });
+}
+
 function startSemanticLastCollectPoll() {
     if (semanticLastCollectPollTimer) {
         return;
     }
     pollSemanticLastCollect();
     semanticLastCollectPollTimer = setInterval(pollSemanticLastCollect, 3000);
+    pollMoodLastCollect();
+    if (!semanticMoodPollTimer) {
+        semanticMoodPollTimer = setInterval(pollMoodLastCollect, 3500);
+    }
 }
 
 function paintSemanticSocketMetrics(latencyMs) {
@@ -842,6 +967,10 @@ function initSemanticSocket() {
 
     semanticSocket.on("semantic_collect", function (data) {
         applySemanticCollectPayload(data, "Socket.IO");
+    });
+
+    semanticSocket.on("mood_collect", function (data) {
+        applyMoodCollectPayload(data, "Socket.IO");
     });
 }
 

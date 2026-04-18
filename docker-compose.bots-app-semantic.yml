@@ -56,6 +56,16 @@ services:
     networks:
       - app_network
 
+  mood:
+    build: ./mood-service
+    container_name: mood_service
+    restart: unless-stopped
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8020"]
+    ports:
+      - "127.0.0.1:8020:8020"
+    networks:
+      - app_network
+
   app:
     build: ./app-service
     container_name: flask
@@ -72,6 +82,7 @@ services:
       REDIS_PORT: 6379
       TAGS_SERVICE_URL: http://tags_service:8000
       SEMANTIC_SERVICE_URL: http://semantic:8005
+      MOOD_SERVICE_URL: http://mood:8020
       BOT_YAML_PATH: /app/bot_config/bot.yaml
       OTEL_TRACING_ENABLED: ${OTEL_TRACING_ENABLED:-0}
     volumes:
@@ -84,6 +95,7 @@ services:
       - redis
       - tags_service
       - semantic
+      - mood
     networks:
       - app_network
 

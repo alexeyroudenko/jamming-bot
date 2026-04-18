@@ -83,6 +83,7 @@ services:
       - REMOTE_DATA_URL=${REMOTE_DATA_URL:-https://data.jamming-bot.arthew0.online}
       - REMOTE_STORAGE_URL=${REMOTE_STORAGE_URL:-https://storage.jamming-bot.arthew0.online}
       - REMOTE_TAGS_URL=${REMOTE_TAGS_URL:-https://tags.jamming-bot.arthew0.online}
+      - MOOD_SERVICE_URL=http://mood_service:8020
     volumes:
       - type: bind
         source: ./app-service/flask
@@ -98,6 +99,7 @@ services:
       - tags_service
       - jaeger
       - image_analyze_service
+      - mood_service
     networks:
       - app_network
     deploy:
@@ -174,6 +176,20 @@ services:
         limits:
           cpus: '0.5'
           memory: 1024M
+
+  mood_service:
+    build: ./mood-service
+    container_name: mood_service
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8020:8020"
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 4096M
 
   image_analyze_service:
     build: ./image-analyze-service
@@ -347,6 +363,7 @@ services:
       - SENTRY_DSN=${SHHH_SENTRY_URL}
       - TAGS_SERVICE_URL=http://tags_service:8000
       - SEMANTIC_SERVICE_URL=http://semantic_service:8005
+      - MOOD_SERVICE_URL=http://mood_service:8020
       - STORAGE_SERVICE_URL=http://storage_service:7781
       - IP_SERVICE_URL=http://ip_service:8004
       - DATA_SERVICE_URL=http://data_service:8010
@@ -369,6 +386,7 @@ services:
       - redis
       - jaeger
       - image_analyze_service
+      - mood_service
     networks:
       - app_network
     deploy:
@@ -389,6 +407,7 @@ services:
       - SENTRY_DSN=${SHHH_SENTRY_URL}
       - TAGS_SERVICE_URL=http://tags_service:8000
       - SEMANTIC_SERVICE_URL=http://semantic_service:8005
+      - MOOD_SERVICE_URL=http://mood_service:8020
       - STORAGE_SERVICE_URL=http://storage_service:7781
       - IP_SERVICE_URL=http://ip_service:8004
       - DATA_SERVICE_URL=http://data_service:8010
@@ -411,6 +430,7 @@ services:
       - redis
       - jaeger
       - image_analyze_service
+      - mood_service
     networks:
       - app_network
     deploy:
@@ -432,6 +452,7 @@ services:
       - SENTRY_DSN=${SHHH_SENTRY_URL}
       - TAGS_SERVICE_URL=http://tags_service:8000
       - SEMANTIC_SERVICE_URL=http://semantic_service:8005
+      - MOOD_SERVICE_URL=http://mood_service:8020
       - STORAGE_SERVICE_URL=http://storage_service:7781
       - IP_SERVICE_URL=http://ip_service:8004
       - DATA_SERVICE_URL=http://data_service:8010
@@ -454,6 +475,7 @@ services:
       - redis
       - jaeger
       - image_analyze_service
+      - mood_service
     networks:
       - app_network
     deploy:
