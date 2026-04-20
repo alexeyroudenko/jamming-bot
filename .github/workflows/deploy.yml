@@ -145,7 +145,7 @@ jobs:
             FAILED=0
             for dep in $WAIT; do
               TIMEOUT=120s
-              if [ "$dep" = "html-renderer" ] || [ "$dep" = "app-service" ] || [ "$dep" = "semantic-service" ] || [ "$dep" = "mood-service" ]; then
+              if [ "$dep" = "html-renderer" ] || [ "$dep" = "app-service" ] || [ "$dep" = "semantic-service" ] || [ "$dep" = "mood-service" ] || [ "$dep" = "tags-service" ]; then
                 TIMEOUT=300s
               fi
               echo ">>> Waiting for $dep (timeout $TIMEOUT)..."
