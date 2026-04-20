@@ -273,8 +273,12 @@ async def backfill_daily_from_storage(storage_url: str, limit: int = 0, offset: 
 
     row_iter = None
     try:
+        latest_limit = max(100, safe_limit + safe_offset) if safe_limit else 3000
         async with httpx.AsyncClient(timeout=45) as client:
-            latest_response = await client.get(f"{storage_url.rstrip('/')}/get/latest")
+            latest_response = await client.get(
+                f"{storage_url.rstrip('/')}/get/latest",
+                params={"limit": latest_limit},
+            )
             latest_response.raise_for_status()
             latest_rows = latest_response.json()
             if isinstance(latest_rows, list):
