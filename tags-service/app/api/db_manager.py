@@ -271,23 +271,35 @@ async def backfill_daily_from_storage(storage_url: str, limit: int = 0, offset: 
     skipped_steps = 0
     tag_increments = 0
 
+    row_iter = None
     try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            response = await client.get(f"{storage_url.rstrip('/')}/export/csv")
-            response.raise_for_status()
-            csv_text = response.text
-    except Exception as exc:
-        return {
-            "ok": False,
-            "dry_run": bool(dry_run),
-            "error": f"storage fetch failed: {exc}",
-            "storage_url": storage_url,
-            "limit": safe_limit,
-            "offset": safe_offset,
-        }
+        async with httpx.AsyncClient(timeout=45) as client:
+            latest_response = await client.get(f"{storage_url.rstrip('/')}/get/latest")
+            latest_response.raise_for_status()
+            latest_rows = latest_response.json()
+            if isinstance(latest_rows, list):
+                row_iter = latest_rows
+    except Exception:
+        row_iter = None
 
-    csv_reader = csv.DictReader(io.StringIO(csv_text))
-    for idx, row in enumerate(csv_reader):
+    if row_iter is None:
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                response = await client.get(f"{storage_url.rstrip('/')}/export/csv")
+                response.raise_for_status()
+                csv_text = response.text
+            row_iter = csv.DictReader(io.StringIO(csv_text))
+        except Exception as exc:
+            return {
+                "ok": False,
+                "dry_run": bool(dry_run),
+                "error": f"storage fetch failed: {exc}",
+                "storage_url": storage_url,
+                "limit": safe_limit,
+                "offset": safe_offset,
+            }
+
+    for idx, row in enumerate(row_iter):
         if idx < safe_offset:
             continue
         if safe_limit and processed_steps >= safe_limit:
