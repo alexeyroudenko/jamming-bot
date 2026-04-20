@@ -1668,9 +1668,11 @@ def get_tags():
     url = f"{TAGS_SERVICE_URL}/api/v1/tags/tags/group/"
     count = request.args.get("count", default=50, type=int)
     page = request.args.get("page", default=0, type=int)
+    days = request.args.get("days", default=0, type=int)
     params = {
         "count": 50 if count is None else count,
         "page": 0 if page is None else page,
+        "days": 0 if days is None else max(days, 0),
     }
     try:
         response = requests.get(url, params=params, timeout=10)

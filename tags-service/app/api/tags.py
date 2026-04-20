@@ -1,4 +1,5 @@
 from typing import List
+import os
 from fastapi import APIRouter, HTTPException, Query
 
 from app.api.models import TagOut, TagIn, TagUpdate, TagBulkIn, TagSyncIn
@@ -6,6 +7,7 @@ from app.api import db_manager
 from app.api.service import is_cast_present
 
 tags = APIRouter()
+STORAGE_SERVICE_URL = os.getenv("STORAGE_SERVICE_URL", "http://storage_service:8001")
 
 @tags.post('/', response_model=TagOut, status_code=201)
 async def create_tag(payload: TagIn):
@@ -82,5 +84,24 @@ async def delete_tag(id: int):
 async def get_tags_group(
     count: int = Query(50, ge=1),
     page: int = Query(0, ge=0),
+    days: int = Query(0, ge=0),
 ):
-    return await db_manager.get_grouped_tags(count=count, page=page)
+    return await db_manager.get_grouped_tags(count=count, page=page, days=days)
+
+
+@tags.post('/tags/backfill-daily/', status_code=200)
+async def backfill_daily_tags(
+    dry_run: bool = Query(True),
+    limit: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0),
+):
+    """
+    Build per-day tag counters from storage-service CSV export.
+    dry_run=true reports counts without writing.
+    """
+    return await db_manager.backfill_daily_from_storage(
+        storage_url=STORAGE_SERVICE_URL,
+        limit=limit,
+        offset=offset,
+        dry_run=dry_run,
+    )

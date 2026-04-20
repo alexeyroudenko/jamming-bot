@@ -1,7 +1,14 @@
-from sqlalchemy import func, select
+import ast
+import csv
+import io
+import json
+from datetime import datetime, timezone, timedelta
+
+import httpx
+from sqlalchemy import and_, desc, func, select
 
 from app.api.models import TagIn, TagOut, TagUpdate
-from app.api.db import tags, database
+from app.api.db import database, tag_daily_stats, tags
 
 async def add_tag(payload: TagIn): 
     #print(f"start add_tag word: {payload.name}")   
@@ -19,10 +26,13 @@ async def add_tag(payload: TagIn):
             .values(**payload.dict())
         )
         await database.execute(query=query)
+        await increment_daily_tag_count(payload.name)
         return id
     else:
         query = tags.insert().values(**payload.dict())
-        return await database.execute(query=query)
+        new_id = await database.execute(query=query)
+        await increment_daily_tag_count(payload.name)
+        return new_id
 
 def _record_to_dict(r):
     """Convert a databases Record to a plain dict so 'count' column doesn't clash with Sequence.count()."""
@@ -131,15 +141,169 @@ async def get_stats():
     return {"total": total}
 
 
-async def get_grouped_tags(count: int = 50, page: int = 0):
-    from sqlalchemy import desc
+def _safe_tag_name(raw):
+    return str(raw or "").strip()[:50]
+
+
+def _parse_step_timestamp_to_utc_date(raw_ts):
+    if raw_ts is None:
+        return None
+    text = str(raw_ts).strip()
+    if not text:
+        return None
+    try:
+        seconds = float(text)
+        return datetime.fromtimestamp(seconds, tz=timezone.utc).date()
+    except (TypeError, ValueError, OSError):
+        return None
+
+
+def _parse_step_tags(raw_tags):
+    if raw_tags is None:
+        return []
+    if isinstance(raw_tags, list):
+        return [_safe_tag_name(x) for x in raw_tags if _safe_tag_name(x)]
+    text = str(raw_tags).strip()
+    if not text:
+        return []
+    parsed = None
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        try:
+            parsed = ast.literal_eval(text)
+        except Exception:
+            parsed = None
+    if isinstance(parsed, list):
+        return [_safe_tag_name(x) for x in parsed if _safe_tag_name(x)]
+    return []
+
+
+async def increment_daily_tag_count(tag_name: str, day=None, increment: int = 1):
+    safe_tag_name = _safe_tag_name(tag_name)
+    if not safe_tag_name:
+        return
+    target_day = day or datetime.now(timezone.utc).date()
+    query = (
+        tag_daily_stats.select()
+        .where(
+            and_(
+                tag_daily_stats.c.day == target_day,
+                tag_daily_stats.c.tag_name == safe_tag_name,
+            )
+        )
+    )
+    row = await database.fetch_one(query=query)
+    if row:
+        update_query = (
+            tag_daily_stats.update()
+            .where(tag_daily_stats.c.id == row["id"])
+            .values(count=int(row["count"] or 0) + int(increment))
+        )
+        await database.execute(query=update_query)
+        return
+    insert_query = tag_daily_stats.insert().values(
+        day=target_day,
+        tag_name=safe_tag_name,
+        count=max(0, int(increment)),
+    )
+    await database.execute(query=insert_query)
+
+
+def _grouped_row_to_dict(r, with_total=False):
+    if r is None:
+        return None
+    payload = {
+        "id": int(r["id"]) if r["id"] is not None else 0,
+        "name": str(r["name"]) if r["name"] else "",
+        "count": int(r["count"]) if r["count"] is not None else 0,
+    }
+    if with_total:
+        payload["total_count"] = int(r["total_count"]) if r["total_count"] is not None else 0
+    return payload
+
+
+async def get_grouped_tags(count: int = 50, page: int = 0, days: int = 0):
     safe_count = max(1, min(500, int(count)))
     safe_page = max(0, int(page))
+    safe_days = max(0, int(days))
+    if safe_days > 0:
+        cutoff_day = datetime.now(timezone.utc).date() - timedelta(days=safe_days - 1)
+        daily_agg_subquery = (
+            select(
+                tag_daily_stats.c.tag_name.label("name"),
+                func.sum(tag_daily_stats.c.count).label("total_count"),
+            )
+            .where(tag_daily_stats.c.day >= cutoff_day)
+            .group_by(tag_daily_stats.c.tag_name)
+            .subquery()
+        )
+        query = (
+            select(
+                func.coalesce(tags.c.id, 0).label("id"),
+                daily_agg_subquery.c.name.label("name"),
+                daily_agg_subquery.c.total_count.label("count"),
+            )
+            .select_from(
+                daily_agg_subquery.outerjoin(tags, tags.c.name == daily_agg_subquery.c.name)
+            )
+            .order_by(desc(daily_agg_subquery.c.total_count), daily_agg_subquery.c.name.asc())
+            .limit(safe_count)
+            .offset(safe_page * safe_count)
+        )
+        rows = await database.fetch_all(query=query)
+        return [_grouped_row_to_dict(r) for r in rows]
     query = (
         tags.select()
-        .order_by(desc(tags.c.count))
+        .order_by(desc(tags.c.count), tags.c.name.asc())
         .limit(safe_count)
         .offset(safe_page * safe_count)
     )
     rows = await database.fetch_all(query=query)
     return [_record_to_dict(r) for r in rows]
+
+
+async def backfill_daily_from_storage(storage_url: str, limit: int = 0, offset: int = 0, dry_run: bool = True):
+    safe_limit = max(0, int(limit))
+    safe_offset = max(0, int(offset))
+    processed_steps = 0
+    used_steps = 0
+    skipped_steps = 0
+    tag_increments = 0
+
+    async with httpx.AsyncClient(timeout=120) as client:
+        response = await client.get(f"{storage_url.rstrip('/')}/export/csv")
+        response.raise_for_status()
+        csv_text = response.text
+
+    csv_reader = csv.DictReader(io.StringIO(csv_text))
+    for idx, row in enumerate(csv_reader):
+        if idx < safe_offset:
+            continue
+        if safe_limit and processed_steps >= safe_limit:
+            break
+        processed_steps += 1
+
+        step_day = _parse_step_timestamp_to_utc_date(row.get("timestamp"))
+        step_tags = _parse_step_tags(row.get("tags"))
+        if not step_day or not step_tags:
+            skipped_steps += 1
+            continue
+        used_steps += 1
+        if not dry_run:
+            for name in step_tags:
+                await increment_daily_tag_count(name, day=step_day, increment=1)
+                tag_increments += 1
+        else:
+            tag_increments += len(step_tags)
+
+    return {
+        "ok": True,
+        "dry_run": bool(dry_run),
+        "processed_steps": processed_steps,
+        "used_steps": used_steps,
+        "skipped_steps": skipped_steps,
+        "tag_increments": tag_increments,
+        "limit": safe_limit,
+        "offset": safe_offset,
+    }
