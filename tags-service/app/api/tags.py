@@ -7,7 +7,7 @@ from app.api import db_manager
 from app.api.service import is_cast_present
 
 tags = APIRouter()
-STORAGE_SERVICE_URL = os.getenv("STORAGE_SERVICE_URL", "http://storage_service:8001")
+STORAGE_SERVICE_URL = os.getenv("STORAGE_SERVICE_URL", "http://storage-service:80")
 
 @tags.post('/', response_model=TagOut, status_code=201)
 async def create_tag(payload: TagIn):
