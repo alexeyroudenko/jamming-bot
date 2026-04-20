@@ -283,6 +283,8 @@ async def backfill_daily_from_storage(storage_url: str, limit: int = 0, offset: 
             latest_rows = latest_response.json()
             if isinstance(latest_rows, list):
                 row_iter = latest_rows
+            elif isinstance(latest_rows, dict) and isinstance(latest_rows.get("data"), list):
+                row_iter = latest_rows.get("data")
     except Exception:
         row_iter = None
 
