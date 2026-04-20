@@ -271,10 +271,20 @@ async def backfill_daily_from_storage(storage_url: str, limit: int = 0, offset: 
     skipped_steps = 0
     tag_increments = 0
 
-    async with httpx.AsyncClient(timeout=120) as client:
-        response = await client.get(f"{storage_url.rstrip('/')}/export/csv")
-        response.raise_for_status()
-        csv_text = response.text
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            response = await client.get(f"{storage_url.rstrip('/')}/export/csv")
+            response.raise_for_status()
+            csv_text = response.text
+    except Exception as exc:
+        return {
+            "ok": False,
+            "dry_run": bool(dry_run),
+            "error": f"storage fetch failed: {exc}",
+            "storage_url": storage_url,
+            "limit": safe_limit,
+            "offset": safe_offset,
+        }
 
     csv_reader = csv.DictReader(io.StringIO(csv_text))
     for idx, row in enumerate(csv_reader):
