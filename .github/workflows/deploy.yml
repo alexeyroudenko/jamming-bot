@@ -45,8 +45,11 @@ jobs:
             CURR=$(git rev-parse HEAD)
 
             changed() {
-              if [ "$FORCE_ALL" = "true" ] || [ -z "$PREV" ] || [ "$PREV" = "$CURR" ]; then
+              if [ "$FORCE_ALL" = "true" ] || [ -z "$PREV" ]; then
                 return 0
+              fi
+              if [ "$PREV" = "$CURR" ]; then
+                return 1
               fi
               git diff --name-only "$PREV" "$CURR" -- "$1" | grep -q .
             }
