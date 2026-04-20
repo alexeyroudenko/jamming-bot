@@ -15,6 +15,7 @@ http://localhost:8003/openapi.json
 ## Backfill helper
 
 - `POST /api/v1/tags/tags/backfill-daily/?dry_run=true&limit=0&offset=0`
+  - alias: `POST /api/v1/tags/backfill-daily/?dry_run=true&limit=0&offset=0`
   - pulls `storage-service` CSV export
   - parses `timestamp` + `tags`
   - fills `tag_daily_stats` when `dry_run=false`
