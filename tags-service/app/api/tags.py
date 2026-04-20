@@ -90,6 +90,7 @@ async def get_tags_group(
 
 
 @tags.post('/tags/backfill-daily/', status_code=200)
+@tags.post('/backfill-daily/', status_code=200)
 async def backfill_daily_tags(
     dry_run: bool = Query(True),
     limit: int = Query(0, ge=0),
