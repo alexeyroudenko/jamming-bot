@@ -60,6 +60,17 @@ ssh-keygen -t ed25519 -C "github-actions-deploy" -f deploy_key -N ""
 5. Applies `deployment.yaml`
 6. Restarts all deployments for rolling update
 
+### Coroot (опционально)
+
+Мониторинг уровня кластера через Coroot CE не входит в стандартный CI-деплой `deployment.yaml`. Разово на сервере:
+
+```bash
+cd /opt/jamming-bot
+make k3s-coroot
+```
+
+Подробнее: [`docs/monitoring/coroot-runbook.md`](../docs/monitoring/coroot-runbook.md).
+
 ### mood-service (K3s)
 
 - Образ **`mood-service:latest`** собирается из каталога **`mood-service/`** (см. `build_and_import` в [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)).
