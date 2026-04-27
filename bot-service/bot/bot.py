@@ -370,15 +370,16 @@ class NetSpider():
         await self._ensure_urls_indexes()
 
     async def _ensure_urls_indexes(self):
-        """Speed up next-url pick (visited=0, GROUP BY hostname) and counts."""
-        idx = (
+        """Speed up next-url pick, per-host counts, and collect_links checks."""
+        for stmt in (
             "CREATE INDEX IF NOT EXISTS idx_urls_visited_hostname "
-            "ON Urls(visited, hostname)"
-        )
-        try:
-            await self.database.execute(query=idx)
-        except Exception as e:
-            logging.warning("Could not create idx_urls_visited_hostname: %s", e)
+            "ON Urls(visited, hostname)",
+            "CREATE INDEX IF NOT EXISTS idx_urls_hostname ON Urls(hostname)",
+        ):
+            try:
+                await self.database.execute(query=stmt)
+            except Exception as e:
+                logging.warning("Could not create url index (%s): %s", stmt[:48], e)
 
     async def set_visited(self, url):
         logging.info("set_visited", url)
@@ -411,10 +412,19 @@ class NetSpider():
             stored_lnks.append(row[2])
         return stored_lnks
 
+    async def _urls_row_exists(self, url: str) -> bool:
+        row = await self._db_fetch_one(
+            query="SELECT 1 FROM Urls WHERE url = :url LIMIT 1",
+            values={"url": url},
+        )
+        return row is not None
 
-    
-
-
+    async def _count_urls_for_hostname(self, hostname: str) -> int:
+        row = await self._db_fetch_one(
+            query="SELECT COUNT(*) FROM Urls WHERE hostname = :hostname",
+            values={"hostname": hostname},
+        )
+        return int(row[0]) if row else 0
 
     '''
         notify step
@@ -488,63 +498,68 @@ class NetSpider():
 
         '''
             already added link for current domain
-        '''              
-        stored_links_for_domain = await self.retrieve_stored_links_for_domain(current_base_domain)
+        '''
+        host_count_cache = {}
 
-        for link_element in link_elements:
-            
-            url = link_element['href']
-            href = link_element['href'] 
+        async with self.database.transaction():
+            for link_element in link_elements:
 
-            # url = link_element
-            # href = link_element
+                url = link_element['href']
+                href = link_element['href']
 
-            mimetype = mimetypes.guess_type(url)
-                                    
-            if mimetype[0] == "text/html" or mimetype[0] == None:
-                new_link_element = ""
-                if not "javascript" in url and not "mailto" in url:
-                    new_hostname = urlparse(url).hostname
-                    if not new_hostname:
-                        full_url = requests.compat.urljoin(current_site, url)
-                        url = self.filter.clean_url(full_url)
-                        
-                    if not new_hostname: 
-                        new_link_element = self.filter.get_values(full_url)['url']
-                    else:
-                        if self.filter.clean_url(new_hostname) in self.filter.filters:
-                            #logging.debug(f"skip href {href} because host {new_hostname}")
-                            ...
-                        else:   
-                            new_link_element = href
-                                                                                    
-                if new_link_element not in stored_links_for_domain and new_link_element != "" and domain_is_en(new_link_element) and not is_domain_blocked(new_link_element):
+                mimetype = mimetypes.guess_type(url)
+
+                if mimetype[0] == "text/html" or mimetype[0] == None:
+                    new_link_element = ""
+                    full_url = None
+                    if not "javascript" in url and not "mailto" in url:
+                        new_hostname = urlparse(url).hostname
+                        if not new_hostname:
+                            full_url = requests.compat.urljoin(current_site, url)
+                            url = self.filter.clean_url(full_url)
+
+                        if not new_hostname:
+                            new_link_element = self.filter.get_values(full_url)['url']
+                        else:
+                            if self.filter.clean_url(new_hostname) in self.filter.filters:
+                                # logging.debug(f"skip href {href} because host {new_hostname}")
+                                ...
+                            else:
+                                new_link_element = href
+
+                    if new_link_element == "":
+                        continue
+                    if not domain_is_en(new_link_element) or is_domain_blocked(new_link_element):
+                        continue
+                    if await self._urls_row_exists(new_link_element):
+                        continue
 
                     hostname = get_second_level_domain(new_link_element)
-                    stored_links_for_domain = await self.retrieve_stored_links_for_domain(hostname)
-                    count_stored_links_for_domain = len(stored_links_for_domain)
-                    count_elements = count_stored_links_for_domain
-                    if count_elements > self.count_per_domain:
+                    if hostname not in host_count_cache:
+                        host_count_cache[hostname] = await self._count_urls_for_hostname(hostname)
+                    if host_count_cache[hostname] > self.count_per_domain:
                         logging.debug(f"skip add")
-                    else:
+                        continue
 
-                        #
-                        # add url to database
-                        #
-                        values = self.filter.get_values(href)
-                        values['url'] = new_link_element
-                        values['src_url'] = current_url                                                                                            
-                        values['hostname'] = hostname
-                        
-                        # logging.info(f"add to queue {values}")                                                                                                                    
-                        try:
-                            self.notify_about_sublink({"hostname":hostname,"src_url":current_url,"url":new_link_element})
-                        except:
-                            ...
-                                                                                                                
-                        query = "INSERT OR IGNORE INTO Urls(hostname, url, src_url, visited) VALUES (:hostname, :url, :src_url, :visited)"
-                        await self._db_execute(query=query, values=values)        
-        
+                    values = self.filter.get_values(href)
+                    values['url'] = new_link_element
+                    values['src_url'] = current_url
+                    values['hostname'] = hostname
+
+                    try:
+                        self.notify_about_sublink(
+                            {"hostname": hostname, "src_url": current_url, "url": new_link_element}
+                        )
+                    except Exception:
+                        ...
+
+                    query = (
+                        "INSERT OR IGNORE INTO Urls(hostname, url, src_url, visited) "
+                        "VALUES (:hostname, :url, :src_url, :visited)"
+                    )
+                    await self._db_execute(query=query, values=values)
+                    host_count_cache[hostname] += 1
+
 
     #
     #
@@ -1002,6 +1017,5 @@ if __name__ == '__main__':
                         datefmt='%Y-%m-%d %H:%M:%S')
 
     logging.getLogger("httpx").setLevel(logging.WARNING)
-    
 
     asyncio.run(main())
