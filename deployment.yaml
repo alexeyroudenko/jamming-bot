@@ -430,6 +430,8 @@ spec:
           value: "http://storage-service/export/img"
         - name: STEPS_LATEST_URL
           value: "http://app-service/api/storage_latest/"
+        - name: STEPS_LATEST_LIMIT
+          value: "10000"
         - name: STEPS_CSV_URL
           value: "http://storage-service/export/csv"
         - name: STEPS_REFRESH_SECONDS
@@ -438,25 +440,27 @@ spec:
           value: "/app/data"
         resources:
           requests:
-            cpu: "100m"
+            cpu: "150m"
             memory: "512Mi"
           limits:
-            cpu: "250m"
+            cpu: "750m"
             memory: "2048Mi"
         readinessProbe:
           httpGet:
-            path: /healthz
+            path: /ready
             port: 8007
           initialDelaySeconds: 5
-          periodSeconds: 10
-          timeoutSeconds: 5
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 5
         livenessProbe:
           httpGet:
-            path: /healthz
+            path: /live
             port: 8007
-          initialDelaySeconds: 15
-          periodSeconds: 20
-          timeoutSeconds: 5
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 3
+          failureThreshold: 5
         volumeMounts:
         - name: steps-data
           mountPath: /app/data

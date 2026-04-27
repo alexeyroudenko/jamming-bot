@@ -2019,9 +2019,13 @@ def api_storage_step(step_num):
 @app.route("/api/storage_latest/", methods=["GET"])
 @cross_origin()
 def api_storage_latest():
-    """Proxy to storage-service GET /get/latest."""
+    """Proxy to storage-service GET /get/latest (optional ?limit= for steps-service)."""
     try:
-        resp = storage_http.storage_get("/get/latest", timeout=15)
+        limit = request.args.get("limit", type=int)
+        params = {}
+        if limit is not None:
+            params["limit"] = max(1, min(limit, 20000))
+        resp = storage_http.storage_get("/get/latest", timeout=30, params=params or None)
         resp.raise_for_status()
         return jsonify(resp.json())
     except Exception as e:
