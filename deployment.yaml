@@ -1089,7 +1089,7 @@ spec:
     targetPort: 8010
 ---
 # ===================== ip-service =====================
-# GeoIP DB (dbip-city-lite) is downloaded at image build; override with IP_MMDB_PATH + volume if needed.
+# GeoIP DB (GeoLite2-City) is downloaded at image build; override with IP_MMDB_PATH + volume if needed.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -1508,7 +1508,7 @@ metadata:
   name: html-renderer-ingress
   namespace: jamming-bot
   annotations:
-    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-semantic@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-steps@kubernetescrd,jamming-bot-strip-tags@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-data@kubernetescrd,jamming-bot-strip-app@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-steps@kubernetescrd,jamming-bot-strip-tags@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-data@kubernetescrd,jamming-bot-strip-app@kubernetescrd
 spec:
   rules:
     - http:
@@ -1535,13 +1535,7 @@ spec:
               name: keywords-service
               port:
                 number: 80
-        - path: /semantic
-          pathType: Prefix
-          backend:
-            service:
-              name: semantic-service
-              port:
-                number: 80
+        # /semantic/ and /semantic/* are Flask (app-service); API is internal or https://semantic.jamming-bot.arthew0.online/
         - path: /storage
           pathType: Prefix
           backend:
@@ -1646,7 +1640,8 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     # strip-tags is not applied here: /tags/* UI paths must reach app-service with full path. Tags REST API uses jamming-bot-tags-api-ingress (strip /tags only for /tags/api/*).
-    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-semantic@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-steps@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-data@kubernetescrd,jamming-bot-strip-app@kubernetescrd
+    # strip-semantic is not applied: /semantic/* UI is Flask on app-service; do not route /semantic to semantic-service (FastAPI has no / page — only /api/v1/semantic/...).
+    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-steps@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-data@kubernetescrd,jamming-bot-strip-app@kubernetescrd
 spec:
   tls:
   - hosts:
@@ -1716,13 +1711,6 @@ spec:
           backend:
             service:
               name: keywords-service
-              port:
-                number: 80
-        - path: /semantic
-          pathType: Prefix
-          backend:
-            service:
-              name: semantic-service
               port:
                 number: 80
         - path: /ip

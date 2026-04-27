@@ -5,7 +5,7 @@ import maxminddb
 
 ip = APIRouter()
 
-MMDB_PATH = os.getenv("IP_MMDB_PATH", "data/db/dbip-city-lite.mmdb")
+MMDB_PATH = os.getenv("IP_MMDB_PATH", "data/db/GeoLite2-City.mmdb")
 
 @ip.get('/{ip}/')
 async def get_geo(ip: str):
