@@ -1,0 +1,41 @@
+# This manifest patches/defines labels on app-service-metrics Service
+# and creates a ServiceMonitor that selects it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-service-metrics
+  namespace: jamming-bot
+  labels:
+    app: app-service-metrics
+    monitoring: enabled
+spec:
+  type: NodePort
+  selector:
+    app: app-service
+  ports:
+  - name: metrics
+    protocol: TCP
+    port: 5000
+    targetPort: 5000
+    nodePort: 30500
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: app-service
+  namespace: jamming-bot
+  labels:
+    app: app-service
+spec:
+  selector:
+    matchLabels:
+      app: app-service-metrics
+      monitoring: enabled
+  namespaceSelector:
+    matchNames:
+    - jamming-bot
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s
+    scheme: http

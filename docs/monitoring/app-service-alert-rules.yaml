@@ -1,0 +1,78 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: app-service-alerts
+  namespace: jamming-bot
+  labels:
+    app: app-service
+spec:
+  groups:
+  - name: app-service.health
+    rules:
+    - alert: AppServiceHigh5xxRatio
+      expr: |
+        (
+          sum(rate(flask_http_request_duration_seconds_count{status=~"5.."}[10m]))
+          /
+          clamp_min(sum(rate(flask_http_request_duration_seconds_count[10m])), 0.001)
+        ) > 0.03
+      for: 10m
+      labels:
+        severity: warning
+        service: app-service
+      annotations:
+        summary: "app-service: высокий процент 5xx"
+        description: "Доля 5xx > 3% за 10 минут. Проверь app-service, ingress и downstream сервисы."
+
+    - alert: AppServiceHighLatencyP95
+      expr: |
+        histogram_quantile(0.95, sum by (le) (rate(flask_http_request_duration_seconds_bucket[10m]))) > 1.5
+      for: 10m
+      labels:
+        severity: warning
+        service: app-service
+      annotations:
+        summary: "app-service: высокий p95 latency"
+        description: "p95 > 1.5s за 10 минут. Возможен рост очереди или деградация downstream API."
+
+    - alert: AppServiceUnhandledExceptions
+      expr: sum(rate(flask_http_request_exceptions_total[10m])) > 0.05
+      for: 10m
+      labels:
+        severity: warning
+        service: app-service
+      annotations:
+        summary: "app-service: растут unhandled exceptions"
+        description: "flask_http_request_exceptions_total > 0.05/s в течение 10 минут."
+
+    - alert: AppServiceNoTraffic
+      expr: sum(rate(flask_http_request_duration_seconds_count[10m])) < 0.001
+      for: 20m
+      labels:
+        severity: info
+        service: app-service
+      annotations:
+        summary: "app-service: почти нет входящего трафика"
+        description: "Почти нулевой RPS 20 минут. Может быть ночь/maintenance или проблема с ingress."
+
+  - name: rq.health
+    rules:
+    - alert: RQQueueBacklogGrowing
+      expr: sum(rq_jobs{status="queued"}) > 100
+      for: 10m
+      labels:
+        severity: warning
+        service: rq
+      annotations:
+        summary: "RQ backlog растет"
+        description: "В очереди > 100 jobs 10 минут. Проверь worker pods, redis и медленные jobs."
+
+    - alert: RQFailedJobsSpike
+      expr: increase(rq_jobs{status="failed"}[15m]) > 20
+      for: 5m
+      labels:
+        severity: warning
+        service: rq
+      annotations:
+        summary: "Много failed jobs в RQ"
+        description: "increase(rq_jobs{status=failed}[15m]) > 20. Проверь исключения analyze/storage/semantic и доступность сервисов."
