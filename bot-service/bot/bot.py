@@ -12,7 +12,7 @@ import logging
 import mimetypes
 import traceback
 from datetime import datetime
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 from urllib.robotparser import RobotFileParser
 
 import httpx
@@ -26,6 +26,8 @@ import yaml
 from yaml.loader import SafeLoader
 from pythonosc import udp_client
 import tldextract
+
+import telemetry
 
 config_file = "bot.yaml"
 
@@ -262,6 +264,8 @@ class NetSpider():
         self.resume_at_restart = False
         
         self.do_save_html = False
+        self._step_db_ms = 0.0
+        self._step_events_ms = 0.0
 
         import socket
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -277,7 +281,38 @@ class NetSpider():
         # logging.info(broadcast)
 
         self.osc = udp_client.SimpleUDPClient(osc_address, 7001)
-        pass
+
+    def _http_post_tracked(self, url, data=None, timeout=3):
+        t0 = time.perf_counter()
+        try:
+            with telemetry.http_client_span(url):
+                return requests.post(url, data=data, timeout=timeout)
+        finally:
+            self._step_events_ms += (time.perf_counter() - t0) * 1000.0
+
+    async def _db_execute(self, *args, **kwargs):
+        t0 = time.perf_counter()
+        try:
+            with telemetry.db_span(kwargs, args):
+                return await self.database.execute(*args, **kwargs)
+        finally:
+            self._step_db_ms += (time.perf_counter() - t0) * 1000.0
+
+    async def _db_fetch_all(self, *args, **kwargs):
+        t0 = time.perf_counter()
+        try:
+            with telemetry.db_span(kwargs, args):
+                return await self.database.fetch_all(*args, **kwargs)
+        finally:
+            self._step_db_ms += (time.perf_counter() - t0) * 1000.0
+
+    async def _db_fetch_one(self, *args, **kwargs):
+        t0 = time.perf_counter()
+        try:
+            with telemetry.db_span(kwargs, args):
+                return await self.database.fetch_one(*args, **kwargs)
+        finally:
+            self._step_db_ms += (time.perf_counter() - t0) * 1000.0
     
     '''
         Control realtime
@@ -339,7 +374,7 @@ class NetSpider():
         try:
             values = self.filter.get_values(url)
             query = "INSERT INTO Urls(hostname, url, visited) VALUES (:hostname, :url, :visited)"
-            await self.database.execute(query=query, values=values)
+            await self._db_execute(query=query, values=values)
         except Exception as e:
             print("Exception set_visited:", e)
             pass
@@ -352,14 +387,14 @@ class NetSpider():
             values['src_url'] = src_url            
             #logging.info(f"insert values to db {url}")
             query = "INSERT INTO Urls(hostname, url, src_url, visited) VALUES (:hostname, :url, :src_url, :visited)"
-            await self.database.execute(query=query, values=values)
+            await self._db_execute(query=query, values=values)
         except Exception as e:
             logging.error(f"Exception insert {traceback.print_exc()}")
             pass
         
     async def retrieve_stored_links_for_domain(self, current_base_domain):
         query = "SELECT * FROM Urls WHERE hostname = :hostname"
-        rows = await self.database.fetch_all(query=query, values={"hostname": current_base_domain})
+        rows = await self._db_fetch_all(query=query, values={"hostname": current_base_domain})
         stored_lnks = []
         for row in rows:
             stored_lnks.append(row[2])
@@ -376,7 +411,8 @@ class NetSpider():
     def notify_about_step(self, step: Step):
         if self.send_step:
             try:
-                r = requests.post(STEP_URL, data = step.to_data(), timeout=10)            
+                with telemetry.step_post_span(step.number):
+                    r = self._http_post_tracked(STEP_URL, data=step.to_data(), timeout=10)
             except Exception as e0:
                 logging.error(f"error send step data {STEP_URL}")
                 self.send_step = False
@@ -395,20 +431,22 @@ class NetSpider():
         
         if self.log_events:
             logging.info(f"event: {event_name} {data}")
-                        
-        if self.send_events:
-            try:
-                url = EVENT_URL + f"/{event_name}/"
-                r = requests.post(url, {"data": data}, timeout=3)
-                if r.status_code != 200:
-                    logging.warning(f"event {event_name} status {r.status_code} {url}")
-            except Exception as e0:
-                logging.error(f"error send eventp {event_name}: {e0} url={EVENT_URL}")
-        if self.send_osc:            
-            try:
-                self.osc.send_message(f"/events/{event_name}/", [])
-            except Exception as e0:
-                logging.error(f"error send OSC: {e0}")
+
+        with telemetry.event_span(event_name):
+            if self.send_events:
+                try:
+                    url = EVENT_URL + "/" + quote(str(event_name), safe="") + "/"
+                    r = self._http_post_tracked(url, data={"data": data}, timeout=3)
+                    if r.status_code != 200:
+                        logging.warning(f"event {event_name} status {r.status_code} {url}")
+                except Exception as e0:
+                    logging.error(f"error send eventp {event_name}: {e0} url={EVENT_URL}")
+            if self.send_osc:
+                try:
+                    osc_seg = str(event_name).replace(" ", "_")
+                    self.osc.send_message(f"/events/{osc_seg}/", [])
+                except Exception as e0:
+                    logging.error(f"error send OSC: {e0}")
                 
 
     '''    
@@ -494,7 +532,7 @@ class NetSpider():
                             ...
                                                                                                                 
                         query = "INSERT OR IGNORE INTO Urls(hostname, url, src_url, visited) VALUES (:hostname, :url, :src_url, :visited)"
-                        await self.database.execute(query=query, values=values)        
+                        await self._db_execute(query=query, values=values)        
         
 
     #
@@ -504,234 +542,237 @@ class NetSpider():
     async def do_step(self):
         #logging.info(f"self.step {str(self.step_number)}")
         self.step_number = self.step_number + 1
-        self.step = Step(self.step_number) 
+        self.step = Step(self.step_number)
+        self._step_db_ms = 0.0
+        self._step_events_ms = 0.0
 
         try:
-            
-            #
-            #  Calc next step retrieve_next_url()
-            #  
-            #
-            #
-
-            self.notify_about_eventp("retrieve_next_url", self.step_number)
-
-            #
-            query = "SELECT id, hostname, url, src_url, count(visited) FROM Urls where visited==0 GROUP BY hostname ORDER BY count(visited) LIMIT 1"
-            rows = await self.database.fetch_all(query=query)
-
-            steps_forwards_query = "SELECT COUNT(*) FROM Urls WHERE visited=0"
-            steps_forwards_result = await self.database.fetch_one(query=steps_forwards_query)
-            steps_forwards = steps_forwards_result[0] if steps_forwards_result else 0
-            self.notify_about_eventp("steps_forwards", steps_forwards)
-            # logging.info(f"steps_forwards {steps_forwards}")
-                   
-            url_id = rows[0][0]
-            # domain = get_second_level_domain(rows[0][1])
-            current_url = rows[0][2]
-            src_url = rows[0][3]
-            
-            self.step.url = current_url
-            self.step.src = src_url
-            
-            #
-            #  Set visited
-            #
-            self.notify_about_eventp("set_visited", url_id)
-            #
-            query = "UPDATE Urls SET visited=1 WHERE id = :id"
-            await self.database.execute(query=query, values={"id": url_id})
-            
-            
-            #
-            #   Validate URL
-            # 
-            self.notify_about_eventp("validate_url", current_url)
-            #             
-            current_site = urlparse(current_url).scheme + "://" + urlparse(current_url).netloc
-            valid = validators.url(current_site)
-                        
-            if valid:
-
-                if is_domain_blocked(current_url):
-                    logging.warning(f"step {self.step_number} \t BLOCK \t {current_url} \t domain in blocklist")
-                    self.step.status_code = 403
-                    self.notify_about_eventp("error_blocked_domain", current_url)
-                    self.notify_about_step(self.step)
-                    return
-
-                import tld
-                try:
-                    res = get_tld(current_url, as_object=True)
-                    current_base_domain = res.fld
-                    current_base_domain = get_second_level_domain(current_base_domain)
-
-                except tld.exceptions.TldBadUrl:
-                    logging.warning(f"step {self.step_number} \t ERR \t {src_url} > {current_url} \t bad url")
-                    self.step.status_code = 900
-                    self.notify_about_eventp("error_retrieve_url", {})
-                    self.notify_about_step(self.step)
-                    return
-
-                except tld.exceptions.TldDomainNotFound:
-                    logging.warning(f"step {self.step_number} \t ERR \t {src_url} > {current_url} \t domain not found")
-                    self.step.status_code = 901
-                    self.notify_about_eventp("error_retrieve_url", {})
-                    self.notify_about_step(self.step)
-                    return
-
-                try:
-
-                    #
-                    #
-                    #       Retrieve page (respect robots.txt)
-                    #
-                    #
-                    self.notify_about_eventp("retrieve_page", current_url)
-                    logging.debug(f"start load  {current_url}")
-
-                    async with httpx.AsyncClient(follow_redirects=True) as client:
-                        if not await robots_can_fetch(client, current_url):
-                            logging.warning(f"step {self.step_number} \t ROBOTS \t {current_url} \t disallowed by robots.txt")
-                            self.step.status_code = 403
-                            self.notify_about_eventp("error_robots_disallow", current_url)
-                            self.notify_about_step(self.step)
-                            return
-                        response = await client.get(
-                            current_url,
-                            headers={
-                                'Accept-Language': 'en-US, en;q=0.5',
-                                'Accept-Charset': 'utf-8',
-                                'Accept-Encoding': 'gzip',
-                                'User-Agent': USER_AGENT,
-                            },
-                            timeout=10,
-                        )
-                    # Resolve hostname to IP for geo (response.extensions is not the remote IP)
-                    ip_addr = "0"
+            with telemetry.root_do_step_span(self.step_number):
+                
+                #
+                #  Calc next step retrieve_next_url()
+                #  
+                #
+                #
+                
+                self.notify_about_eventp("retrieve_next_url", self.step_number)
+                
+                #
+                query = "SELECT id, hostname, url, src_url, count(visited) FROM Urls where visited==0 GROUP BY hostname ORDER BY count(visited) LIMIT 1"
+                rows = await self._db_fetch_all(query=query)
+                
+                steps_forwards_query = "SELECT COUNT(*) FROM Urls WHERE visited=0"
+                steps_forwards_result = await self._db_fetch_one(query=steps_forwards_query)
+                steps_forwards = steps_forwards_result[0] if steps_forwards_result else 0
+                self.notify_about_eventp("steps_forwards", steps_forwards)
+                # logging.info(f"steps_forwards {steps_forwards}")
+                
+                url_id = rows[0][0]
+                # domain = get_second_level_domain(rows[0][1])
+                current_url = rows[0][2]
+                src_url = rows[0][3]
+                
+                self.step.url = current_url
+                self.step.src = src_url
+                
+                #
+                #  Set visited
+                #
+                self.notify_about_eventp("set_visited", url_id)
+                #
+                query = "UPDATE Urls SET visited=1 WHERE id = :id"
+                await self._db_execute(query=query, values={"id": url_id})
+                
+                
+                #
+                #   Validate URL
+                # 
+                self.notify_about_eventp("validate_url", current_url)
+                #             
+                current_site = urlparse(current_url).scheme + "://" + urlparse(current_url).netloc
+                valid = validators.url(current_site)
+                
+                if valid:
+                
+                    if is_domain_blocked(current_url):
+                        logging.warning(f"step {self.step_number} \t BLOCK \t {current_url} \t domain in blocklist")
+                        self.step.status_code = 403
+                        self.notify_about_eventp("error_blocked_domain", current_url)
+                        self.notify_about_step(self.step)
+                        return
+                
+                    import tld
                     try:
-                        hostname = urlparse(current_url).hostname
-                        if hostname:
-                            loop = asyncio.get_event_loop()
-                            infos = await loop.run_in_executor(
-                                None,
-                                lambda: socket.getaddrinfo(hostname, None, socket.AF_INET),
+                        res = get_tld(current_url, as_object=True)
+                        current_base_domain = res.fld
+                        current_base_domain = get_second_level_domain(current_base_domain)
+                
+                    except tld.exceptions.TldBadUrl:
+                        logging.warning(f"step {self.step_number} \t ERR \t {src_url} > {current_url} \t bad url")
+                        self.step.status_code = 900
+                        self.notify_about_eventp("error_retrieve_url", {})
+                        self.notify_about_step(self.step)
+                        return
+                
+                    except tld.exceptions.TldDomainNotFound:
+                        logging.warning(f"step {self.step_number} \t ERR \t {src_url} > {current_url} \t domain not found")
+                        self.step.status_code = 901
+                        self.notify_about_eventp("error_retrieve_url", {})
+                        self.notify_about_step(self.step)
+                        return
+                
+                    try:
+                
+                        #
+                        #
+                        #       Retrieve page (respect robots.txt)
+                        #
+                        #
+                        self.notify_about_eventp("retrieve_page", current_url)
+                        logging.debug(f"start load  {current_url}")
+                
+                        async with httpx.AsyncClient(follow_redirects=True) as client:
+                            if not await robots_can_fetch(client, current_url):
+                                logging.warning(f"step {self.step_number} \t ROBOTS \t {current_url} \t disallowed by robots.txt")
+                                self.step.status_code = 403
+                                self.notify_about_eventp("error_robots_disallow", current_url)
+                                self.notify_about_step(self.step)
+                                return
+                            response = await client.get(
+                                current_url,
+                                headers={
+                                    'Accept-Language': 'en-US, en;q=0.5',
+                                    'Accept-Charset': 'utf-8',
+                                    'Accept-Encoding': 'gzip',
+                                    'User-Agent': USER_AGENT,
+                                },
+                                timeout=10,
                             )
-                            if infos:
-                                ip_addr = infos[0][4][0]
-                    except (socket.gaierror, OSError, ValueError):
-                        pass
-                    ip = (ip_addr, 0)
-                        
-                    
-                    headers_dump = json.dumps(dict(response.headers))                    
-                    #logging.info(f"headers: {headers_dump}")
-                    
-                    self.notify_about_eventp("headers", headers_dump)
-                    
-                    text = ""
-                    link_elements = []
-                    
-                    self.step.status_code = response.status_code
-                    self.step.headers = f"{headers_dump}"
-                    self.step.ip = ip[0]
-                    
-                    content_type = str(response.headers.get("Content-Type", "").lower())
-                    
-                    if "html" not in content_type:
-                        
-                        logging.warning(f"step {self.step_number} \t {current_url} \t bad content-type: {content_type}")                        
-                        self.notify_about_eventp("step_error_content", content_type)                        
+                        # Resolve hostname to IP for geo (response.extensions is not the remote IP)
+                        ip_addr = "0"
+                        try:
+                            hostname = urlparse(current_url).hostname
+                            if hostname:
+                                loop = asyncio.get_event_loop()
+                                infos = await loop.run_in_executor(
+                                    None,
+                                    lambda: socket.getaddrinfo(hostname, None, socket.AF_INET),
+                                )
+                                if infos:
+                                    ip_addr = infos[0][4][0]
+                        except (socket.gaierror, OSError, ValueError):
+                            pass
+                        ip = (ip_addr, 0)
+                
+                
+                        headers_dump = json.dumps(dict(response.headers))                    
+                        #logging.info(f"headers: {headers_dump}")
+                
+                        self.notify_about_eventp("headers", headers_dump)
+                
+                        text = ""
+                        link_elements = []
+                
+                        self.step.status_code = response.status_code
+                        self.step.headers = f"{headers_dump}"
+                        self.step.ip = ip[0]
+                
+                        content_type = str(response.headers.get("Content-Type", "").lower())
+                
+                        if "html" not in content_type:
+                
+                            logging.warning(f"step {self.step_number} \t {current_url} \t bad content-type: {content_type}")                        
+                            self.notify_about_eventp("step_error_content", content_type)                        
+                            self.notify_about_step(self.step)
+                
+                        elif response.status_code != 200 :
+                            logging.warning(f"step {self.step_number} \t {response.status_code} \t {current_base_domain} \t {src_url} > {current_url} \t {ip}")                                                
+                            self.notify_about_eventp("step_error_status", response.status_code)                        
+                            self.notify_about_step(self.step)
+                
+                        else:                        
+                            encoding = response.charset_encoding or 'utf-8'
+                            self.notify_about_eventp("analyze_page_fix_codepage", encoding)
+                            html_content = response.content.decode('utf-8', errors='replace')
+                
+                
+                            #
+                            #   Get Text
+                            #
+                            self.notify_about_eventp("analyze_page_fast_text_exxtract", content_type)
+                
+                            text = get_text_from_html(html_content)
+                
+                
+                            self.notify_about_eventp("save_html_to_file", content_type)
+                
+                            self.step.html = html_content
+                            self.step.text = text
+                
+                
+                            do_save_html = False
+                            if do_save_html:
+                                html_path = f'data/path/html/{str(self.step.number).zfill(8)}.html'
+                                with open(html_path, 'w') as file:
+                                    file.write(html_content)                        
+                
+                                text_path = f'data/path/txt/{str(self.step.number).zfill(8)}.txt'                           
+                                with open(text_path, 'w') as file:
+                                    file.write(text)
+                
+                                step_path = f'data/path/steps/{str(self.step.number).zfill(8)}.info'                           
+                                with open(step_path, 'w') as file:                            
+                                    file.writelines(self.step.to_info())
+                
+                
+                
+                            soup = BeautifulSoup(response.content, "html.parser", from_encoding="utf-8")                         
+                            self.notify_about_eventp("analyze_page_remove_nav", content_type) 
+                
+                
+                            # Remove navigation text
+                            for tag in soup(['button', 'nav', 'footer', 'header', 'aside']):
+                                tag.decompose()                            
+                
+                
+                            self.notify_about_eventp("analyze_page_collect_links_elements", content_type) 
+                
+                            link_elements = soup.select("a[href]")[0:20]
+                
+                            self.notify_about_eventp("analyze_page_finish", content_type)
+                
+                            logging.info(f"step {self.step.number} \t {response.status_code} \t {current_base_domain} \t {src_url} > {current_url} \t {len(link_elements)} \t {ip}")
+                
+                
+                
+                
+                            #
+                            #
+                            #       Collect links
+                            #
+                            self.notify_about_eventp("collect_links", link_elements)
+                            #  
+                            await self.collect_links(link_elements, 
+                                               current_site, 
+                                               current_url, 
+                                               current_base_domain)
+                
+                
+                            #
+                            #
+                            #       Say finish
+                            #
+                            self.notify_about_eventp("say_finish", len(link_elements))
+                            self.notify_about_step(self.step)
+                
+                
+                    except Exception as e1:
+                        logging.warning(e1)
+                        logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t e1 line {e1.__traceback__.tb_lineno}")
+                        self.notify_about_eventp("error_retrieve_url", {})                    
+                        self.step.status_code = 801         
                         self.notify_about_step(self.step)
-                    
-                    elif response.status_code != 200 :
-                        logging.warning(f"step {self.step_number} \t {response.status_code} \t {current_base_domain} \t {src_url} > {current_url} \t {ip}")                                                
-                        self.notify_about_eventp("step_error_status", response.status_code)                        
-                        self.notify_about_step(self.step)
-                        
-                    else:                        
-                        encoding = response.charset_encoding or 'utf-8'
-                        self.notify_about_eventp("analyze_page_fix_codepage", encoding)
-                        html_content = response.content.decode('utf-8', errors='replace')
-
-
-                        #
-                        #   Get Text
-                        #
-                        self.notify_about_eventp("analyze_page_fast_text_exxtract", content_type)
-
-                        text = get_text_from_html(html_content)
-
-                        
-                        self.notify_about_eventp("save_html_to_file", content_type)
-                        
-                        self.step.html = html_content
-                        self.step.text = text
-
-
-                        do_save_html = False
-                        if do_save_html:
-                            html_path = f'data/path/html/{str(self.step.number).zfill(8)}.html'
-                            with open(html_path, 'w') as file:
-                                file.write(html_content)                        
-                            
-                            text_path = f'data/path/txt/{str(self.step.number).zfill(8)}.txt'                           
-                            with open(text_path, 'w') as file:
-                                file.write(text)
-                            
-                            step_path = f'data/path/steps/{str(self.step.number).zfill(8)}.info'                           
-                            with open(step_path, 'w') as file:                            
-                                file.writelines(self.step.to_info())
-               
-                                                
-                        
-                        soup = BeautifulSoup(response.content, "html.parser", from_encoding="utf-8")                         
-                        self.notify_about_eventp("analyze_page_remove_nav", content_type) 
-                        
-                        
-                        # Remove navigation text
-                        for tag in soup(['button', 'nav', 'footer', 'header', 'aside']):
-                            tag.decompose()                            
-                        
-                                                                                           
-                        self.notify_about_eventp("analyze_page_collect_links_elements", content_type) 
-                        
-                        link_elements = soup.select("a[href]")[0:20]
-                        
-                        self.notify_about_eventp("analyze_page_finish", content_type)
-                        
-                        logging.info(f"step {self.step.number} \t {response.status_code} \t {current_base_domain} \t {src_url} > {current_url} \t {len(link_elements)} \t {ip}")
-                        
-                        
-                        
-                        
-                        #
-                        #
-                        #       Collect links
-                        #
-                        self.notify_about_eventp("collect_links", link_elements)
-                        #  
-                        await self.collect_links(link_elements, 
-                                           current_site, 
-                                           current_url, 
-                                           current_base_domain)
-                        
-                        
-                        #
-                        #
-                        #       Say finish
-                        #
-                        self.notify_about_eventp("say_finish", len(link_elements))
-                        self.notify_about_step(self.step)
-
-
-                except Exception as e1:
-                    logging.warning(e1)
-                    logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t e1 line {e1.__traceback__.tb_lineno}")
-                    self.notify_about_eventp("error_retrieve_url", {})                    
-                    self.step.status_code = 801         
-                    self.notify_about_step(self.step)
-                    
+                
         except IndexError as e2:
             self.count_errors += 1
             logging.error(f"IndexError step 2 {e2} line:{e2.__traceback__.tb_lineno}")
@@ -783,6 +824,7 @@ async def main():
         config = yaml.load(file, Loader=SafeLoader)
 
     apply_step_event_urls(config)
+    telemetry.init_telemetry()
     logging.info("step/event URLs: %s | %s", STEP_URL, EVENT_URL)
     logging.info(f"init bot version: {config['version']}")
     
@@ -835,7 +877,9 @@ async def main():
         # Main loop
         #        
         while True:
-            
+            spider._step_db_ms = 0.0
+            spider._step_events_ms = 0.0
+
             #
             # CTRL from REDIS
             #
@@ -896,6 +940,11 @@ async def main():
                 pass
 
             delay = spider.sleep_time + random.uniform(0, max(0.0, random_span))
+            db_ms = int(round(spider._step_db_ms))
+            ev_ms = int(round(spider._step_events_ms))
+            spider.notify_about_eventp(f"db_time {db_ms}ms", {})
+            spider.notify_about_eventp(f"events_time {ev_ms}ms", {})
+            spider.notify_about_eventp(f"sleep {delay:.1f}s", {})
             await asyncio.sleep(delay)
             
             if killer.kill_now:
