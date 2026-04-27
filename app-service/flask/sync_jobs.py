@@ -8,6 +8,7 @@ import requests
 from rq.decorators import job
 from rq import get_current_job
 from rq_helpers import redis_connection
+import storage_http
 
 logging.basicConfig(
     level=logging.INFO,
@@ -21,7 +22,6 @@ REMOTE_STORAGE_URL = os.getenv("REMOTE_STORAGE_URL", "https://storage.jamming-bo
 REMOTE_TAGS_URL = os.getenv("REMOTE_TAGS_URL", "https://tags.jamming-bot.arthew0.online")
 
 DATA_SERVICE_URL = os.getenv("DATA_SERVICE_URL", "http://data_service:8010")
-STORAGE_SERVICE_URL = os.getenv("STORAGE_SERVICE_URL", "http://storage_service:7781")
 TAGS_SERVICE_URL = os.getenv("TAGS_SERVICE_URL", "http://tags_service:8000")
 
 REQUEST_TIMEOUT = 60
@@ -109,11 +109,7 @@ def sync_storage_steps():
     missing = []
     for i in range(0, len(remote_ids_str), BATCH_SIZE):
         batch = remote_ids_str[i : i + BATCH_SIZE]
-        resp = requests.post(
-            f"{STORAGE_SERVICE_URL}/exists/batch",
-            json={"numbers": batch},
-            timeout=REQUEST_TIMEOUT,
-        )
+        resp = storage_http.storage_post_exists_batch(batch, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         missing.extend(resp.json().get("missing", []))
 
@@ -138,11 +134,7 @@ def sync_storage_steps():
             step_resp.raise_for_status()
             step_data = step_resp.json()
 
-            store_resp = requests.post(
-                f"{STORAGE_SERVICE_URL}/store",
-                json=step_data,
-                timeout=REQUEST_TIMEOUT,
-            )
+            store_resp = storage_http.storage_post_store(step_data, timeout=REQUEST_TIMEOUT)
             store_resp.raise_for_status()
             synced += 1
         except Exception as e:

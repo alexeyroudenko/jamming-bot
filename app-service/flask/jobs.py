@@ -17,6 +17,7 @@ from rq.decorators import job
 from rq import get_current_job
 from rq_helpers import redis_connection
 from telemetry import init_telemetry, with_trace_context, set_step_span_attributes
+import storage_http
 
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
@@ -24,7 +25,6 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 TAGS_SERVICE_URL = os.getenv('TAGS_SERVICE_URL', 'http://tags_service:8000')
 SEMANTIC_SERVICE_URL = os.getenv('SEMANTIC_SERVICE_URL', 'http://semantic_service:8005')
 MOOD_SERVICE_URL = os.getenv("MOOD_SERVICE_URL", "http://mood_service:8020")
-STORAGE_SERVICE_URL = os.getenv('STORAGE_SERVICE_URL', 'http://storage_service:7781')
 IMAGE_ANALYZE_SERVICE_URL = os.getenv('IMAGE_ANALYZE_SERVICE_URL', 'http://image-analyze-service:8006')
 IP_SERVICE_URL = os.getenv('IP_SERVICE_URL', 'http://bots.arthew0.online:8004')
 RENDERER_SERVICE_URL = os.getenv('RENDERER_SERVICE_URL', 'http://html-renderer-service:3000')
@@ -719,12 +719,9 @@ def do_storage(data):
 
     payload = step_payload_for_store(data)
 
-    url = f"{STORAGE_SERVICE_URL}/store"
-    headers = {'content-type': 'application/json'}
     try:
         with sentry_sdk.start_span(op="http.client", description="storage_service /store"):
-            response = requests.post(url, data=json.dumps(payload, default=str),
-                                     headers=headers, timeout=30)
+            response = storage_http.storage_post_store(payload, timeout=30)
             response.raise_for_status()
         r = response.json() if response.content else {}
     except Exception as e:

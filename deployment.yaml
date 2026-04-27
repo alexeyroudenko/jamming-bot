@@ -369,10 +369,10 @@ spec:
           mountPath: /tmp/backfill
         resources:
           requests:
-            cpu: "50m"
+            cpu: "100m"
             memory: "256Mi"
           limits:
-            cpu: "250m"
+            cpu: "1000m"
             memory: "1024Mi"
         startupProbe:
           tcpSocket:

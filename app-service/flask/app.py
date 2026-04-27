@@ -9,6 +9,7 @@ import threading
 import tempfile
 import requests
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 import yaml
 from rq import Worker
@@ -30,6 +31,7 @@ from config import Config, getConfig, getRedis
 from telemetry import init_telemetry, inject_trace_context_into_job, set_step_span_attributes, step_span, enqueue_with_trace
 import jobs
 import sync_jobs
+import storage_http
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -487,6 +489,30 @@ def _emit_presence_step(step_number, phase="update"):
     )
 
 
+def _run_early_storage(store_payload: dict, step_number: str, is_silent: bool):
+    """POST /store in background (non-blocking /bot/step/); keep-alive via storage_http."""
+    try:
+        last_error = None
+        for idx, delay in enumerate((0.0, 0.8, 1.6)):
+            if delay > 0:
+                time.sleep(delay)
+            try:
+                store_resp = storage_http.storage_post_store(store_payload, timeout=12)
+                store_resp.raise_for_status()
+                last_error = None
+                break
+            except Exception as e:
+                last_error = e
+                logger.warning("step: early storage retry=%s/3 failed: %s", idx + 1, e)
+        if last_error is not None:
+            raise last_error
+        logger.info("step: early storage OK for step %s", step_number)
+        if is_silent:
+            _emit_presence_step(step_number, phase="store")
+    except Exception as e:
+        logger.warning("step: early storage failed: %s", e)
+
+
 def _persist_semantic_last_collect(payload):
     """Store last semantic_collect payload so /semantic/ can poll after a missed Socket.IO event."""
     if not isinstance(payload, dict):
@@ -884,16 +910,36 @@ def _patch_storage(step_key, data):
         if delay > 0:
             time.sleep(delay)
         try:
-            response = requests.patch(
-                f"{STORAGE_SERVICE_URL}/update/step/{number}",
-                json=payload,
-                timeout=12,
-            )
-            if response.status_code == 404:
-                logger.warning(f"_patch_storage({number}) 404 not found (step missing in storage)")
+            # Row is created asynchronously (early POST /store); wait or bootstrap on 404.
+            for attempt in range(14):
+                response = storage_http.storage_patch_step(number, payload, timeout=12)
+                if response.status_code == 404:
+                    if attempt < 10:
+                        time.sleep(0.15)
+                        continue
+                    if attempt == 10:
+                        row = _read_step_hash(step_key) or {}
+                        merged = {**dict(row), **payload}
+                        store_body = jobs.step_payload_for_store(merged)
+                        try:
+                            boot = storage_http.storage_post_store(store_body, timeout=15)
+                            boot.raise_for_status()
+                        except Exception as boot_e:
+                            logger.warning(
+                                "_patch_storage(%s) bootstrap POST failed: %s",
+                                number,
+                                boot_e,
+                            )
+                            return
+                        time.sleep(0.05)
+                        continue
+                    logger.warning(
+                        "_patch_storage(%s) 404 after bootstrap (step missing in storage)",
+                        number,
+                    )
+                    return
+                response.raise_for_status()
                 return
-            response.raise_for_status()
-            return
         except Exception as e:
             last_error = e
             logger.warning(f"_patch_storage({number}) retry={idx+1}/{len(delays)}: {e}")
@@ -907,9 +953,8 @@ def _store_step_analysis(step_key, data):
     if not number or not isinstance(palette, list):
         return
     try:
-        requests.post(
-            f"{STORAGE_SERVICE_URL}/analysis/store",
-            json={"step_number": str(number), "palette": palette},
+        storage_http.storage_post_analysis(
+            {"step_number": str(number), "palette": palette},
             timeout=5,
         )
     except Exception as e:
@@ -1759,32 +1804,15 @@ def step():
         )
         if early_store and data.get('url'):
             try:
-                store_payload = jobs.step_payload_for_store(data)
-                store_resp = None
-                last_error = None
-                for idx, delay in enumerate((0.0, 0.8, 1.6)):
-                    if delay > 0:
-                        time.sleep(delay)
-                    try:
-                        store_resp = requests.post(
-                            f"{STORAGE_SERVICE_URL}/store",
-                            data=json.dumps(store_payload, default=str),
-                            headers={'content-type': 'application/json'},
-                            timeout=12,
-                        )
-                        store_resp.raise_for_status()
-                        last_error = None
-                        break
-                    except Exception as e:
-                        last_error = e
-                        logger.warning(f"step: early storage retry={idx+1}/3 failed: {e}")
-                if last_error is not None:
-                    raise last_error
-                logger.info(f"step: early storage OK for step {data['number']}")
-                if is_silent:
-                    _emit_presence_step(data.get("number"), phase="store")
+                store_payload = dict(jobs.step_payload_for_store(data))
+                threading.Thread(
+                    target=_run_early_storage,
+                    args=(store_payload, str(data["number"]), is_silent),
+                    name="early-storage",
+                    daemon=True,
+                ).start()
             except Exception as e:
-                logger.warning(f"step: early storage failed: {e}")
+                logger.warning("step: early storage thread spawn failed: %s", e)
 
         if data['status_string'] == "ok":
             with step_span(step_number=data.get('number'), step_url=data.get('url')):
@@ -1974,8 +2002,9 @@ def api_storage_step(step_num):
         if delay > 0:
             time.sleep(delay)
         try:
-            resp = requests.get(
-                f"{STORAGE_SERVICE_URL}/get/step/{step_num}", timeout=20
+            resp = storage_http.storage_get(
+                f"/get/step/{quote(str(step_num), safe='')}",
+                timeout=20,
             )
             resp.raise_for_status()
             return jsonify(resp.json())
@@ -1992,7 +2021,7 @@ def api_storage_step(step_num):
 def api_storage_latest():
     """Proxy to storage-service GET /get/latest."""
     try:
-        resp = requests.get(f"{STORAGE_SERVICE_URL}/get/latest", timeout=15)
+        resp = storage_http.storage_get("/get/latest", timeout=15)
         resp.raise_for_status()
         return jsonify(resp.json())
     except Exception as e:
@@ -2005,7 +2034,7 @@ def api_storage_latest():
 def api_storage_ids():
     """Proxy to storage-service GET /get/ids."""
     try:
-        resp = requests.get(f"{STORAGE_SERVICE_URL}/get/ids", timeout=15)
+        resp = storage_http.storage_get("/get/ids", timeout=15)
         resp.raise_for_status()
         return jsonify(resp.json())
     except Exception as e:
@@ -2049,10 +2078,10 @@ def api_storage_img():
             params["width"] = width
         if image_type:
             params["type"] = image_type
-        resp = requests.get(
-            f"{STORAGE_SERVICE_URL}/export/img",
-            params=params,
+        resp = storage_http.storage_get(
+            "/export/img",
             timeout=30,
+            params=params or None,
         )
         resp.raise_for_status()
         return Response(
@@ -2103,7 +2132,7 @@ def api_storage_geo():
     limit = request.args.get("limit", default=2000, type=int)
     limit = max(1, min(limit, 5000))
     try:
-        resp = requests.get(f"{STORAGE_SERVICE_URL}/get/latest", timeout=15)
+        resp = storage_http.storage_get("/get/latest", timeout=15)
         resp.raise_for_status()
         payload = resp.json()
         rows = payload.get("data") or []
