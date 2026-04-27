@@ -367,7 +367,18 @@ class NetSpider():
                 self.resumed = False
                 query = """CREATE TABLE Urls (id INTEGER PRIMARY KEY, hostname VARCHAR(127), url VARCHAR(127) unique, src_url VARCHAR(127), visited INTEGER)"""
                 await self.database.execute(query=query)
+        await self._ensure_urls_indexes()
 
+    async def _ensure_urls_indexes(self):
+        """Speed up next-url pick (visited=0, GROUP BY hostname) and counts."""
+        idx = (
+            "CREATE INDEX IF NOT EXISTS idx_urls_visited_hostname "
+            "ON Urls(visited, hostname)"
+        )
+        try:
+            await self.database.execute(query=idx)
+        except Exception as e:
+            logging.warning("Could not create idx_urls_visited_hostname: %s", e)
 
     async def set_visited(self, url):
         logging.info("set_visited", url)
@@ -557,9 +568,24 @@ class NetSpider():
                 
                 self.notify_about_eventp("retrieve_next_url", self.step_number)
                 
-                #
-                query = "SELECT id, hostname, url, src_url, count(visited) FROM Urls where visited==0 GROUP BY hostname ORDER BY count(visited) LIMIT 1"
-                rows = await self._db_fetch_all(query=query)
+                # Host with fewest unvisited rows, then one row (uses idx_urls_visited_hostname).
+                pick_host_sql = (
+                    "SELECT hostname FROM Urls WHERE visited = 0 "
+                    "GROUP BY hostname ORDER BY COUNT(*) ASC, hostname ASC LIMIT 1"
+                )
+                host_row = await self._db_fetch_one(query=pick_host_sql)
+                pick_row_sql = (
+                    "SELECT id, hostname, url, src_url FROM Urls "
+                    "WHERE visited = 0 AND hostname = :hostname ORDER BY id ASC LIMIT 1"
+                )
+                rows = (
+                    await self._db_fetch_all(
+                        query=pick_row_sql,
+                        values={"hostname": host_row[0]},
+                    )
+                    if host_row
+                    else []
+                )
                 
                 steps_forwards_query = "SELECT COUNT(*) FROM Urls WHERE visited=0"
                 steps_forwards_result = await self._db_fetch_one(query=steps_forwards_query)
