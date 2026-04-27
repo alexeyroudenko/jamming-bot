@@ -360,8 +360,8 @@ def _ctrl_log(action: str, source: str):
 
 
 def _ensure_redis_defaults():
-    defaults = {'value': 0.5, 'do_pass': 0.5, 'do_geo': 0.5,
-                'do_save': 1.0, 'do_analyze': 1.0, 'do_mood': 1.0, 'do_screenshot': 0.5,
+    defaults = {'value': 0.5, 'do_pass': 0.5, 'do_geo': 1.0,
+                'do_save': 1.0, 'do_analyze': 1.0, 'do_mood': 1.0, 'do_screenshot': 1.0,
                 'do_image_analyze': 1.0, 'do_storage': 1.0, 'sleep_time': 2.0,
                 'random_time': 2.0, 'backfill_sleep': 2.0, 'backfill_timeout': 4.0,
                 'backfill_active': 1.0, 'fetch_concurrency': 10.0}

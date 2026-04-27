@@ -43,12 +43,12 @@ def getConfig():
     defaults = {
         'value': 0.5,
         'do_pass': 0,
-        'do_geo': 0,
+        'do_geo': 1,
         'do_save': 0,
-        'do_analyze': 0,
+        'do_analyze': 1,
         'do_mood': 1,
-        'do_screenshot': 0,
-        'do_storage': 0,
+        'do_screenshot': 1,
+        'do_storage': 1,
     }
     
     # Try to initialize default values if they don't exist
