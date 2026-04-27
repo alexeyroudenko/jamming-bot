@@ -1,0 +1,23 @@
+<section class="bot-panel bot-primary-panel">
+  <div class="bot-primary-head">
+    <div class="bot-brand">
+      <span class="bot-brand-kicker">Jamming Bot v2.1.0</span>
+    </div>
+
+    <div class="bot-nav-grid">
+      {% include "components/bot_primary_nav_full.html" %}
+    </div>
+
+    <div class="bot-auth-slot">
+      <div class="guest-only">
+        <a class="bot-login-link" href="#" onclick="showLoginForm(); return false;">login <span id="login"></span></a>
+      </div>
+      <div class="admin-only">
+        <button class="bot-action bot-action-danger" onclick="handleLogout()">logout</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="bot-section">
+  </div>
+</section>

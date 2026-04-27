@@ -25,6 +25,7 @@
   
   <!-- Description -->
   <meta name="description" content="Jamming bot visualization and monitoring">
+  <link rel="stylesheet" href="/flask_static/dashboard_panels.css">
 <style>
     body, table {
     margin: 0px;
@@ -414,876 +415,6 @@ button {
     opacity: 1;
 }
 
-:root {
-    --bot-bg: #000000;
-    --bot-surface: rgba(18, 18, 18, 0.94);
-    --bot-surface-strong: rgba(8, 8, 8, 0.98);
-    --bot-border: rgba(255, 255, 255, 0.18);
-    --bot-border-strong: rgba(255, 255, 255, 0.34);
-    --bot-text: #ffffff;
-    --bot-muted: #9a9a9a;
-    --bot-accent: #ff0000;
-    --bot-accent-strong: #ff0000;
-    --bot-danger: #ff0000;
-    --bot-shadow: 0 18px 44px rgba(0, 0, 0, 0.38);
-}
-
-#debug,
-#login-overlay,
-#login-form {
-    font-family: "Segoe UI", Arial, sans-serif;
-}
-
-.bot-topbar {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    align-items: start;
-}
-
-.bot-panel {
-    border: 0px solid var(--bot-border);
-    background: transparent;
-    box-shadow: none;
-}
-
-.bot-primary-panel,
-.bot-status-panel,
-.bot-admin-panel {
-    padding: 8px;
-}
-
-.bot-primary-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 8px;
-    margin-bottom: 8px;
-}
-
-.bot-brand {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.bot-brand-kicker,
-.bot-section-label {
-    color: var(--bot-muted);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    padding-top: 3px;
-    padding-right: 3px;
-    text-transform: uppercase;
-}
-
-.bot-brand-title {
-    color: var(--bot-text);
-    font-size: 18px;
-    font-weight: 600;
-    line-height: 1.1;
-}
-
-.bot-brand-subtitle {
-    color: var(--bot-muted);
-    font-size: 12px;
-    line-height: 1.25;
-    max-width: 56ch;
-}
-
-.bot-auth-slot {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 4px;
-    min-height: 22px;
-}
-
-.bot-section {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.bot-section + .bot-section {
-    margin-top: 6px;
-}
-
-.bot-nav-grid,
-.bot-admin-grid,
-.bot-dev-links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-}
-
-.bot-nav-grid .bot-link-chip {
-    opacity: 0.5;
-}
-
-.bot-nav-grid .bot-link-chip:hover {
-    opacity: 1;
-}
-
-.bot-side-column .bot-link-chip,
-.bot-side-column .bot-action {
-    opacity: 0.5;
-}
-
-.bot-side-column .bot-link-chip:hover,
-.bot-side-column .bot-action:hover {
-    opacity: 1;
-}
-
-.bot-side-column {
-    position: fixed;
-    left: 20px;
-    right: 20px;
-    bottom: 20px;
-    display: flex;
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 4px;
-    flex-wrap: nowrap;
-    white-space: nowrap;
-    width: auto;
-    z-index: 210;
-}
-
-.bot-link-chip,
-.bot-action,
-.bot-login-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    min-height: 18px;
-    padding: 2px 8px;
-    /* border: 1px solid var(--bot-border); */
-    /* background: rgba(24, 24, 24, 0.95); */
-    /* color: var(--bot-text); */
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 12px;
-    line-height: 1;
-    transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.bot-link-chip:hover,
-.bot-action:hover,
-.bot-login-link:hover {
-    background: transparent;
-    border-color: transparent;
-}
-
-.bot-move-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    min-height: 18px;
-    padding: 2px 8px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 12px;
-    line-height: 1;
-    color: var(--bot-text);
-    cursor: pointer;
-    opacity: 0.5;
-    user-select: none;
-}
-
-.bot-move-toggle:hover {
-    opacity: 1;
-}
-
-.bot-move-toggle input {
-    margin: 0;
-    accent-color: var(--bot-accent);
-}
-
-.bot-visibility-panel {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 220;
-    width: 85px;
-    height: 768px;
-    padding: 10px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    background: rgba(5, 7, 10, 0.76);
-    border: 1px solid var(--bot-border);
-    box-shadow: var(--bot-shadow);
-    backdrop-filter: blur(10px);
-    overflow: hidden;
-}
-
-.bot-visibility-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-}
-
-.bot-visibility-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-}
-
-.bot-visibility-actions .bot-action {
-    padding: 0;
-    min-height: auto;
-    opacity: 0.78;
-}
-
-.bot-visibility-actions .bot-action:hover {
-    opacity: 1;
-}
-
-.bot-visibility-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
-    align-content: start;
-    overflow: auto;
-    padding-right: 2px;
-}
-
-.bot-visibility-panel-toggles {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
-}
-
-.bot-visibility-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    min-height: 18px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 12px;
-    line-height: 1.1;
-    color: var(--bot-text);
-    cursor: pointer;
-    opacity: 0.78;
-    user-select: none;
-}
-
-.bot-visibility-toggle:hover {
-    opacity: 1;
-}
-
-.bot-visibility-toggle input {
-    margin: 0;
-    accent-color: var(--bot-accent);
-}
-
-body.is-move-mode {
-    cursor: crosshair;
-}
-
-body.is-move-mode .bot-move-target {
-    touch-action: none;
-}
-
-body.is-move-mode .bot-move-target:hover {
-    outline: 1px dashed rgba(255, 0, 0, 0.45);
-    outline-offset: 2px;
-}
-
-body.is-move-mode .bot-move-target.is-move-selected {
-    outline: 1px solid rgba(255, 0, 0, 0.95);
-    outline-offset: 2px;
-    box-shadow: 0 0 0 1px rgba(255, 0, 0, 0.18);
-}
-
-.bot-link-chip span,
-.bot-login-link span,
-.bot-metric-value {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-.bot-link-chip.is-danger,
-.bot-action-danger {
-    border-color: transparent;
-    background: transparent;
-}
-
-.bot-status-grid {
-    display: flex;
-    align-items: center;
-    flex-wrap: nowrap;
-    gap: 4px;
-}
-
-.bot-metric {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    background: transparent;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 12px;
-    line-height: 1;
-}
-
-.bot-metric-label {
-    display: inline;
-    margin-bottom: 0;
-    color: var(--bot-text);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0;
-    text-transform: none;
-}
-
-.bot-metric-value {
-    color: var(--bot-text);
-    font-size: 12px;
-    font-weight: 600;
-    font-family: inherit;
-}
-
-.bot-status-panel,
-.bot-admin-panel,
-.bot-status-grid,
-.bot-admin-grid,
-.bot-dev-links {
-    background: transparent;
-}
-
-.bot-status-panel,
-.bot-admin-panel {
-    padding: 0;
-}
-
-.bot-admin-panel {
-    display: inline-flex;
-    align-items: flex-start;
-    gap: 4px;
-}
-
-.bot-admin-grid,
-.bot-dev-links {
-    flex-wrap: nowrap;
-}
-
-.bot-admin-panel .bot-section-label {
-    margin-right: 2px;
-}
-
-.bot-workers-panel {
-    position: fixed;
-    left: 50%;
-    bottom: 120px;
-    transform: translateX(-50%);
-    z-index: 205;
-    width: min(640px, calc(100vw - 320px));
-    max-height: 180px;
-    padding: 10px 12px;
-    background: rgba(5, 7, 10, 0.76);
-    border: 1px solid var(--bot-border);
-    box-shadow: var(--bot-shadow);
-    backdrop-filter: blur(10px);
-    overflow: hidden;
-}
-
-.bot-backfill-panel {
-    position: fixed;
-    left: 50%;
-    bottom: 212px;
-    transform: translateX(-50%);
-    z-index: 204;
-    width: min(960px, calc(100vw - 240px));
-    padding: 10px 12px;
-    background: rgba(5, 7, 10, 0.76);
-    border: 1px solid var(--bot-border);
-    box-shadow: var(--bot-shadow);
-    backdrop-filter: blur(10px);
-    overflow: hidden;
-}
-
-.bot-viewers-panel {
-    position: fixed;
-    left: 50%;
-    bottom: 316px;
-    transform: translateX(-50%);
-    z-index: 203;
-    width: min(1120px, calc(100vw - 160px));
-    max-height: 190px;
-    padding: 10px 12px;
-    background: rgba(5, 7, 10, 0.76);
-    border: 1px solid var(--bot-border);
-    box-shadow: var(--bot-shadow);
-    backdrop-filter: blur(10px);
-    overflow: hidden;
-}
-
-.bot-logs-panel {
-    position: fixed;
-    left: 50%;
-    bottom: 612px;
-    transform: translateX(-50%);
-    z-index: 202;
-    width: min(1120px, calc(100vw - 160px));
-    max-height: 230px;
-    padding: 10px 12px;
-    background: rgba(5, 7, 10, 0.76);
-    border: 1px solid var(--bot-border);
-    box-shadow: var(--bot-shadow);
-    backdrop-filter: blur(10px);
-    overflow: hidden;
-    display: none;
-}
-
-.bot-panel-quick-toggle {
-    position: fixed;
-    z-index: 206;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 8px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 11px;
-    line-height: 1;
-    color: var(--bot-text);
-    background: rgba(5, 7, 10, 0.82);
-    border: 1px solid var(--bot-border);
-    box-shadow: var(--bot-shadow);
-    backdrop-filter: blur(10px);
-    opacity: 0.82;
-    user-select: none;
-}
-
-.bot-panel-quick-toggle:hover {
-    opacity: 1;
-}
-
-.bot-panel-quick-toggle input {
-    margin: 0;
-    accent-color: var(--bot-accent);
-}
-
-.bot-visibility-panel .bot-panel-quick-toggle,
-.bot-visibility-panel .bot-panel-quick-toggle-workers,
-.bot-visibility-panel .bot-panel-quick-toggle-backfill,
-.bot-visibility-panel .bot-panel-quick-toggle-viewers,
-.bot-visibility-panel .bot-panel-quick-toggle-timeline,
-.bot-visibility-panel .bot-panel-quick-toggle-logs {
-    position: static;
-    left: auto;
-    bottom: auto;
-    transform: none;
-    z-index: auto;
-    width: 100%;
-    padding: 0;
-    background: transparent;
-    border: 0;
-    box-shadow: none;
-    backdrop-filter: none;
-    opacity: 0.78;
-}
-
-.bot-panel-quick-toggle-workers {
-    left: 50%;
-    bottom: 92px;
-    transform: translateX(-50%);
-}
-
-.bot-panel-quick-toggle-backfill {
-    left: 50%;
-    bottom: 184px;
-    transform: translateX(-50%);
-}
-
-.bot-panel-quick-toggle-viewers {
-    left: 50%;
-    bottom: 288px;
-    transform: translateX(-50%);
-}
-
-.bot-panel-quick-toggle-timeline {
-    left: 50%;
-    bottom: 490px;
-    transform: translateX(-50%);
-}
-
-.bot-panel-quick-toggle-logs {
-    left: 50%;
-    bottom: 584px;
-    transform: translateX(-50%);
-}
-
-.bot-step-timeline-panel {
-    position: fixed;
-    left: 50%;
-    bottom: 518px;
-    transform: translateX(-50%);
-    z-index: 202;
-    width: min(1120px, calc(100vw - 160px));
-    padding: 10px 12px;
-    background: rgba(5, 7, 10, 0.76);
-    border: 1px solid var(--bot-border);
-    box-shadow: var(--bot-shadow);
-    backdrop-filter: blur(10px);
-    overflow: hidden;
-}
-
-.bot-workers-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 8px;
-}
-
-.bot-workers-meta {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 11px;
-    color: var(--bot-muted);
-}
-
-.bot-backfill-grid {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 6px 10px;
-    margin-bottom: 8px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 12px;
-}
-
-.bot-backfill-item {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.bot-backfill-label {
-    color: var(--bot-muted);
-    font-size: 10px;
-    text-transform: uppercase;
-}
-
-.bot-backfill-value {
-    color: var(--bot-text);
-    min-height: 16px;
-}
-
-.bot-backfill-value.is-running {
-    color: #fca5a5;
-}
-
-.bot-backfill-value.is-finished {
-    color: #bbf7d0;
-}
-
-.bot-backfill-value.is-failed {
-    color: #fca5a5;
-}
-
-.bot-backfill-detail {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 11px;
-    color: var(--bot-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.bot-workers-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    max-height: 126px;
-    overflow-y: auto;
-}
-
-.bot-workers-row,
-.bot-workers-empty {
-    display: grid;
-    grid-template-columns: minmax(130px, 1.4fr) minmax(64px, 0.7fr) minmax(130px, 1.2fr) minmax(110px, 1fr) minmax(56px, 0.5fr);
-    gap: 8px;
-    align-items: center;
-    padding: 4px 0;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 12px;
-    line-height: 1.25;
-}
-
-.bot-workers-empty {
-    grid-template-columns: 1fr;
-    color: var(--bot-muted);
-}
-
-.bot-workers-name,
-.bot-workers-queues,
-.bot-workers-job {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.bot-workers-state {
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-start;
-    color: var(--bot-text);
-}
-
-.bot-workers-state::before {
-    content: "";
-    width: 6px;
-    height: 6px;
-    margin-right: 6px;
-    border-radius: 999px;
-    background: var(--bot-muted);
-    box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
-}
-
-.bot-workers-row.is-busy .bot-workers-state::before {
-    background: var(--bot-accent);
-    box-shadow: 0 0 12px rgba(255, 0, 0, 0.55);
-}
-
-.bot-workers-row.is-idle .bot-workers-state::before {
-    background: #6b7280;
-}
-
-.bot-workers-age {
-    color: var(--bot-muted);
-    text-align: right;
-}
-
-.bot-viewers-table {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    max-height: 136px;
-    overflow: auto;
-}
-
-.bot-viewers-row,
-.bot-viewers-empty {
-    display: grid;
-    grid-template-columns: minmax(120px, 1.1fr) minmax(56px, 0.55fr) minmax(56px, 0.55fr) minmax(56px, 0.55fr) minmax(120px, 0.9fr) minmax(72px, 0.6fr) minmax(120px, 1fr) minmax(220px, 1.6fr);
-    gap: 8px;
-    align-items: center;
-    padding: 4px 0;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 11px;
-    line-height: 1.25;
-}
-
-.bot-viewers-row.is-head {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    padding-top: 0;
-    background: rgba(5, 7, 10, 0.95);
-    color: var(--bot-muted);
-    text-transform: uppercase;
-}
-
-.bot-viewers-empty {
-    grid-template-columns: 1fr;
-    color: var(--bot-muted);
-}
-
-.bot-viewers-sid,
-.bot-viewers-ip,
-.bot-viewers-origin,
-.bot-viewers-ua {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.bot-viewers-role {
-    color: var(--bot-text);
-}
-
-.bot-viewers-role.is-admin {
-    color: #bbf7d0;
-}
-
-.bot-viewers-role.is-guest {
-    color: var(--bot-muted);
-}
-
-.bot-viewers-seen.is-stale {
-    color: #fca5a5;
-}
-
-.bot-logs-table {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    max-height: 176px;
-    overflow: auto;
-}
-
-.bot-logs-row,
-.bot-logs-empty {
-    display: grid;
-    grid-template-columns: minmax(66px, 0.55fr) minmax(96px, 0.8fr) minmax(110px, 0.9fr) minmax(0, 2.8fr);
-    gap: 8px;
-    align-items: start;
-    padding: 4px 0;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 11px;
-    line-height: 1.25;
-}
-
-.bot-logs-row.is-head {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    padding-top: 0;
-    background: rgba(5, 7, 10, 0.95);
-    color: var(--bot-muted);
-    text-transform: uppercase;
-}
-
-.bot-logs-empty {
-    grid-template-columns: 1fr;
-    color: var(--bot-muted);
-}
-
-.bot-logs-type,
-.bot-logs-event {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.bot-logs-type {
-    color: var(--bot-text);
-}
-
-.bot-logs-type.type-bot {
-    color: #fca5a5;
-}
-
-.bot-logs-type.type-analyzer {
-    color: #93c5fd;
-}
-
-.bot-logs-type.type-screenshoter {
-    color: #fcd34d;
-}
-
-.bot-logs-type.type-geo {
-    color: #86efac;
-}
-
-.bot-logs-type.type-controls {
-    color: #c4b5fd;
-}
-
-.bot-logs-type.type-system {
-    color: var(--bot-muted);
-}
-
-.bot-step-timeline-track {
-    position: relative;
-    height: 52px;
-    width: 100%;
-    overflow: hidden;
-    background:
-        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 20% 100%,
-        rgba(255, 255, 255, 0.035);
-}
-
-.bot-step-timeline-empty {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    padding: 0;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 11px;
-    color: var(--bot-muted);
-    pointer-events: none;
-    justify-content: center;
-}
-
-.bot-step-timeline-segment {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    min-width: 4px;
-    border: 1px solid #000;
-    box-sizing: border-box;
-    opacity: 0.92;
-}
-
-.bot-step-timeline-segment.type-bot {
-    background: #b7b7b7;
-}
-
-.bot-step-timeline-segment.type-analyzer {
-    background: #8f8f8f;
-}
-
-.bot-step-timeline-segment.type-screenshoter {
-    background: #d5d5d5;
-}
-
-.bot-step-timeline-segment.type-geo {
-    background: #6f6f6f;
-}
-
-.bot-step-timeline-segment.type-controls {
-    background: #f0f0f0;
-}
-
-.bot-step-timeline-segment.type-system {
-    background: #555555;
-}
-
-.bot-step-timeline-segment.is-overflow {
-    box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.8);
-}
-
-.bot-step-timeline-cursor {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 1px;
-    background: #ff3b30;
-    pointer-events: none;
-    z-index: 3;
-}
-
-.bot-logs-summary {
-    min-width: 0;
-    color: var(--bot-text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-button.bot-action {
-    appearance: none;
-    -webkit-appearance: none;
-    cursor: pointer;
-}
-
-.admin-only {
-    display: none;
-}
-
-.guest-only {
-    display: flex;
-}
-
-body.is-admin .admin-only {
-    display: flex;
-}
-
-body.is-admin .guest-only {
-    display: none;
-}
 
 #login-overlay {
     position: fixed;
@@ -1680,57 +811,10 @@ body.is-admin .guest-only {
 
   <div id="debug">
     <div class="bot-topbar">
-      <section class="bot-panel bot-primary-panel">
-        <div class="bot-primary-head">
-          <div class="bot-brand">
-            <span class="bot-brand-kicker">Jamming Bot v2.1.0</span>
-          </div>
-
-          <div class="bot-nav-grid">
-            <a class="bot-link-chip is-primary" href="/tags/">tag cloud</a>
-            <a class="bot-link-chip is-primary" href="/tags/3d/">3D cloud</a>
-            <a class="bot-link-chip" href="/geo/">geo globe</a>
-            <a class="bot-link-chip" href="/path/map/">path map</a>
-            <a class="bot-link-chip" href="/static-app/">react UI</a>
-            <a class="bot-link-chip" href="/screenshots/">screenshot</a>
-            <a class="bot-link-chip" href="/tags/phrases/">phrases</a>
-            <a class="bot-link-chip" href="/tags/sentiment-vortex/">sentiment vortex</a>
-            <a class="bot-link-chip" href="/tags/constellation/">constellation</a>
-            <a class="bot-link-chip" href="/tags/vectorfield/">vector field</a>
-            <a class="bot-link-chip" href="/tags/vectorfield-3d/">vector 3D</a>
-            <a class="bot-link-chip" href="/tags/chaos-attractor/">chaos</a>
-            <a class="bot-link-chip" href="/semantic/">semantic</a>
-          </div>
-
-
-
-          <div class="bot-auth-slot">
-            <div class="guest-only">
-              <a class="bot-login-link" href="#" onclick="showLoginForm(); return false;">login <span id="login"></span></a>
-            </div>
-            <div class="admin-only">
-              <button class="bot-action bot-action-danger" onclick="handleLogout()">logout</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="bot-section">
-        </div>
-      </section>
+      {% include "components/bot_primary_panel.html" %}
 
       <div class="bot-side-column">
-        <section class="bot-panel bot-status-panel">
-          <div class="bot-status-grid">
-            <div class="bot-metric">
-              <span class="bot-metric-label">Counter</span>
-              <span class="bot-metric-value" id="counter"></span>
-            </div>
-            <div class="bot-metric">
-              <span class="bot-metric-label">Latency</span>
-              <span class="bot-metric-value" id="latency"></span>
-            </div>
-          </div>
-        </section>
+        {% include "components/bot_status_panel.html" %}
 
         <section class="bot-panel bot-admin-panel admin-only">
           <div class="bot-admin-grid">
@@ -1804,7 +888,7 @@ body.is-admin .guest-only {
           <div class="bot-viewers-empty">Loading viewers...</div>
         </div>
       </section>
-      <section id="logs-panel" class="bot-panel bot-logs-panel admin-only" aria-live="polite">
+      <section id="logs-panel" class="bot-panel bot-logs-panel" aria-live="polite">
         <div class="bot-workers-head">
           <span class="bot-section-label">Logs</span>
           <span id="logs-meta" class="bot-workers-meta">0 events</span>
@@ -1813,7 +897,7 @@ body.is-admin .guest-only {
           <div class="bot-logs-empty">Waiting for socket events...</div>
         </div>
       </section>
-      <section id="step-timeline-panel" class="bot-panel bot-step-timeline-panel admin-only" aria-live="polite">
+      <section id="step-timeline-panel" class="bot-panel bot-step-timeline-panel" aria-live="polite">
         <div id="step-timeline-track" class="bot-step-timeline-track">
           <div class="bot-step-timeline-empty">Waiting for step...</div>
           <div id="step-timeline-cursor" class="bot-step-timeline-cursor" hidden></div>
@@ -1833,11 +917,11 @@ body.is-admin .guest-only {
       </div>
     </div>
     <div class="bot-visibility-panel-toggles">
-      <label class="bot-panel-quick-toggle bot-panel-quick-toggle-logs admin-only" for="quick-toggle-logs-panel">
+      <label class="bot-panel-quick-toggle bot-panel-quick-toggle-logs" for="quick-toggle-logs-panel">
         <input type="checkbox" id="quick-toggle-logs-panel" data-target-selector="#logs-panel" checked>
         <span>logs</span>
       </label>
-      <label class="bot-panel-quick-toggle bot-panel-quick-toggle-timeline admin-only" for="quick-toggle-step-timeline-panel">
+      <label class="bot-panel-quick-toggle bot-panel-quick-toggle-timeline" for="quick-toggle-step-timeline-panel">
         <input type="checkbox" id="quick-toggle-step-timeline-panel" data-target-selector="#step-timeline-panel" checked>
         <span>timeline</span>
       </label>
@@ -1914,6 +998,7 @@ body.is-admin .guest-only {
     })();
     </script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
+    <script src="/flask_static/dashboard_socket.js"></script>
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
 
     <!-- Google tag (gtag.js) -->
@@ -2013,7 +1098,6 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeBlockVisibilityControls();
     initializeQuickPanelToggles();
     bindMoveModeControls();
-    startStepTimelineCursorLoop();
 
     document.addEventListener('change', function(event) {
         var target = event.target;
@@ -2034,31 +1118,12 @@ var text = "."
 var url = "/"
 
 
-var server = window.location.protocol + "//" + window.location.host;
-console.log("server", server)
-
-// Detect if behind /app ingress prefix and set socket.io path accordingly
-var basePath = window.location.pathname.replace(/\/+$/, '');
-var socketPath = basePath ? basePath + '/socket.io' : '/socket.io';
-console.log("socketPath", socketPath)
-var socket = io({path: socketPath});
-
 height = 600
 
-var counter = 0
 var tag = 0
 var imgs = 0
 var currentPalette = []
 var currentNounPhrases = []
-var logsBuffer = []
-var MAX_LOG_EVENTS = 200
-var STEP_TIMELINE_DURATION_MS = 10000
-var stepTimelineState = {
-    step: null,
-    startedAt: null,
-    events: []
-}
-var stepTimelineCursorFrame = null
 var viewersRefreshTimer = null
 var workersRefreshTimer = null
 var backfillRefreshTimer = null
@@ -2100,14 +1165,7 @@ var BLOCK_VISIBILITY_TARGETS = [
     { selector: '#log_words', label: 'words' }
 ]
 
-function escapeHtml(value) {
-    return String(value == null ? '' : value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
+var escapeHtml = window.escapeHtml;
 
 function getOrCreateCodeElement(containerId) {
     var container = document.getElementById(containerId);
@@ -2541,257 +1599,6 @@ function renderWorkers(payload) {
     }).join('');
 }
 
-function classifySocketEvent(eventName) {
-    switch (eventName) {
-    case 'event':
-    case 'step':
-    case 'sublink':
-    case 'clear':
-    case 'steps_forwards':
-        return 'bot';
-    case 'analyzed':
-    case 'tags_updated':
-        return 'analyzer';
-    case 'screenshot':
-    case 'image_analyzed':
-        return 'screenshoter';
-    case 'location':
-        return 'geo';
-    case 'set':
-    case 'set_values':
-        return 'controls';
-    default:
-        return 'system';
-    }
-}
-
-function summarizeSocketEvent(eventName, payload) {
-    if (eventName === 'connect') return 'socket connected';
-    if (eventName === 'disconnect') return 'socket disconnected';
-    if (eventName === 'clear') return 'clear state';
-    if (eventName === 'my_pong') return 'latency ' + String(payload && payload.latency_ms != null ? payload.latency_ms : '—') + 'ms';
-    if (eventName === 'event') return String((payload && payload.event) || 'event');
-    if (eventName === 'steps_forwards') return 'steps ' + String(payload && payload.value != null ? payload.value : payload);
-    if (eventName === 'sublink') return String((payload && payload.url) || 'sublink');
-    if (eventName === 'step') {
-        return '#' + String(payload && payload.step != null ? payload.step : '—') + ' ' +
-            String((payload && payload.status_code) || '—') + ' ' +
-            String((payload && payload.url) || '');
-    }
-    if (eventName === 'analyzed') {
-        var wordsCount = Array.isArray(payload && payload.words) ? payload.words.length : 0;
-        var phraseCount = Array.isArray(payload && payload.noun_phrases) ? payload.noun_phrases.length : 0;
-        return 'words=' + String(wordsCount) + ' noun_phrases=' + String(phraseCount);
-    }
-    if (eventName === 'screenshot') {
-        return payload && payload.screenshot_url ? String(payload.screenshot_url) : 'screenshot ready';
-    }
-    if (eventName === 'image_analyzed') {
-        var paletteCount = Array.isArray(payload && payload.palette) ? payload.palette.length : 0;
-        return 'palette=' + String(paletteCount);
-    }
-    if (eventName === 'set_values' || eventName === 'set') {
-        if (!payload || typeof payload !== 'object') return 'values updated';
-        var keys = Object.keys(payload).slice(0, 3);
-        return keys.length ? keys.map(function(key) {
-            return key + '=' + String(payload[key]);
-        }).join(' ') : 'values updated';
-    }
-    if (eventName === 'location') {
-        if (!payload || typeof payload !== 'object') return 'geo resolved';
-        return String(payload.country || payload.city || payload.ip || 'geo resolved');
-    }
-    if (eventName === 'tags_updated') return 'tags refreshed';
-    if (eventName === 'response') return String((payload && payload.message) || 'response');
-    return typeof payload === 'string' ? payload : eventName;
-}
-
-function renderStepTimeline() {
-    var trackEl = document.getElementById('step-timeline-track');
-    var cursorEl = document.getElementById('step-timeline-cursor');
-    var metaEl = document.getElementById('step-timeline-meta');
-    var captionEl = document.getElementById('step-timeline-caption');
-    if (!trackEl || !cursorEl || !metaEl || !captionEl) return;
-
-    if (stepTimelineState.step == null || !stepTimelineState.startedAt) {
-        metaEl.textContent = 'Waiting for step...';
-        trackEl.innerHTML = '<div class="bot-step-timeline-empty">Waiting for step...</div><div id="step-timeline-cursor" class="bot-step-timeline-cursor" hidden></div>';
-        captionEl.innerHTML = '<span>step -</span><span>0 events</span>';
-        updateStepTimelineCursor();
-        return;
-    }
-
-    metaEl.textContent = 'step #' + String(stepTimelineState.step) + ' • 10s window';
-    captionEl.textContent = 'step ' + String(stepTimelineState.step) + ' • ' + String(stepTimelineState.events.length) + ' events';
-
-    if (!stepTimelineState.events.length) {
-        trackEl.innerHTML = '<div class="bot-step-timeline-empty">Waiting for events inside the current 10s step window...</div><div id="step-timeline-cursor" class="bot-step-timeline-cursor" hidden></div>';
-        updateStepTimelineCursor();
-        return;
-    }
-
-    var segmentsHtml = stepTimelineState.events.map(function(entry, index) {
-        var summary = escapeHtml(entry.summary || entry.event || 'event');
-        var eventName = escapeHtml(entry.event || 'event');
-        var typeName = escapeHtml(entry.type || 'system');
-        var elapsedMs = Math.max(0, Math.round(entry.elapsedMs || 0));
-        var title = eventName + ' • ' + elapsedMs + 'ms • ' + summary;
-        var classes = 'bot-step-timeline-segment type-' + typeName + (entry.overflow ? ' is-overflow' : '');
-        var previousEntry = stepTimelineState.events[index - 1] || null;
-        var startLeft = previousEntry ? previousEntry.left : 0;
-        var width = Math.max(entry.left - startLeft, entry.width || 0.35);
-        return '<span class="' + classes + '" style="left:' + startLeft + '%;width:' + width + '%" title="' + escapeHtml(title) + '"></span>';
-    }).join('');
-    trackEl.innerHTML = segmentsHtml + '<div id="step-timeline-cursor" class="bot-step-timeline-cursor" hidden></div>';
-    updateStepTimelineCursor();
-}
-
-function updateStepTimelineCursor() {
-    var cursorEl = document.getElementById('step-timeline-cursor');
-    if (!cursorEl) {
-        return;
-    }
-    if (stepTimelineState.step == null || !stepTimelineState.startedAt) {
-        cursorEl.hidden = true;
-        return;
-    }
-    var elapsedMs = Math.max(0, Date.now() - stepTimelineState.startedAt);
-    var clampedMs = Math.min(elapsedMs, STEP_TIMELINE_DURATION_MS);
-    var left = (clampedMs / STEP_TIMELINE_DURATION_MS) * 100;
-    cursorEl.hidden = false;
-    cursorEl.style.left = left + '%';
-}
-
-function startStepTimelineCursorLoop() {
-    if (stepTimelineCursorFrame !== null) {
-        cancelAnimationFrame(stepTimelineCursorFrame);
-    }
-    function tick() {
-        updateStepTimelineCursor();
-        stepTimelineCursorFrame = requestAnimationFrame(tick);
-    }
-    stepTimelineCursorFrame = requestAnimationFrame(tick);
-}
-
-function resetStepTimeline(stepNumber, startedAt) {
-    stepTimelineState.step = stepNumber == null ? null : stepNumber;
-    stepTimelineState.startedAt = startedAt || Date.now();
-    stepTimelineState.events = [];
-    renderStepTimeline();
-}
-
-function clearStepTimeline() {
-    stepTimelineState.step = null;
-    stepTimelineState.startedAt = null;
-    stepTimelineState.events = [];
-    renderStepTimeline();
-}
-
-function appendTimelineEvent(eventName, payload, forcedType, eventTime) {
-    if (eventName === 'step' || !stepTimelineState.startedAt) {
-        return;
-    }
-
-    var timestamp = typeof eventTime === 'number' ? eventTime : Date.now();
-    var elapsedMs = Math.max(0, timestamp - stepTimelineState.startedAt);
-    var clampedMs = Math.min(elapsedMs, STEP_TIMELINE_DURATION_MS);
-    var left = (clampedMs / STEP_TIMELINE_DURATION_MS) * 100;
-    var width = 0.35;
-    var maxLeft = Math.max(100 - width, 0);
-    var timelineType = forcedType || classifySocketEvent(eventName);
-
-    stepTimelineState.events.push({
-        event: eventName,
-        type: timelineType,
-        summary: summarizeSocketEvent(eventName, payload),
-        elapsedMs: elapsedMs,
-        left: Math.min(left, maxLeft),
-        width: width,
-        overflow: elapsedMs > STEP_TIMELINE_DURATION_MS
-    });
-    renderStepTimeline();
-}
-
-function pushSocketLog(eventName, payload, forcedType) {
-    var eventTime = Date.now();
-    var entry = {
-        time: new Date(eventTime),
-        type: forcedType || classifySocketEvent(eventName),
-        event: eventName,
-        summary: summarizeSocketEvent(eventName, payload),
-        payload: payload
-    };
-    logsBuffer.unshift(entry);
-    if (logsBuffer.length > MAX_LOG_EVENTS) {
-        logsBuffer.length = MAX_LOG_EVENTS;
-    }
-    renderLogs();
-    appendTimelineEvent(eventName, payload, forcedType, eventTime);
-}
-
-function formatLogTime(value) {
-    if (!(value instanceof Date)) {
-        return '--:--:--';
-    }
-    return value.toLocaleTimeString([], { hour12: false });
-}
-
-function payloadPreview(payload) {
-    if (payload == null) return '';
-    if (typeof payload === 'string') return payload;
-    try {
-        var raw = JSON.stringify(payload);
-        return raw.length > 280 ? raw.slice(0, 277) + '...' : raw;
-    } catch (error) {
-        return '[payload]';
-    }
-}
-
-function renderLogs() {
-    var listEl = document.getElementById('logs-list');
-    var metaEl = document.getElementById('logs-meta');
-    if (!listEl || !metaEl) return;
-
-    metaEl.textContent = String(logsBuffer.length) + ' events';
-
-    if (!admin) {
-        listEl.innerHTML = '<div class="bot-logs-empty">Logs are available for admin only</div>';
-        return;
-    }
-
-    if (!logsBuffer.length) {
-        listEl.innerHTML = '<div class="bot-logs-empty">Waiting for socket events...</div>';
-        return;
-    }
-
-    var head = [
-        '<div class="bot-logs-row is-head">',
-        '<span>time</span>',
-        '<span>type</span>',
-        '<span>event</span>',
-        '<span>summary</span>',
-        '</div>'
-    ].join('');
-
-    var rows = logsBuffer.map(function(entry) {
-        var time = escapeHtml(formatLogTime(entry.time));
-        var type = escapeHtml(entry.type || 'system');
-        var event = escapeHtml(entry.event || 'event');
-        var summary = escapeHtml(entry.summary || '');
-        var preview = escapeHtml(payloadPreview(entry.payload));
-        return [
-            '<div class="bot-logs-row" title="' + preview + '">',
-            '<span>' + time + '</span>',
-            '<span class="bot-logs-type type-' + type + '">' + type + '</span>',
-            '<span class="bot-logs-event">' + event + '</span>',
-            '<span class="bot-logs-summary">' + summary + '</span>',
-            '</div>'
-        ].join('');
-    }).join('');
-
-    listEl.innerHTML = head + rows;
-}
-
 function renderViewers(payload) {
     const listEl = document.getElementById('viewers-list');
     const metaEl = document.getElementById('viewers-meta');
@@ -2964,39 +1771,6 @@ function syncBackfillPolling() {
     backfillRefreshTimer = setInterval(refreshBackfill, 8000);
 }
 
-var start_time = (new Date).getTime()   
-socket.on('connect', function() {  
-    console.log("on connect")
-    pushSocketLog('connect', { sid: socket.id }, 'system');
-    window.setInterval(function () {
-        counter += 1
-        start_time = (new Date).getTime();
-        //console.log("semd my_ping")
-        socket.emit('my_ping');
-    }, 250);
-});
-
-socket.on('response', function(data) {
-    pushSocketLog('response', data, 'system');
-});
-
-socket.on('set', function(data) {
-    pushSocketLog('set', data, 'controls');
-});
-
-socket.on('steps_forwards', function(data) {
-    pushSocketLog('steps_forwards', { value: data }, 'bot');
-});
-
-socket.on('tags_updated', function(data) {
-    pushSocketLog('tags_updated', data || {}, 'analyzer');
-});
-
-socket.on('location', function(data) {
-    pushSocketLog('location', data, 'geo');
-});
-
-
 function getLinkLength(url1, url2) {
 length = "30"
 if (getDomain(url1,2)==getDomain(url2,2)) {
@@ -3017,7 +1791,6 @@ return length
     let last_event = "";
     var event_time = (new Date).getTime()
     socket.on('event', function(data) {                
-        pushSocketLog('event', data, 'bot');
         if (data['event'] == "retrieve_next_url") {
             log_page = ""
             event_time = (new Date).getTime()
@@ -3055,7 +1828,6 @@ return length
         }, SUBLINK_RENDER_INTERVAL_MS);
     }
     socket.on('sublink', function(data) {        
-        pushSocketLog('sublink', data, 'bot');
         const log_sub_line = data['url']
         if (!log_sub_line) {
             return;
@@ -3072,7 +1844,6 @@ return length
 
 
     socket.on('clear', function(data){
-        pushSocketLog('clear', data, 'bot');
         console.log("clear")
         url = ""
         text = ""
@@ -3088,7 +1859,9 @@ return length
             screenshotElement.innerHTML = "";
         }
         renderPalette([]);
-        clearStepTimeline();
+        if (typeof window.clearStepTimeline === 'function') {
+            window.clearStepTimeline();
+        }
     })
 
 
@@ -3104,11 +1877,9 @@ return length
     let timeoutId = -1;
     let last_added = "";
     socket.on('step', function(data) {
-        pushSocketLog('step', data, 'bot');
         clearTimeout(timeoutId);
         console.log(data)
         step = data['step']
-        resetStepTimeline(step, Date.now());
         url = data['url'];
         from_url = data['src_url'];    
         struct_text = data['struct_text']
@@ -3234,7 +2005,6 @@ return length
     }); // socket on step
 
     socket.on('screenshot', function(data) {
-        pushSocketLog('screenshot', data, 'screenshoter');
         if (!data || !data.screenshot_url) return;
 
         const shotWidth = 90;
@@ -3268,7 +2038,6 @@ return length
     }
 
     socket.on('image_analyzed', function(data) {
-        pushSocketLog('image_analyzed', data, 'screenshoter');
         if (!data || !Array.isArray(data.palette)) return;
         renderPalette(data.palette);
     });
@@ -3313,7 +2082,6 @@ return length
 
 
     socket.on('set_values', function(data) {
-        pushSocketLog('set_values', data, 'controls');
         // console.log('set_values', data);
         graph.setValues(data)        
         $('#value').html(data['v1']);
@@ -3330,7 +2098,6 @@ return length
     //
     words_all = ""
     socket.on('analyzed', function(data) {
-        pushSocketLog('analyzed', data, 'analyzer');
         if (!data) return;
         let wordsSrc = data['words_str'] || (Array.isArray(data['words']) ? data['words'].join(' ') : '');
         let words = (wordsSrc || '').split(" ").filter(Boolean);
@@ -3385,20 +2152,6 @@ return length
         //console.log(node, node.data); 
         //document.getElementById("log_words").innerHTML = "<code>" + words_all + "</code>";
     })
-
-
-
-
-    socket.on('my_pong', function () {
-        const latency = (new Date).getTime() - start_time;
-        $('#latency').html(String(latency).padStart(4, '0'));
-        $('#counter').html(String(counter).padStart(4, '0'));
-    });
-
-    socket.on('disconnect', function() {
-        pushSocketLog('disconnect', { sid: socket.id }, 'system');
-        console.log('Disconnected from server');
-    });
 
 
 

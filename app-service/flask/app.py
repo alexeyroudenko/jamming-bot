@@ -318,6 +318,7 @@ AUTH_USER = os.getenv("AUTH_USER", "x")
 AUTH_PASS = os.getenv("AUTH_PASS", "x")
 
 PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
+                   "/events",
                    "/rytm", "/socket.io", "/tags/", "/geo/", "/screenshots/", "/semantic", "/api/semantic/",
                    "/api/tags/get/", "/api/tags/combine/",
                    "/api/tags/sentiment-vortex/", "/api/tags/embeddings/", "/api/tags/add/",
@@ -999,6 +1000,17 @@ def logout():
 @cross_origin()
 def bot():
     return render_template('bot.html')
+
+
+@app.route('/events/')
+@cross_origin()
+def events_page():
+    return render_template('events.html')
+
+
+@app.route('/events')
+def events_redirect():
+    return redirect('/events/', code=302)
 
 
 @app.route('/status')
