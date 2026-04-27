@@ -6,7 +6,7 @@ FastAPI service that proxies step PNG snapshots, renders them as a fullscreen ba
 
 - `STEPS_IMAGE_URL` — source PNG URL, default `http://localhost:5000/api/storage_img/`
 - `STEPS_LATEST_URL` — source latest-steps JSON URL (preferred for refresh), default `http://localhost:5000/api/storage_latest/`
-- `STEPS_LATEST_LIMIT` — max rows requested from latest (`?limit=`), default `10000`, capped at `20000`
+- `STEPS_LATEST_LIMIT` — max rows requested from latest (`?limit=`), default `3000`, capped at `20000`
 - `STEPS_CSV_URL` — CSV export used only if latest JSON fails, default `http://storage_service:7781/export/csv`
 - `STEPS_REFRESH_SECONDS` — background refresh interval in seconds, default `60`
 - `STEPS_OUTPUT_DIR` — directory for cached step PNG snapshots, default `/tmp/steps-service`

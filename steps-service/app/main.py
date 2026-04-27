@@ -1384,7 +1384,7 @@ def fetch_steps_payload_sync() -> dict:
     Prefer JSON /get/latest via app-service (light); fall back to full CSV export.
     """
     try:
-        body = fetch_json(build_latest_url(), timeout=45)
+        body = fetch_json(build_latest_url(), timeout=90)
         data = body.get("data")
         if not isinstance(data, list):
             raise ValueError("latest response missing data array")
@@ -1457,8 +1457,14 @@ async def refresh_presence() -> None:
         err_text = "; ".join(errors) if errors else "no per-fetch details"
         raise RuntimeError(f"No image snapshots available after refresh: {err_text}")
     if payload is None:
-        err_text = "; ".join(errors) if errors else "no per-fetch details"
-        raise RuntimeError(f"Steps payload not available after refresh: {err_text}")
+        # Presence image is enough for /ready; empty step map until next refresh.
+        payload = {
+            "fields": [],
+            "returned_lines": 0,
+            "total_lines": 0,
+            "data": [],
+        }
+        errors.append("payload: empty fallback (latest/CSV failed; will retry)")
 
     async with state_lock:
         state.snapshots = snapshots

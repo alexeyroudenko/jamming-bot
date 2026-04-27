@@ -431,7 +431,7 @@ spec:
         - name: STEPS_LATEST_URL
           value: "http://app-service/api/storage_latest/"
         - name: STEPS_LATEST_LIMIT
-          value: "10000"
+          value: "3000"
         - name: STEPS_CSV_URL
           value: "http://storage-service/export/csv"
         - name: STEPS_REFRESH_SECONDS
