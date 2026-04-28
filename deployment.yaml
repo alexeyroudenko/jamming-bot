@@ -819,8 +819,11 @@ data:
         endpoint: coroot-coroot.coroot.svc.cluster.local:4317
         tls:
           insecure: true
+        # Coroot gRPC без gzip-распаковки в ответе; иначе: Decompressor is not installed for grpc-encoding "gzip"
+        compression: none
+        # Пустой default, если ключа нет в Secret — под стартует; верни ключ в jamming-bot-secrets для Coroot.
         headers:
-          x-api-key: ${env:COROOT_OTEL_API_KEY}
+          x-api-key: ${env:COROOT_OTEL_API_KEY:-}
     service:
       extensions: [health_check]
       pipelines:
@@ -859,6 +862,7 @@ spec:
             secretKeyRef:
               name: jamming-bot-secrets
               key: COROOT_OTEL_API_KEY
+              optional: true
         ports:
         - containerPort: 4317
           name: otlp-grpc
