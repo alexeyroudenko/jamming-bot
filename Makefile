@@ -138,6 +138,12 @@ k3s-apply:
 	@test -f k8s-secrets.yaml && kubectl apply -f k8s-secrets.yaml || echo "WARN: k8s-secrets.yaml not found — create it from k8s-secrets.yaml.template"
 	kubectl apply -f deployment.yaml
 
+.PHONY: k3s-traefik-stabilize
+k3s-traefik-stabilize:
+	kubectl -n kube-system patch deployment traefik --type='json' -p='[{"op":"replace","path":"/spec/template/spec/containers/0/livenessProbe/timeoutSeconds","value":5},{"op":"replace","path":"/spec/template/spec/containers/0/readinessProbe/timeoutSeconds","value":5},{"op":"replace","path":"/spec/template/spec/containers/0/livenessProbe/initialDelaySeconds","value":10},{"op":"replace","path":"/spec/template/spec/containers/0/readinessProbe/initialDelaySeconds","value":10}]'
+	kubectl -n kube-system rollout restart deployment/traefik
+	kubectl -n kube-system rollout status deployment/traefik --timeout=240s
+
 # Coroot CE + operator (namespace coroot). HTTPS UI: https://coroot.jamming-bot.arthew0.online/
 # Docs: docs/monitoring/coroot-runbook.md — chart versions pinned below.
 COROOT_OPERATOR_CHART_VERSION ?= 0.9.4

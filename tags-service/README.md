@@ -8,7 +8,7 @@ http://localhost:8003/openapi.json
 
 ## New query filter
 
-- `GET /api/v1/tags/tags/group/?count=50&page=0&days=0`
+- `GET /api/v1/tags/tags/group/?count=100&page=0&days=0`
   - `days=0` (default) -> all-time counters from `movies`
   - `days=1,2,3...` -> aggregated counters for the last N UTC calendar days
 

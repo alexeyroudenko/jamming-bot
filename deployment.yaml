@@ -1379,16 +1379,29 @@ spec:
           limits:
             cpu: "1000m"
             memory: "1Gi"
+        startupProbe:
+          httpGet:
+            path: /status
+            port: 5000
+          failureThreshold: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
         readinessProbe:
-          tcpSocket:
+          httpGet:
+            path: /status
             port: 5000
-          initialDelaySeconds: 60
+          initialDelaySeconds: 20
           periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
         livenessProbe:
-          tcpSocket:
+          httpGet:
+            path: /status
             port: 5000
-          initialDelaySeconds: 90
+          initialDelaySeconds: 45
           periodSeconds: 20
+          timeoutSeconds: 3
+          failureThreshold: 3
       volumes:
       - name: bot-config
         hostPath:

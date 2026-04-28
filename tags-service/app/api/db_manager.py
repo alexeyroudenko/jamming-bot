@@ -223,7 +223,7 @@ def _grouped_row_to_dict(r, with_total=False):
     return payload
 
 
-async def get_grouped_tags(count: int = 50, page: int = 0, days: int = 0):
+async def get_grouped_tags(count: int = 100, page: int = 0, days: int = 0):
     safe_count = max(1, min(500, int(count)))
     safe_page = max(0, int(page))
     safe_days = max(0, int(days))

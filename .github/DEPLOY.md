@@ -71,6 +71,20 @@ make k3s-coroot
 
 Подробнее: [`docs/monitoring/coroot-runbook.md`](../docs/monitoring/coroot-runbook.md).
 
+### Traefik stability (K3s)
+
+Если ingress (`traefik` в `kube-system`) уходит в `CrashLoopBackOff` из-за слишком агрессивных probe-таймаутов, примените фикс:
+
+```bash
+cd /opt/jamming-bot
+make k3s-traefik-stabilize
+```
+
+Команда:
+- увеличивает `timeoutSeconds` для `liveness/readiness` до `5`,
+- ставит `initialDelaySeconds` в `10`,
+- перезапускает `traefik` и ждёт успешный rollout.
+
 ### OpenTelemetry: Jaeger + Coroot (K3s)
 
 В [`deployment.yaml`](../deployment.yaml) поднят **`otel-collector`**: приложения (`app-service`, `worker-service`, `bot-service`) шлют OTLP на `http://otel-collector:4318`, collector экспортирует трассы в **Jaeger** (`http://jaeger:4318`) и в **Coroot** (gRPC `coroot-coroot.coroot.svc.cluster.local:4317`, заголовок `x-api-key`).

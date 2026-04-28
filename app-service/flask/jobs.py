@@ -274,9 +274,19 @@ def add_tags_from_steps():
 
     num_iterations = min(len(files), MAX_STEPS)
     for i, file in enumerate(files[0:MAX_STEPS]):
-        contents = open(file).readlines()
-        step = int(contents[0].strip())
-        text = open(files_txt[step-1]).read().strip().replace("\n", "")
+        with open(file, encoding="utf-8", errors="ignore") as fp:
+            first_line = fp.readline().strip()
+        if not first_line:
+            continue
+        try:
+            step = int(first_line)
+        except ValueError:
+            continue
+        txt_path = files_txt[step - 1] if 0 <= step - 1 < len(files_txt) else None
+        if not txt_path:
+            continue
+        with open(txt_path, encoding="utf-8", errors="ignore") as fp:
+            text = fp.read().strip().replace("\n", "")
         
         with sentry_sdk.start_span(op="http.client", description=f"semantic+tags step {step}"):
             url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
@@ -419,12 +429,12 @@ def analyze(html, step_number=None, step_url=None):
         with sentry_sdk.start_span(op="http.client", description="semantic_service /tags/"):
             url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
             headers = {'content-type': 'application/json'}
-            rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
-            rr.raise_for_status()
-            sem_data = rr.json()
-            sentry_sdk.logger.info(f"semantic_service data: {sem_data}")
-            entities = sem_data.get("entities", []) or []
             if len(text) > 128:
+                rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
+                rr.raise_for_status()
+                sem_data = rr.json()
+                sentry_sdk.logger.info(f"semantic_service data: {sem_data}")
+                entities = sem_data.get("entities", []) or []            
                 words = sem_data.get('words', []) or []
                 hrases = sem_data.get('hrases', []) or []
                 noun_phrases = hrases
@@ -896,50 +906,43 @@ def clean_tsv_data():
     backup_file = "data/data_backup.tsv"
     
     try:
-        # Read the file
+        total_lines = 0
         with open(input_file, 'r', encoding='utf-8', errors='ignore') as f:
-            lines = f.readlines()
-        
-        total_lines = len(lines)
-        cleaned_lines = []
-        
-        for i, line in enumerate(lines):
-            # Remove line breaks within the line content
-            clean_line = line.replace('\n', ' ').replace('\r', ' ')
-            
-            # Split by tabs to get individual fields
-            fields = clean_line.split('\t')
-            
-            # Clean each field
-            cleaned_fields = []
-            for field in fields:
-                # Remove special characters that might cause issues
-                field = remove_special_characters(field)
-                # Replace multiple spaces with single space
-                field = ' '.join(field.split())
-                cleaned_fields.append(field)
-            
-            # Rejoin with tabs and add newline at end
-            cleaned_line = '\t'.join(cleaned_fields) + '\n'
-            cleaned_lines.append(cleaned_line)
-            
-            # Update progress
-            if i % 100 == 0:
-                self_job = get_current_job()
-                self_job.meta['progress'] = {
-                    'num_iterations': total_lines,
-                    'iteration': i,
-                    'percent': i / total_lines * 100
-                }
-                self_job.save_meta()
+            for _ in f:
+                total_lines += 1
+
+        cleaned_lines = 0
+        with open(input_file, 'r', encoding='utf-8', errors='ignore') as src, open(output_file, 'w', encoding='utf-8') as dst:
+            for i, line in enumerate(src, start=1):
+                # Remove line breaks within the line content
+                clean_line = line.replace('\n', ' ').replace('\r', ' ')
+
+                # Split by tabs to get individual fields
+                fields = clean_line.split('\t')
+
+                # Clean each field
+                cleaned_fields = []
+                for field in fields:
+                    field = remove_special_characters(field)
+                    field = ' '.join(field.split())
+                    cleaned_fields.append(field)
+
+                dst.write('\t'.join(cleaned_fields) + '\n')
+                cleaned_lines += 1
+
+                # Update progress
+                if i % 100 == 0:
+                    self_job = get_current_job()
+                    self_job.meta['progress'] = {
+                        'num_iterations': max(total_lines, 1),
+                        'iteration': i,
+                        'percent': i / max(total_lines, 1) * 100
+                    }
+                    self_job.save_meta()
         
         # Create backup of original file
         import shutil
         shutil.copy2(input_file, backup_file)
-        
-        # Write cleaned data to output file
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.writelines(cleaned_lines)
         
         # Replace original with cleaned version
         shutil.move(output_file, input_file)
@@ -956,7 +959,7 @@ def clean_tsv_data():
         return {
             "status": "success",
             "total_lines": total_lines,
-            "cleaned_lines": len(cleaned_lines),
+            "cleaned_lines": cleaned_lines,
             "backup_file": backup_file,
             "pod": POD_NAME,
         }

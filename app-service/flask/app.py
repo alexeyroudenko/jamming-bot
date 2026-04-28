@@ -21,13 +21,13 @@ from flask_cors import CORS, cross_origin
 from flask_socketio import SocketIO, emit
 from werkzeug.middleware.proxy_fix import ProxyFix
 from prometheus_flask_exporter import PrometheusMetrics
-from prometheus_client import Gauge, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import Gauge, Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
 import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.rq import RqIntegration
 
-from rq_helpers import queue, get_all_jobs, redis_connection
+from rq_helpers import queue, get_all_jobs, get_all_jobs_paginated, redis_connection
 from config import Config, getConfig, getRedis
 from telemetry import (
     init_telemetry,
@@ -68,6 +68,10 @@ MOOD_LAST_COLLECT_KEY = "mood:last_collect"
 MOOD_LAST_COLLECT_TTL = int(os.getenv("MOOD_LAST_COLLECT_TTL", "86400"))
 _sublink_listener_started = False
 _sublink_listener_lock = threading.Lock()
+POLL_THREAD_LIMIT = max(1, int(os.getenv("POLL_THREAD_LIMIT", "64")))
+VIEWER_STALE_TTL_SECONDS = max(15, int(os.getenv("VIEWER_STALE_TTL_SECONDS", "60")))
+VIEWER_SWEEP_INTERVAL_SECONDS = max(5, int(os.getenv("VIEWER_SWEEP_INTERVAL_SECONDS", "15")))
+_viewer_last_sweep_monotonic = 0.0
 
 # ---------------------------------------------------------------------------
 # Sentry
@@ -200,6 +204,24 @@ if os.getenv("OTEL_TRACING_ENABLED", "0") == "1":
 metrics = PrometheusMetrics(app)
 step_number = Gauge('step_number', 'Current step number')
 steps_forwards = Gauge('steps_forwards', 'Steps remaining')
+active_poll_threads = Gauge(
+    "active_poll_threads",
+    "Background RQ poll threads currently running",
+)
+poll_thread_spawn_rejected_total = Counter(
+    "poll_thread_spawn_rejected_total",
+    "Polling jobs skipped because poll thread limit was reached",
+)
+active_viewers_size = Gauge(
+    "active_viewers_size",
+    "Current number of active websocket viewers",
+)
+jobs_fetched_per_request = Histogram(
+    "jobs_fetched_per_request",
+    "Jobs fetched from RQ registries per HTTP request",
+    buckets=(1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, float("inf")),
+)
+poll_thread_slots = threading.BoundedSemaphore(POLL_THREAD_LIMIT)
 
 # ---------------------------------------------------------------------------
 # CORS & SocketIO
@@ -357,6 +379,7 @@ PUBLIC_PATHS = ("/", "/login")
 @app.before_request
 def _check_auth():
     _ensure_sublink_listener_started()
+    _prune_stale_viewers()
     if request.method == "OPTIONS":
         return
     if request.path in PUBLIC_PATHS or any(request.path.startswith(p) for p in PUBLIC_PREFIXES):
@@ -585,130 +608,146 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                        step_key=None, silent=False):
     """Poll an RQ job in a background thread and emit result via SocketIO."""
     def _poll():
-        elapsed = 0.0
-        while elapsed < timeout:
-            time.sleep(poll_interval)
-            elapsed += poll_interval
-            try:
-                job.refresh()
-            except Exception:
-                logger.debug(f"Job {job.id} no longer exists for event {event_name}")
-                return
-            if job.is_finished:
-                emit_payload = job.result
-                if event_name == "semantic_collect" and isinstance(job.result, dict):
-                    received_at = datetime.now(timezone.utc).isoformat()
-                    emit_payload = {**job.result, "received_at": received_at}
-                    _persist_semantic_last_collect(emit_payload)
-                    logger.info(
-                        "semantic_collect step=%s dependency_lines=%s",
-                        emit_payload.get("number"),
-                        len(emit_payload.get("dependency_lines") or []),
-                    )
-                if event_name == "mood_collect" and isinstance(job.result, dict):
-                    received_at = datetime.now(timezone.utc).isoformat()
-                    emit_payload = {**job.result, "received_at": received_at}
-                    _persist_mood_last_collect(emit_payload)
-                    logger.info(
-                        "mood_collect step=%s",
-                        emit_payload.get("step_number"),
-                    )
-                if not silent:
-                    socketio.emit(event_name, emit_payload)
-                if event_name != "mood_collect":
-                    _save_to_step_hash(step_key, job.result)
-                if event_name == "image_analyzed":
-                    _store_step_analysis(step_key, job.result)
-                elif event_name != "mood_collect":
-                    _patch_storage(step_key, job.result)
-                    if silent and step_key:
-                        _emit_presence_step(step_key.split(":")[-1], phase=event_name)
-                if event_name == "screenshot":
-                    _enqueue_image_analysis_followup(step_key, job.result, silent=silent)
-                if event_name == "semantic_collect" and not silent:
-                    try:
-                        if _redis_float("do_mood", 1.0) >= 0.5:
-                            res = job.result or {}
-                            snippet = (res.get("snippet") or "").strip()
-                            sem_raw = res.get("semantic")
-                            sem = {}
-                            if isinstance(sem_raw, str) and sem_raw.strip():
-                                try:
-                                    sem = json.loads(sem_raw)
-                                except (json.JSONDecodeError, TypeError):
-                                    sem = {}
-                            elif isinstance(sem_raw, dict):
-                                sem = sem_raw
-                            snum = res.get("number") or ""
-                            if snippet or sem:
+        acquired = poll_thread_slots.acquire(blocking=False)
+        if not acquired:
+            poll_thread_spawn_rejected_total.inc()
+            logger.warning(
+                "Skip polling job %s for %s: POLL_THREAD_LIMIT=%s reached",
+                job.id,
+                event_name,
+                POLL_THREAD_LIMIT,
+            )
+            _save_to_step_hash(step_key, {"_error_" + event_name: "poll thread limit reached"})
+            return
+        active_poll_threads.inc()
+        try:
+            elapsed = 0.0
+            while elapsed < timeout:
+                time.sleep(poll_interval)
+                elapsed += poll_interval
+                try:
+                    job.refresh()
+                except Exception:
+                    logger.debug(f"Job {job.id} no longer exists for event {event_name}")
+                    return
+                if job.is_finished:
+                    emit_payload = job.result
+                    if event_name == "semantic_collect" and isinstance(job.result, dict):
+                        received_at = datetime.now(timezone.utc).isoformat()
+                        emit_payload = {**job.result, "received_at": received_at}
+                        _persist_semantic_last_collect(emit_payload)
+                        logger.info(
+                            "semantic_collect step=%s dependency_lines=%s",
+                            emit_payload.get("number"),
+                            len(emit_payload.get("dependency_lines") or []),
+                        )
+                    if event_name == "mood_collect" and isinstance(job.result, dict):
+                        received_at = datetime.now(timezone.utc).isoformat()
+                        emit_payload = {**job.result, "received_at": received_at}
+                        _persist_mood_last_collect(emit_payload)
+                        logger.info(
+                            "mood_collect step=%s",
+                            emit_payload.get("step_number"),
+                        )
+                    if not silent:
+                        socketio.emit(event_name, emit_payload)
+                    if event_name != "mood_collect":
+                        _save_to_step_hash(step_key, job.result)
+                    if event_name == "image_analyzed":
+                        _store_step_analysis(step_key, job.result)
+                    elif event_name != "mood_collect":
+                        _patch_storage(step_key, job.result)
+                        if silent and step_key:
+                            _emit_presence_step(step_key.split(":")[-1], phase=event_name)
+                    if event_name == "screenshot":
+                        _enqueue_image_analysis_followup(step_key, job.result, silent=silent)
+                    if event_name == "semantic_collect" and not silent:
+                        try:
+                            if _redis_float("do_mood", 1.0) >= 0.5:
+                                res = job.result or {}
+                                snippet = (res.get("snippet") or "").strip()
+                                sem_raw = res.get("semantic")
+                                sem = {}
+                                if isinstance(sem_raw, str) and sem_raw.strip():
+                                    try:
+                                        sem = json.loads(sem_raw)
+                                    except (json.JSONDecodeError, TypeError):
+                                        sem = {}
+                                elif isinstance(sem_raw, dict):
+                                    sem = sem_raw
+                                snum = res.get("number") or ""
+                                if snippet or sem:
+                                    car = _step_trace_carrier_for_enqueue(step_key)
+                                    jm = enqueue_with_trace_carrier(
+                                        queue,
+                                        redis_connection,
+                                        jobs.mood_snapshot,
+                                        car,
+                                        snippet,
+                                        sem,
+                                        timeout=120,
+                                        result_ttl=300,
+                                        step_number=str(snum),
+                                    )
+                                    _poll_job_and_emit(
+                                        jm,
+                                        "mood_collect",
+                                        timeout=120,
+                                        step_key=step_key,
+                                        silent=False,
+                                    )
+                        except Exception as exc:
+                            logger.warning("mood chain after semantic_collect: %s", exc)
+                    if event_name == "analyzed" and step_key and not silent:
+                        try:
+                            result = job.result or {}
+                            seg = _snippet_for_analyze_semantic(
+                                step_key, result if isinstance(result, dict) else {}
+                            )
+                            if seg:
+                                step_num = step_key.split(":", 1)[-1]
+                                row = _read_step_hash(step_key) or {}
+                                step_url = row.get("url") or ""
                                 car = _step_trace_carrier_for_enqueue(step_key)
-                                jm = enqueue_with_trace_carrier(
+                                j2 = enqueue_with_trace_carrier(
                                     queue,
                                     redis_connection,
-                                    jobs.mood_snapshot,
+                                    jobs.analyze_semantic,
                                     car,
-                                    snippet,
-                                    sem,
-                                    timeout=120,
-                                    result_ttl=300,
-                                    step_number=str(snum),
+                                    seg,
+                                    timeout=60,
+                                    result_ttl=270,
+                                    step_number=step_num,
+                                    step_url=step_url,
                                 )
                                 _poll_job_and_emit(
-                                    jm,
-                                    "mood_collect",
-                                    timeout=120,
+                                    j2,
+                                    "semantic_collect",
+                                    timeout=60,
                                     step_key=step_key,
                                     silent=False,
                                 )
-                    except Exception as exc:
-                        logger.warning("mood chain after semantic_collect: %s", exc)
-                if event_name == "analyzed" and step_key and not silent:
-                    try:
-                        result = job.result or {}
-                        seg = _snippet_for_analyze_semantic(
-                            step_key, result if isinstance(result, dict) else {}
+                            else:
+                                logger.info(
+                                    "analyze_semantic not enqueued (empty snippet) for %s",
+                                    step_key,
+                                )
+                        except Exception as exc:
+                            logger.exception("analyze_semantic enqueue failed: %s", exc)
+                    if event_name == "analyzed" and step_key and silent:
+                        logger.info(
+                            "analyze_semantic chain skipped (silent step) %s",
+                            step_key,
                         )
-                        if seg:
-                            step_num = step_key.split(":", 1)[-1]
-                            row = _read_step_hash(step_key) or {}
-                            step_url = row.get("url") or ""
-                            car = _step_trace_carrier_for_enqueue(step_key)
-                            j2 = enqueue_with_trace_carrier(
-                                queue,
-                                redis_connection,
-                                jobs.analyze_semantic,
-                                car,
-                                seg,
-                                timeout=60,
-                                result_ttl=270,
-                                step_number=step_num,
-                                step_url=step_url,
-                            )
-                            _poll_job_and_emit(
-                                j2,
-                                "semantic_collect",
-                                timeout=60,
-                                step_key=step_key,
-                                silent=False,
-                            )
-                        else:
-                            logger.info(
-                                "analyze_semantic not enqueued (empty snippet) for %s",
-                                step_key,
-                            )
-                    except Exception as exc:
-                        logger.exception("analyze_semantic enqueue failed: %s", exc)
-                if event_name == "analyzed" and step_key and silent:
-                    logger.info(
-                        "analyze_semantic chain skipped (silent step) %s",
-                        step_key,
-                    )
-                return
-            if job.is_failed:
-                logger.warning(f"Job {job.id} failed for event {event_name}")
-                _save_to_step_hash(step_key, {"_error_" + event_name: "job failed"})
-                return
-        logger.warning(f"Job {job.id} timed out after {timeout}s for event {event_name}")
+                    return
+                if job.is_failed:
+                    logger.warning(f"Job {job.id} failed for event {event_name}")
+                    _save_to_step_hash(step_key, {"_error_" + event_name: "job failed"})
+                    return
+            logger.warning(f"Job {job.id} timed out after {timeout}s for event {event_name}")
+        finally:
+            active_poll_threads.dec()
+            poll_thread_slots.release()
     threading.Thread(target=_poll, daemon=True).start()
 
 
@@ -926,6 +965,7 @@ def _capture_viewer_snapshot():
 
 
 def _get_viewers_snapshot():
+    _prune_stale_viewers()
     now = datetime.now(timezone.utc)
     with viewers_lock:
         raw_viewers = list(active_viewers.values())
@@ -964,6 +1004,32 @@ def _get_viewers_snapshot():
         "admins": admins,
         "guests": guests,
     }
+
+
+def _prune_stale_viewers(force=False):
+    global _viewer_last_sweep_monotonic
+    now_monotonic = time.monotonic()
+    if (
+        not force
+        and now_monotonic - _viewer_last_sweep_monotonic < VIEWER_SWEEP_INTERVAL_SECONDS
+    ):
+        return 0
+    _viewer_last_sweep_monotonic = now_monotonic
+    now = datetime.now(timezone.utc)
+    with viewers_lock:
+        stale_sids = []
+        for sid, viewer in active_viewers.items():
+            last_seen = viewer.get("last_seen")
+            if not last_seen:
+                continue
+            if (now - last_seen).total_seconds() > VIEWER_STALE_TTL_SECONDS:
+                stale_sids.append(sid)
+        for sid in stale_sids:
+            active_viewers.pop(sid, None)
+        active_viewers_size.set(len(active_viewers))
+    if stale_sids:
+        logger.info("Pruned %s stale websocket viewers", len(stale_sids))
+    return len(stale_sids)
 
 
 def _patch_storage(step_key, data):
@@ -1520,8 +1586,13 @@ def get_job_status(job_id):
 
 @app.route("/queue/", methods=["GET"])
 def queue_page():
+    limit = request.args.get("limit", default=200, type=int)
+    page = request.args.get("page", default=0, type=int)
+    offset = max(0, page) * max(1, limit or 1)
     try:
-        joblist = reversed(get_all_jobs())
+        jobs_raw, total_jobs = get_all_jobs_paginated(limit=limit, offset=offset)
+        jobs_fetched_per_request.observe(len(jobs_raw))
+        joblist = reversed(jobs_raw)
     except Exception as e:
         logger.exception("Redis/queue error in queue_page")
         return render_template(
@@ -1569,7 +1640,7 @@ def queue_page():
     except Exception as e:
         logger.warning("Redis defaults error: %s", e)
         cfg = {}
-    return render_template('queue.html', joblist=l, cfg=cfg)
+    return render_template('queue.html', joblist=l, cfg=cfg, total_jobs=total_jobs, page=page, limit=limit)
 
 
 @app.route("/queue/job/<job_id>/", methods=["GET"])
@@ -1793,11 +1864,11 @@ def tags_embeddings():
 @app.route("/api/tags/get/", methods=["GET"])
 def get_tags():
     url = f"{TAGS_SERVICE_URL}/api/v1/tags/tags/group/"
-    count = request.args.get("count", default=50, type=int)
+    count = request.args.get("count", default=100, type=int)
     page = request.args.get("page", default=0, type=int)
     days = request.args.get("days", default=0, type=int)
     params = {
-        "count": 50 if count is None else count,
+        "count": 100 if count is None else count,
         "page": 0 if page is None else page,
         "days": 0 if days is None else max(days, 0),
     }
@@ -1935,7 +2006,8 @@ def step():
 
                     # SCREENSHOT — fire-and-forget with background poll
                     if float(current_cfg['do_screenshot']) == 1.0:
-                        if data.get('url'):
+                        step_text = (data.get('text') or '').strip()
+                        if data.get('url') and len(step_text) > 128:
                             logger.info(f"step do_screenshot")
                             job = enqueue_with_trace(queue, redis_connection, jobs.do_screenshot, data, timeout=120, result_ttl=270)
                             _poll_job_and_emit(job, 'screenshot', timeout=120, step_key=step_key, silent=is_silent)
@@ -2036,7 +2108,11 @@ def handle_json():
 
 @app.route("/api/steps/", methods=["GET"])
 def all_steps():
-    joblist = get_all_jobs()
+    limit = request.args.get("limit", default=500, type=int)
+    page = request.args.get("page", default=0, type=int)
+    offset = max(0, page) * max(1, limit or 1)
+    joblist, total_jobs = get_all_jobs_paginated(limit=limit, offset=offset)
+    jobs_fetched_per_request.observe(len(joblist))
     l = []
     for job in list(joblist):
         if job.meta.get('type'):
@@ -2063,7 +2139,7 @@ def all_steps():
                         'id': job.get_id(),
                         'type': job_type,
                     })
-    return jsonify(l)
+    return jsonify({"data": l, "page": max(0, page), "limit": max(1, min(limit or 500, 5000)), "total_jobs": total_jobs})
 
 
 @app.route("/api/step/<step_num>/", methods=["GET"])
@@ -2333,7 +2409,11 @@ def add_tags():
 
 @app.route("/api/step/<step_num>", methods=["GET"])
 def get_step(step_num):
-    joblist = get_all_jobs()
+    limit = request.args.get("limit", default=500, type=int)
+    page = request.args.get("page", default=0, type=int)
+    offset = max(0, page) * max(1, limit or 1)
+    joblist, total_jobs = get_all_jobs_paginated(limit=limit, offset=offset)
+    jobs_fetched_per_request.observe(len(joblist))
     l = []
     for job in list(joblist):
         if job.meta.get('type'):
@@ -2355,7 +2435,7 @@ def get_step(step_num):
                         'noun_phrases': job.meta.get('noun_phrases'),
                         'sim': job.meta.get('sim'),
                     })
-    return jsonify(l)
+    return jsonify({"data": l, "page": max(0, page), "limit": max(1, min(limit or 500, 5000)), "total_jobs": total_jobs})
 
 
 @app.route("/add_wait_job/<num_iterations>", methods=["GET"])
@@ -2399,9 +2479,11 @@ def semantic_ent():
 @socketio.on('connect')
 def handle_connect():
     _ensure_sublink_listener_started()
+    _prune_stale_viewers()
     viewer = _capture_viewer_snapshot()
     with viewers_lock:
         active_viewers[viewer["sid"]] = viewer
+        active_viewers_size.set(len(active_viewers))
     logger.info("Client connected sid=%s role=%s ip=%s", viewer["sid"], viewer["role"], viewer["ip"])
 
 @socketio.on('disconnect')
@@ -2409,6 +2491,7 @@ def handle_disconnect():
     sid = getattr(request, "sid", None)
     with viewers_lock:
         viewer = active_viewers.pop(sid, None)
+        active_viewers_size.set(len(active_viewers))
     logger.info("Client disconnected sid=%s role=%s", sid, (viewer or {}).get("role", "unknown"))
 
 @socketio.on('message')
@@ -2546,6 +2629,7 @@ def my_ping():
         viewer = active_viewers.get(sid)
         if viewer:
             viewer["last_seen"] = datetime.now(timezone.utc)
+    _prune_stale_viewers()
     emit('my_pong')
 
 
