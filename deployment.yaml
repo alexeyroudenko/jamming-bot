@@ -788,6 +788,135 @@ spec:
     targetPort: 16686
     nodePort: 31686
 ---
+# ===================== otel-collector (OTLP fan-out: Jaeger + Coroot) =====================
+# Apps use OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318 (HTTP OTLP).
+# Coroot: gRPC OTLP on coroot-coroot.coroot:4317 + header x-api-key from Secret COROOT_OTEL_API_KEY.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: jamming-bot
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      batch: {}
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+    exporters:
+      otlphttp/jaeger:
+        endpoint: http://jaeger:4318
+        tls:
+          insecure: true
+      otlp/coroot:
+        endpoint: coroot-coroot.coroot.svc.cluster.local:4317
+        tls:
+          insecure: true
+        headers:
+          x-api-key: ${env:COROOT_OTEL_API_KEY}
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlphttp/jaeger, otlp/coroot]
+      telemetry:
+        logs:
+          level: warn
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: jamming-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+      - name: otel-collector
+        image: otel/opentelemetry-collector-contrib:0.115.1
+        imagePullPolicy: IfNotPresent
+        args:
+        - --config=/etc/otelcol/config.yaml
+        env:
+        - name: COROOT_OTEL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: COROOT_OTEL_API_KEY
+        ports:
+        - containerPort: 4317
+          name: otlp-grpc
+        - containerPort: 4318
+          name: otlp-http
+        - containerPort: 13133
+          name: health
+        volumeMounts:
+        - name: config
+          mountPath: /etc/otelcol
+          readOnly: true
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 13133
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 13133
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+      volumes:
+      - name: config
+        configMap:
+          name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: jamming-bot
+spec:
+  type: ClusterIP
+  selector:
+    app: otel-collector
+  ports:
+  - name: otlp-grpc
+    protocol: TCP
+    port: 4317
+    targetPort: otlp-grpc
+  - name: otlp-http
+    protocol: TCP
+    port: 4318
+    targetPort: otlp-http
+  - name: health
+    protocol: TCP
+    port: 13133
+    targetPort: health
+---
 # ===================== worker-service (rq workers) =====================
 apiVersion: apps/v1
 kind: Deployment
@@ -860,7 +989,7 @@ spec:
         - name: OTEL_TRACING_ENABLED
           value: "1"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: "http://jaeger:4318"
+          value: "http://otel-collector:4318"
         - name: OTEL_SERVICE_NAME
           value: "app-service-worker"
         resources:
@@ -997,7 +1126,7 @@ spec:
         - name: OTEL_SERVICE_NAME
           value: "bot-service"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: "http://jaeger:4318"
+          value: "http://otel-collector:4318"
         volumeMounts:
         - name: bot-db
           mountPath: /app/data
@@ -1231,7 +1360,7 @@ spec:
         - name: OTEL_TRACING_ENABLED
           value: "1"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: "http://jaeger:4318"
+          value: "http://otel-collector:4318"
         - name: OTEL_SERVICE_NAME
           value: "app-service"
         - name: BOT_YAML_PATH
@@ -1857,7 +1986,7 @@ spec:
   scaleTargetRef:
     name: html-renderer
   minReplicaCount: 2
-  maxReplicaCount: 8
+  maxReplicaCount: 4
   cooldownPeriod: 90
   pollingInterval: 10
   triggers:

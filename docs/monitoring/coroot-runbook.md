@@ -7,6 +7,14 @@
 
 Метрики Flask/RQ см. [app-service-monitoring-runbook.md](app-service-monitoring-runbook.md); здесь только Coroot.
 
+## Трассы OpenTelemetry (Jaeger + Coroot)
+
+В кластере в namespace `jamming-bot` развёрнут **OpenTelemetry Collector** (`Deployment`/`Service` **`otel-collector`**, см. [`deployment.yaml`](../../deployment.yaml)): `app-service`, `worker-service` и `bot-service` отправляют OTLP HTTP на **`http://otel-collector:4318`**; collector дублирует трассы в **Jaeger** и в **Coroot** (OTLP gRPC на `coroot-coroot.coroot.svc.cluster.local:4317` с заголовком **`x-api-key`**).
+
+Ключ API проекта Coroot хранится в Secret **`jamming-bot-secrets`**, ключ **`COROOT_OTEL_API_KEY`** (шаблон: [`k8s-secrets.yaml.template`](../../k8s-secrets.yaml.template)). Должен совпадать с ключом в UI Coroot для этого проекта.
+
+Локально в Docker Compose тот же collector описан в [`docker/otel-collector-config.yaml`](../../docker/otel-collector-config.yaml); переменные окружения **`COROOT_OTEL_API_KEY`** и **`COROOT_OTLP_GRPC_ADDR`** (по умолчанию `host.docker.internal:4317`, см. `docker-compose.yml`).
+
 ## Зафиксированные версии Helm chart (актуализировать при апгрейде)
 
 Проверка доступных версий:
@@ -133,6 +141,19 @@ kubectl label namespace coroot pod-security.kubernetes.io/enforce=privileged --o
 ### Дисковое место ClickHouse / Prometheus
 
 Размеры PVC заданы в [`coroot-values.yaml`](coroot-values.yaml); при нехватке места увеличьте `storage.size` для `clickhouse` / `prometheus` и переустановите или расширьте PVC по политике StorageClass.
+
+### В UI: «kube-state-metrics: no kube-state-metrics installed»
+
+Встроенный Prometheus от **coroot-operator** по умолчанию скрейпит только `127.0.0.1:9090`. Проверка в UI ищет метрики `kube_*` в **этом** Prometheus, поэтому отдельный Helm chart `kube-state-metrics` сам по себе индикатор не «вылечит», пока Prometheus не начнёт скрейпить его Service.
+
+В репозитории:
+
+1. `make k3s-kube-state-metrics` — Service `kube-state-metrics.kube-state-metrics:8080`.
+2. `make k3s-coroot-prometheus-ksm-scrape` — скрипт [`scripts/coroot-prometheus-add-kube-state-metrics-scrape.sh`](../../scripts/coroot-prometheus-add-kube-state-metrics-scrape.sh) дописывает `scrape_configs` и **`metric_relabel_configs`**: ко всем точкам из job `kube-state-metrics` добавляется лейбл `coroot_project_id=<id проекта>`. Иначе Coroot при запросах к Prometheus всегда накладывает селектор `{coroot_project_id="…"}` ([`db/project.go` в upstream](https://github.com/coroot/coroot/blob/master/db/project.go)), и «сырые» метрики KSM не попадают в модель — в настройках проекта остаётся «no kube-state-metrics installed». Id проекта скрипт берёт из SQLite Coroot (должен быть **ровно один** проект) или из переменной **`COROOT_PROJECT_ID`**.
+
+**Важно:** при работающем `coroot-operator` он сразу откатывает патч Deployment. По умолчанию скрипт **останавливает** `coroot-operator` (`kubectl scale … --replicas=0`), патчит Prometheus и **не** поднимает оператор обратно — иначе конфиг снова затрётся. Если нужен живой оператор (реконсил CR Coroot), после `kubectl scale deployment/coroot-operator -n coroot --replicas=1` снова выполните `make k3s-coroot-prometheus-ksm-scrape` (или держите оператор на 0, пока не обновляете CR вручную).
+
+Отключить паузу оператора (патч почти наверняка не сохранится): `COROOT_PAUSE_OPERATOR=0 make k3s-coroot-prometheus-ksm-scrape`.
 
 ### Локальный доступ без ingress
 
