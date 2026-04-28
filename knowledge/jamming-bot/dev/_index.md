@@ -27,6 +27,10 @@ tags:
 - [[Jamming bot Dev project|Jamming Bot Dev Project]]
 - [[Jamming bot Redis Queue Jobs|Jamming Bot Redis Queue Jobs]]
 
+## Changelog
+
+- [[2026-04-28|2026-04-27–2026-04-28 — dev changelog]]
+
 ## Tasks
 
 - [[Jamming bot Tasks|Jamming Bot Tasks]]
