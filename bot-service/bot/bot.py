@@ -679,16 +679,22 @@ class NetSpider():
                                 self.notify_about_eventp("error_robots_disallow", current_url)
                                 self.notify_about_step(self.step)
                                 return
-                            response = await client.get(
-                                current_url,
-                                headers={
-                                    'Accept-Language': 'en-US, en;q=0.5',
-                                    'Accept-Charset': 'utf-8',
-                                    'Accept-Encoding': 'gzip',
-                                    'User-Agent': USER_AGENT,
-                                },
-                                timeout=10,
-                            )
+                            async with telemetry.fetch_page_span(current_url) as fetch_span:
+                                response = await client.get(
+                                    current_url,
+                                    headers={
+                                        'Accept-Language': 'en-US, en;q=0.5',
+                                        'Accept-Charset': 'utf-8',
+                                        'Accept-Encoding': 'gzip',
+                                        'User-Agent': USER_AGENT,
+                                    },
+                                    timeout=10,
+                                )
+                                if fetch_span is not None and fetch_span.is_recording():
+                                    fetch_span.set_attribute(
+                                        "http.response.status_code",
+                                        response.status_code,
+                                    )
                         # Resolve hostname to IP for geo (response.extensions is not the remote IP)
                         ip_addr = "0"
                         try:

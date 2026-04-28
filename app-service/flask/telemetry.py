@@ -76,10 +76,24 @@ def enqueue_with_trace(queue, connection, func, *args, timeout=90, result_ttl=27
     so the worker always sees the carrier (avoids race with save_meta() after delay()).
     Returns the Job. Falls back to func.delay(*args, **kwargs) when tracing is disabled."""
     carrier = get_trace_context_for_rq()
-    if not carrier:
+    return enqueue_with_trace_carrier(
+        queue, connection, func, carrier, *args, timeout=timeout, result_ttl=result_ttl, **kwargs
+    )
+
+
+def enqueue_with_trace_carrier(
+    queue, connection, func, carrier, *args, timeout=90, result_ttl=270, **kwargs
+):
+    """Like enqueue_with_trace but uses an explicit W3C carrier dict (e.g. from Redis step hash).
+    Falls back to get_trace_context_for_rq() when carrier is empty; then to delay() without meta."""
+    eff = carrier if isinstance(carrier, dict) else {}
+    if not eff:
+        eff = get_trace_context_for_rq()
+    if not eff:
         return func.delay(*args, **kwargs)
     try:
         from rq.job import Job
+
         job = Job.create(
             func=func,
             args=args,
@@ -87,14 +101,21 @@ def enqueue_with_trace(queue, connection, func, *args, timeout=90, result_ttl=27
             connection=connection,
             timeout=timeout,
             result_ttl=result_ttl,
-            meta={"trace_carrier": json.dumps(carrier)},
+            meta={"trace_carrier": json.dumps({k: str(v) for k, v in eff.items() if v is not None})},
             origin=queue.name,
         )
         queue.enqueue_job(job)
         return job
     except Exception as e:
-        logger.warning("enqueue_with_trace failed, falling back to delay: %s", e)
+        logger.warning("enqueue_with_trace_carrier failed, falling back to delay: %s", e)
         return func.delay(*args, **kwargs)
+
+
+# Display names for Jaeger operation list (rq.<name> in traces)
+_RQ_SPAN_DISPLAY_NAMES = {
+    "mood_snapshot": "rq.do_mood",
+    "image_analyze": "rq.do_image_analyze",
+}
 
 
 # Map RQ function name -> job type for Jaeger (matches job.meta['type'])
@@ -188,8 +209,9 @@ def with_trace_context(f):
             ctx = extract(carrier)
             tracer = trace.get_tracer(__name__)
             job_type = _JOB_TYPE_MAP.get(f.__name__, f.__name__)
+            span_name = _RQ_SPAN_DISPLAY_NAMES.get(f.__name__, f"rq.{f.__name__}")
             with tracer.start_as_current_span(
-                f"rq.{f.__name__}",
+                span_name,
                 context=ctx,
                 kind=trace.SpanKind.SERVER,
             ) as span:

@@ -10,7 +10,7 @@ metadata:
   name: html-renderer
   namespace: jamming-bot
 spec:
-  replicas: 2
+  replicas: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -132,7 +132,7 @@ metadata:
   name: semantic-service
   namespace: jamming-bot
 spec:
-  replicas: 2
+  replicas: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -928,7 +928,7 @@ metadata:
   name: worker-service
   namespace: jamming-bot
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: worker-service
@@ -1967,8 +1967,8 @@ metadata:
 spec:
   scaleTargetRef:
     name: worker-service
-  minReplicaCount: 2
-  maxReplicaCount: 10
+  minReplicaCount: 1
+  maxReplicaCount: 4
   cooldownPeriod: 60
   pollingInterval: 10
   triggers:
@@ -1981,6 +1981,7 @@ spec:
 ---
 # ===================== KEDA: html-renderer autoscaler =====================
 # Screenshot jobs (do_screenshot) call html-renderer; scale up earlier under queue load.
+# Caps tuned for single-node (~8 CPU): fewer Chromium replicas = less RAM/CPU thrash.
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -1989,8 +1990,8 @@ metadata:
 spec:
   scaleTargetRef:
     name: html-renderer
-  minReplicaCount: 2
-  maxReplicaCount: 4
+  minReplicaCount: 1
+  maxReplicaCount: 2
   cooldownPeriod: 90
   pollingInterval: 10
   triggers:

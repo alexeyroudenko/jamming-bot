@@ -76,6 +76,90 @@ if os.getenv("OTEL_TRACING_ENABLED", "0") == "1":
 POD_NAME = os.environ.get('HOSTNAME', 'unknown')
 
 
+def _otel_screenshot_renderer_spans(response, response_received_wall_ns, rq_parent_span=None):
+    """Attributes + child spans for page load vs screenshot (html-renderer headers).
+
+    Child spans use explicit start/end times so Jaeger shows separate waterfall bars.
+    Pass *rq_parent_span* (snapshot before requests.get) so children attach under rq.do_screenshot,
+    not under the auto-instrumented HTTP client span.
+    """
+    if os.getenv("OTEL_TRACING_ENABLED", "0") != "1":
+        return
+    try:
+        from opentelemetry import trace
+        from opentelemetry.trace import SpanKind
+
+        parent = rq_parent_span or trace.get_current_span()
+        if not parent or not parent.is_recording():
+            return
+        h = response.headers
+        pl_raw = h.get("X-Page-Load-Ms") or h.get("x-page-load-ms")
+        sm_raw = h.get("X-Screenshot-Ms") or h.get("x-screenshot-ms")
+        tm_raw = h.get("X-Total-Ms") or h.get("x-total-ms")
+        pl_ms = None
+        sm_ms = None
+        tm_ms = None
+        if pl_raw is not None:
+            try:
+                pl_ms = int(pl_raw)
+                parent.set_attribute("renderer.page_load_ms", pl_ms)
+            except (TypeError, ValueError):
+                pass
+        if sm_raw is not None:
+            try:
+                sm_ms = int(sm_raw)
+                parent.set_attribute("renderer.screenshot_ms", sm_ms)
+            except (TypeError, ValueError):
+                pass
+        if tm_raw is not None:
+            try:
+                tm_ms = int(tm_raw)
+                parent.set_attribute("renderer.total_ms", tm_ms)
+            except (TypeError, ValueError):
+                pass
+
+        if pl_ms is None or sm_ms is None or pl_ms < 0 or sm_ms < 0:
+            return
+
+        tracer = trace.get_tracer(__name__)
+        # Server ordering: page_load finishes, then screenshot; align synthetic timeline to response receipt.
+        ss_end_ns = int(response_received_wall_ns)
+        ss_start_ns = ss_end_ns - int(sm_ms * 1e6)
+        pl_end_ns = ss_start_ns
+        pl_start_ns = pl_end_ns - int(pl_ms * 1e6)
+
+        from opentelemetry.trace import use_span
+
+        with use_span(parent):
+            span_load = tracer.start_span(
+                "renderer.page_load",
+                kind=SpanKind.INTERNAL,
+                start_time=pl_start_ns,
+            )
+            span_load.set_attributes(
+                {
+                    "renderer.phase": "page_load",
+                    "renderer.duration_ms": pl_ms,
+                }
+            )
+            span_load.end(end_time=pl_end_ns)
+
+            span_shot = tracer.start_span(
+                "renderer.screenshot",
+                kind=SpanKind.INTERNAL,
+                start_time=ss_start_ns,
+            )
+            span_shot.set_attributes(
+                {
+                    "renderer.phase": "screenshot_capture",
+                    "renderer.duration_ms": sm_ms,
+                }
+            )
+            span_shot.end(end_time=ss_end_ns)
+    except Exception:
+        pass
+
+
 def _tags_bulk_post(names, timeout=60):
     """POST /api/v1/tags/bulk/ — пустой список не шлём."""
     if not names:
@@ -555,9 +639,19 @@ def do_screenshot(data):
             'json_on_error': 'true',
         }
         last_error = None
+        response_received_wall_ns = None
+        rq_otel_parent_for_renderer = None
+        if os.getenv("OTEL_TRACING_ENABLED", "0") == "1":
+            try:
+                from opentelemetry import trace as _otel_trace
+
+                rq_otel_parent_for_renderer = _otel_trace.get_current_span()
+            except Exception:
+                rq_otel_parent_for_renderer = None
         for attempt in range(1, SCREENSHOT_RENDER_RETRIES + 1):
             try:
                 response = requests.get(render_url, params=params, timeout=60)
+                response_received_wall_ns = time.time_ns()
                 break
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
                 last_error = e
@@ -590,6 +684,12 @@ def do_screenshot(data):
                 pass
         response.raise_for_status()
         image_bytes = response.content
+        if response_received_wall_ns is not None:
+            _otel_screenshot_renderer_spans(
+                response,
+                response_received_wall_ns,
+                rq_parent_span=rq_otel_parent_for_renderer,
+            )
         span.set_data("image_size", len(image_bytes))
 
     with sentry_sdk.start_span(op="s3", description="s3 upload screenshot") as span:

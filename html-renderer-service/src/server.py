@@ -113,6 +113,7 @@ async def render_screenshot(
                     try:
                         logger.info(f"Viewport: {width}x{height}, DeviceScaleFactor: {device_scale_factor}")
 
+                        load_phase_start = time.perf_counter()
                         # Переходим на страницу (domcontentloaded — меньше нагрузка на тяжёлых сайтах)
                         await page.goto(url, wait_until="domcontentloaded", timeout=5000)
                         await page.wait_for_timeout(400)
@@ -137,8 +138,10 @@ async def render_screenshot(
                                 }
                             """)
 
-                        elapsed = time.perf_counter() - render_start
-                        logger.info(f"Загрузка страницы успешно завершена для: {url} (время: {elapsed:.2f}s)")
+                        page_load_s = time.perf_counter() - load_phase_start
+                        logger.info(
+                            f"Загрузка страницы успешно завершена для: {url} (время: {page_load_s:.2f}s)"
+                        )
 
                         screenshot_options = {
                             "full_page": fullPage.lower() == 'true',
@@ -151,16 +154,27 @@ async def render_screenshot(
                             elif screenshot_options["type"] == 'jpeg':
                                 screenshot_options["quality"] = 90
 
+                        screenshot_phase_start = time.perf_counter()
                         image_bytes = await page.screenshot(**screenshot_options)
+                        screenshot_s = time.perf_counter() - screenshot_phase_start
 
-                        elapsed = time.perf_counter() - render_start
-                        logger.info(f"Скриншот успешно создан для: {url} (время: {elapsed:.2f}s)")
+                        total_s = page_load_s + screenshot_s
+                        logger.info(f"Скриншот успешно создан для: {url} (время: {total_s:.2f}s)")
+
+                        page_load_ms = int(round(page_load_s * 1000))
+                        screenshot_ms = int(round(screenshot_s * 1000))
+                        total_ms = int(round(total_s * 1000))
 
                         content_type = f"image/{screenshot_options['type']}"
                         return Response(
                             content=image_bytes,
                             media_type=content_type,
-                            headers={"X-Render-Time-Seconds": f"{elapsed:.2f}"}
+                            headers={
+                                "X-Page-Load-Ms": str(page_load_ms),
+                                "X-Screenshot-Ms": str(screenshot_ms),
+                                "X-Total-Ms": str(total_ms),
+                                "X-Render-Time-Seconds": f"{total_s:.2f}",
+                            },
                         )
 
                     finally:

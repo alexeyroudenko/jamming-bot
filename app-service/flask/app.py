@@ -1,3 +1,4 @@
+import contextlib
 import os
 import re
 import sys
@@ -28,7 +29,15 @@ from sentry_sdk.integrations.rq import RqIntegration
 
 from rq_helpers import queue, get_all_jobs, redis_connection
 from config import Config, getConfig, getRedis
-from telemetry import init_telemetry, inject_trace_context_into_job, set_step_span_attributes, step_span, enqueue_with_trace
+from telemetry import (
+    init_telemetry,
+    inject_trace_context_into_job,
+    set_step_span_attributes,
+    step_span,
+    enqueue_with_trace,
+    enqueue_with_trace_carrier,
+    get_trace_context_for_rq,
+)
 import jobs
 import sync_jobs
 import storage_http
@@ -489,9 +498,15 @@ def _emit_presence_step(step_number, phase="update"):
     )
 
 
-def _run_early_storage(store_payload: dict, step_number: str, is_silent: bool):
+def _run_early_storage(
+    store_payload: dict,
+    step_number: str,
+    is_silent: bool,
+    trace_carrier=None,
+):
     """POST /store in background (non-blocking /bot/step/); keep-alive via storage_http."""
-    try:
+
+    def _post_retries():
         last_error = None
         for idx, delay in enumerate((0.0, 0.8, 1.6)):
             if delay > 0:
@@ -509,6 +524,32 @@ def _run_early_storage(store_payload: dict, step_number: str, is_silent: bool):
         logger.info("step: early storage OK for step %s", step_number)
         if is_silent:
             _emit_presence_step(step_number, phase="store")
+
+    span_cm = contextlib.nullcontext()
+    if (
+        os.getenv("OTEL_TRACING_ENABLED", "0") == "1"
+        and trace_carrier
+        and isinstance(trace_carrier, dict)
+    ):
+        try:
+            from opentelemetry import trace
+            from opentelemetry.propagate import extract
+            from opentelemetry.trace import SpanKind
+
+            otel_ctx = extract(trace_carrier)
+            tracer = trace.get_tracer(__name__)
+            span_cm = tracer.start_as_current_span(
+                "rq.do_storage",
+                context=otel_ctx,
+                kind=SpanKind.INTERNAL,
+            )
+        except Exception as exc:
+            logger.debug("early storage OTEL span setup failed: %s", exc)
+            span_cm = contextlib.nullcontext()
+
+    try:
+        with span_cm:
+            _post_retries()
     except Exception as e:
         logger.warning("step: early storage failed: %s", e)
 
@@ -600,17 +641,18 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                                 sem = sem_raw
                             snum = res.get("number") or ""
                             if snippet or sem:
-                                jm = enqueue_with_trace(
+                                car = _step_trace_carrier_for_enqueue(step_key)
+                                jm = enqueue_with_trace_carrier(
                                     queue,
                                     redis_connection,
                                     jobs.mood_snapshot,
+                                    car,
                                     snippet,
                                     sem,
                                     timeout=120,
                                     result_ttl=300,
                                     step_number=str(snum),
                                 )
-                                inject_trace_context_into_job(jm)
                                 _poll_job_and_emit(
                                     jm,
                                     "mood_collect",
@@ -630,17 +672,18 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                             step_num = step_key.split(":", 1)[-1]
                             row = _read_step_hash(step_key) or {}
                             step_url = row.get("url") or ""
-                            j2 = enqueue_with_trace(
+                            car = _step_trace_carrier_for_enqueue(step_key)
+                            j2 = enqueue_with_trace_carrier(
                                 queue,
                                 redis_connection,
                                 jobs.analyze_semantic,
+                                car,
                                 seg,
                                 timeout=60,
                                 result_ttl=270,
                                 step_number=step_num,
                                 step_url=step_url,
                             )
-                            inject_trace_context_into_job(j2)
                             _poll_job_and_emit(
                                 j2,
                                 "semantic_collect",
@@ -714,6 +757,31 @@ def _read_step_hash(step_key):
         except (json.JSONDecodeError, TypeError):
             result[key] = val
     return result
+
+
+def _step_trace_carrier_dict(step_key):
+    """OpenTelemetry trace carrier dict stored on the step hash (JSON or raw string)."""
+    row = _read_step_hash(step_key) or {}
+    raw = row.get("_otel_trace_carrier")
+    if isinstance(raw, dict):
+        return {str(k): str(v) for k, v in raw.items() if v is not None}
+    if isinstance(raw, str) and raw.strip():
+        try:
+            d = json.loads(raw)
+            if isinstance(d, dict):
+                return {str(k): str(v) for k, v in d.items() if v is not None}
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return {}
+
+
+def _step_trace_carrier_for_enqueue(step_key):
+    """Prefer step-scoped carrier (for follow-up RQ jobs from poll threads); else current context."""
+    if step_key:
+        c = _step_trace_carrier_dict(step_key)
+        if c:
+            return c
+    return get_trace_context_for_rq()
 
 
 def _read_backfill_status():
@@ -975,10 +1043,12 @@ def _enqueue_image_analysis_followup(step_key, screenshot_result, silent=False):
         "screenshot_url": screenshot_url,
     }
     try:
-        job = enqueue_with_trace(
+        car = _step_trace_carrier_for_enqueue(step_key)
+        job = enqueue_with_trace_carrier(
             queue,
             redis_connection,
             jobs.image_analyze,
+            car,
             payload,
             timeout=120,
             result_ttl=270,
@@ -1802,63 +1872,77 @@ def step():
             float(current_cfg.get('do_save', 0)) == 1.0
             or float(current_cfg.get('do_storage', 0)) == 1.0
         )
-        if early_store and data.get('url'):
-            try:
-                store_payload = dict(jobs.step_payload_for_store(data))
-                threading.Thread(
-                    target=_run_early_storage,
-                    args=(store_payload, str(data["number"]), is_silent),
-                    name="early-storage",
-                    daemon=True,
-                ).start()
-            except Exception as e:
-                logger.warning("step: early storage thread spawn failed: %s", e)
 
-        if data['status_string'] == "ok":
+        trace_wrap = (
+            data["status_string"] == "ok"
+            or (early_store and data.get("url"))
+        )
+
+        if trace_wrap:
             with step_span(step_number=data.get('number'), step_url=data.get('url')):
-                set_step_span_attributes(
-                    step_number=data.get('number'),
-                    step_url=data.get('url'),
-                )
-                pending_jobs = []
-
-                # PASS — semantic analysis via worker
-                if not is_silent:
-                    socketio.emit('step', data)
-
-                # GEO — fire-and-forget with background poll
-                if float(current_cfg['do_geo']) == 1.0:
-                    if not is_silent:
-                        send_node_red_event(f"try {data.keys()}")
-                    if "ip" in data.keys():
-                        ip = data['ip']
-                        if ip != "0":
-                            job = enqueue_with_trace(queue, redis_connection, jobs.do_geo, ip, timeout=90, result_ttl=270)
-                            _poll_job_and_emit(job, 'location', timeout=90, step_key=step_key, silent=is_silent)
-                            pending_jobs.append(job)
-
-                # ANALYZE — fire-and-forget with background poll
-                if float(current_cfg['do_analyze']) == 1.0:
-                    logger.info(f"step do_analyze")
-                    html = data.get('html', data.get('text', ''))
-                    job = enqueue_with_trace(
-                        queue, redis_connection, jobs.analyze, html,
-                        step_number=data.get('number'), step_url=data.get('url'),
-                        timeout=90, result_ttl=270,
+                carrier = get_trace_context_for_rq()
+                if carrier:
+                    _save_to_step_hash(
+                        step_key,
+                        {"_otel_trace_carrier": json.dumps(carrier)},
                     )
-                    _poll_job_and_emit(job, 'analyzed', timeout=90, step_key=step_key, silent=is_silent)
-                    pending_jobs.append(job)
 
-                # SCREENSHOT — fire-and-forget with background poll
-                if float(current_cfg['do_screenshot']) == 1.0:
-                    if data.get('url'):
-                        logger.info(f"step do_screenshot")
-                        job = enqueue_with_trace(queue, redis_connection, jobs.do_screenshot, data, timeout=120, result_ttl=270)
-                        _poll_job_and_emit(job, 'screenshot', timeout=120, step_key=step_key, silent=is_silent)
+                if early_store and data.get('url'):
+                    try:
+                        store_payload = dict(jobs.step_payload_for_store(data))
+                        threading.Thread(
+                            target=_run_early_storage,
+                            args=(store_payload, str(data["number"]), is_silent, carrier),
+                            name="early-storage",
+                            daemon=True,
+                        ).start()
+                    except Exception as e:
+                        logger.warning("step: early storage thread spawn failed: %s", e)
+
+                if data['status_string'] == "ok":
+                    set_step_span_attributes(
+                        step_number=data.get('number'),
+                        step_url=data.get('url'),
+                    )
+                    pending_jobs = []
+
+                    # PASS — semantic analysis via worker
+                    if not is_silent:
+                        socketio.emit('step', data)
+
+                    # GEO — fire-and-forget with background poll
+                    if float(current_cfg['do_geo']) == 1.0:
+                        if not is_silent:
+                            send_node_red_event(f"try {data.keys()}")
+                        if "ip" in data.keys():
+                            ip = data['ip']
+                            if ip != "0":
+                                job = enqueue_with_trace(queue, redis_connection, jobs.do_geo, ip, timeout=90, result_ttl=270)
+                                _poll_job_and_emit(job, 'location', timeout=90, step_key=step_key, silent=is_silent)
+                                pending_jobs.append(job)
+
+                    # ANALYZE — fire-and-forget with background poll
+                    if float(current_cfg['do_analyze']) == 1.0:
+                        logger.info(f"step do_analyze")
+                        html = data.get('html', data.get('text', ''))
+                        job = enqueue_with_trace(
+                            queue, redis_connection, jobs.analyze, html,
+                            step_number=data.get('number'), step_url=data.get('url'),
+                            timeout=90, result_ttl=270,
+                        )
+                        _poll_job_and_emit(job, 'analyzed', timeout=90, step_key=step_key, silent=is_silent)
                         pending_jobs.append(job)
 
-                # STORAGE updates happen incrementally via _poll_job_and_emit → _patch_storage
-        else:
+                    # SCREENSHOT — fire-and-forget with background poll
+                    if float(current_cfg['do_screenshot']) == 1.0:
+                        if data.get('url'):
+                            logger.info(f"step do_screenshot")
+                            job = enqueue_with_trace(queue, redis_connection, jobs.do_screenshot, data, timeout=120, result_ttl=270)
+                            _poll_job_and_emit(job, 'screenshot', timeout=120, step_key=step_key, silent=is_silent)
+                            pending_jobs.append(job)
+
+                    # STORAGE updates happen incrementally via _poll_job_and_emit → _patch_storage
+        elif data['status_string'] != "ok":
             logger.info(f"skip step actions")
 
     return "done"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +109,32 @@ def http_client_span(url: str):
     }
     with tracer.start_as_current_span("http.client", kind=SpanKind.CLIENT, attributes=attrs):
         yield
+
+
+@asynccontextmanager
+async def fetch_page_span(url: str):
+    """Async client span for GET page HTML under bot.do_step."""
+    if os.getenv("OTEL_TRACING_ENABLED", "0") != "1":
+        yield None
+        return
+    from urllib.parse import urlparse
+
+    from opentelemetry.trace import SpanKind
+
+    tracer = get_tracer()
+    parsed = urlparse(url)
+    path = (parsed.path or "")[:512]
+    attrs = {
+        "http.method": "GET",
+        "http.url": f"{parsed.scheme}://{parsed.netloc}{path}"[:768],
+        "net.peer.name": parsed.hostname or "",
+    }
+    with tracer.start_as_current_span(
+        "bot.fetch_html",
+        kind=SpanKind.CLIENT,
+        attributes=attrs,
+    ) as span:
+        yield span
 
 
 def _query_operation(kwargs, args) -> str:
