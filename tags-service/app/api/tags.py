@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 import os
 from fastapi import APIRouter, HTTPException, Query
 
@@ -84,7 +84,11 @@ async def delete_tag(id: int):
 async def get_tags_group(
     count: int = Query(200, ge=1),
     page: int = Query(0, ge=0),
-    days: int = Query(0, ge=0),
+    days: Optional[int] = Query(
+        None,
+        ge=0,
+        description="Omit: all-time. 0: today (UTC). N>=1: last N days from tag_daily_stats.",
+    ),
 ):
     return await db_manager.get_grouped_tags(count=count, page=page, days=days)
 

@@ -3,6 +3,7 @@ import csv
 import io
 import json
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 
 import httpx
 from sqlalchemy import and_, desc, func, select
@@ -223,44 +224,60 @@ def _grouped_row_to_dict(r, with_total=False):
     return payload
 
 
-async def get_grouped_tags(count: int = 200, page: int = 0, days: int = 0):
+async def get_grouped_tags(count: int = 200, page: int = 0, days: Optional[int] = None):
+    """
+    Grouped tag counts.
+
+    * days is None (query param omitted): all-time totals from `tags`.
+    * days == 0: counts for the current UTC calendar day only (`tag_daily_stats`).
+    * days >= 1: rolling window of N days ending today (UTC), from `tag_daily_stats`.
+    """
     safe_count = max(1, min(500, int(count)))
     safe_page = max(0, int(page))
-    safe_days = max(0, int(days))
-    if safe_days > 0:
-        cutoff_day = datetime.now(timezone.utc).date() - timedelta(days=safe_days - 1)
-        daily_agg_subquery = (
+
+    def _daily_window_subquery(day_predicate):
+        agg = (
             select(
                 tag_daily_stats.c.tag_name.label("name"),
                 func.sum(tag_daily_stats.c.count).label("total_count"),
             )
-            .where(tag_daily_stats.c.day >= cutoff_day)
+            .where(day_predicate)
             .group_by(tag_daily_stats.c.tag_name)
             .subquery()
         )
-        query = (
+        return (
             select(
                 func.coalesce(tags.c.id, 0).label("id"),
-                daily_agg_subquery.c.name.label("name"),
-                daily_agg_subquery.c.total_count.label("count"),
+                agg.c.name.label("name"),
+                agg.c.total_count.label("count"),
             )
-            .select_from(
-                daily_agg_subquery.outerjoin(tags, tags.c.name == daily_agg_subquery.c.name)
-            )
-            .order_by(desc(daily_agg_subquery.c.total_count), daily_agg_subquery.c.name.asc())
+            .select_from(agg.outerjoin(tags, tags.c.name == agg.c.name))
+            .order_by(desc(agg.c.total_count), agg.c.name.asc())
+            .limit(safe_count)
+            .offset(safe_page * safe_count)
+        )
+
+    if days is None:
+        query = (
+            tags.select()
+            .order_by(desc(tags.c.count), tags.c.name.asc())
             .limit(safe_count)
             .offset(safe_page * safe_count)
         )
         rows = await database.fetch_all(query=query)
+        return [_record_to_dict(r) for r in rows]
+
+    safe_days = max(0, int(days))
+    if safe_days == 0:
+        today = datetime.now(timezone.utc).date()
+        query = _daily_window_subquery(tag_daily_stats.c.day == today)
+        rows = await database.fetch_all(query=query)
         return [_grouped_row_to_dict(r) for r in rows]
-    query = (
-        tags.select()
-        .order_by(desc(tags.c.count), tags.c.name.asc())
-        .limit(safe_count)
-        .offset(safe_page * safe_count)
-    )
+
+    cutoff_day = datetime.now(timezone.utc).date() - timedelta(days=safe_days - 1)
+    query = _daily_window_subquery(tag_daily_stats.c.day >= cutoff_day)
     rows = await database.fetch_all(query=query)
-    return [_record_to_dict(r) for r in rows]
+    return [_grouped_row_to_dict(r) for r in rows]
 
 
 async def backfill_daily_from_storage(storage_url: str, limit: int = 0, offset: int = 0, dry_run: bool = True):

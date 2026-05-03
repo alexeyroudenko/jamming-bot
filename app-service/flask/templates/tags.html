@@ -78,12 +78,27 @@
 (function () {
   var API_BASE = {{ tags_api_base|tojson }};
   var API = (API_BASE || '') + '/api/tags/get/';
-  var REFRESH_INTERVAL = 60000;
-  /** Single family for canvas + d3-cloud collision canvas (must match). */
-  var FONT = 'Segoe UI';
-  var PAD = 2;
-  /** Max tags passed to d3-cloud (by count). */
-  var MAX_CLOUD_TAGS = 200;
+  /** Sanitized ?days=N from page URL (fixed at load); omitted = all-time API. */
+  var DAYS_QUERY_SUFFIX = (function () {
+    var sp = new URLSearchParams(window.location.search);
+    if (!sp.has('days')) return '';
+    var raw = sp.get('days');
+    if (raw === null || raw === '') return '';
+    var d = parseInt(raw, 10);
+    if (isNaN(d) || d < 0) return '';
+    return '?days=' + d;
+  })();
+  if (DAYS_QUERY_SUFFIX === '?days=0') {
+    document.title = 'Jamming bot — Tag Cloud (today)';
+  } else if (DAYS_QUERY_SUFFIX === '?days=7') {
+    document.title = 'Jamming bot — Tag Cloud (7 days)';
+  }
+  var REFRESH_INTERVAL = 30000;
+  var REPEL_RADIUS = 150;
+  var REPEL_STRENGTH = 42;
+  var RETURN_SPEED = 0.09;
+  var FONT = 'monospace';
+  var PAD = 12;
   var HIGHLIGHT_COLOR = 'rgb(255,0,0)';
   var HIGHLIGHT_DECAY = 0.015;
   var RESIZE_LAYOUT_MS = 220;
@@ -446,7 +461,7 @@
 
   function fetchAndDraw() {
     statusEl.textContent = 'updating…';
-    fetch(API)
+    fetch(API + DAYS_QUERY_SUFFIX)
       .then(function (r) { return r.json(); })
       .then(function (tags) {
         if (!tags || !tags.length) {
