@@ -8,7 +8,9 @@
 
 {% block content %}
 <h1>Queue</h1>
-<p>Finished and failed jobs remain until result_ttl or failure_ttl expires.</p>
+<p>Записи в таблице — это задачи из очереди RQ (ожидают, выполняются, недавно завершённые или упавшие). У завершённых результат живёт в Redis не дольше <code class="jb-code">RQ_RESULT_TTL_SECONDS</code> на стороне app-service (по умолчанию сейчас 30 мин; раньше было ~4.5 мин — из‑за этого страница почти всегда выглядела пустой).</p>
+<p><strong>Важно:</strong> джобы <code class="jb-code">analyze</code>, <code class="jb-code">do_geo</code>, скриншоты и т.д. ставятся только для <strong>успешного шага</strong> (бот прислал <code class="jb-code">status_code=200</code> на <code class="jb-code">/bot/step/</code>). Если в логах бота одни <code class="jb-code">error_retrieve_url</code>, очередь будет пустой даже при включённых do_*.</p>
+<p>Показано записей в индексах RQ: <strong>{{ total_jobs }}</strong>{% if limit %} (листинг до {{ limit }} с позиции {{ page }} × {{ limit }}){% endif %}.</p>
 
 {% if queue_error %}
 <div class="jb-alert jb-alert--danger" role="alert">
@@ -37,6 +39,11 @@
       </tr>
     </thead>
     <tbody>
+      {% if not joblist %}
+      <tr>
+        <td colspan="8" class="jb-muted">Нет задач для отображения: либо сейчас ничего не стоит в очереди и не выполняется, либо последние завершённые уже истекли по TTL, либо бот не даёт успешных загрузок страниц (не 200).</td>
+      </tr>
+      {% endif %}
       {% for job in joblist %}
       <tr>
         <td>{{ job_badge(job.state) }}</td>

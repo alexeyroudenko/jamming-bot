@@ -579,14 +579,6 @@ button {
         max-height: 180px;
     }
 
-    .bot-step-timeline-panel {
-        left: 10px;
-        right: 10px;
-        bottom: 522px;
-        transform: none;
-        width: auto;
-    }
-
     .bot-backfill-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -897,15 +889,6 @@ button {
           <div class="bot-logs-empty">Waiting for socket events...</div>
         </div>
       </section>
-      <section id="step-timeline-panel" class="bot-panel bot-step-timeline-panel" aria-live="polite">
-        <div id="step-timeline-track" class="bot-step-timeline-track">
-          <div class="bot-step-timeline-empty">Waiting for step...</div>
-          <div id="step-timeline-cursor" class="bot-step-timeline-cursor" hidden></div>
-        </div>
-        <div id="step-timeline-meta" hidden>Waiting for step...</div>
-        <div id="step-timeline-caption" hidden></div>
-        <div class="bot-section-label" hidden>Step timeline</div>
-      </section>
     </div>
   </div>
 
@@ -920,10 +903,6 @@ button {
       <label class="bot-panel-quick-toggle bot-panel-quick-toggle-logs" for="quick-toggle-logs-panel">
         <input type="checkbox" id="quick-toggle-logs-panel" data-target-selector="#logs-panel" checked>
         <span>logs</span>
-      </label>
-      <label class="bot-panel-quick-toggle bot-panel-quick-toggle-timeline" for="quick-toggle-step-timeline-panel">
-        <input type="checkbox" id="quick-toggle-step-timeline-panel" data-target-selector="#step-timeline-panel" checked>
-        <span>timeline</span>
       </label>
       <label class="bot-panel-quick-toggle bot-panel-quick-toggle-viewers admin-only" for="quick-toggle-viewers-panel">
         <input type="checkbox" id="quick-toggle-viewers-panel" data-target-selector="#viewers-panel" checked>
@@ -1135,7 +1114,6 @@ var MOVE_TARGET_SELECTOR = [
     '#debug',
     '.bot-side-column',
     '#logs-panel',
-    '#step-timeline-panel',
     '#viewers-panel',
     '#workers-panel',
     '#backfill-panel',

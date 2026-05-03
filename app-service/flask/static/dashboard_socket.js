@@ -175,6 +175,9 @@
     window.startStepTimelineCursorLoop = startStepTimelineCursorLoop;
 
     function resetStepTimeline(stepNumber, startedAt) {
+        if (!document.getElementById('step-timeline-track')) {
+            return;
+        }
         stepTimelineState.step = stepNumber == null ? null : stepNumber;
         stepTimelineState.startedAt = startedAt || Date.now();
         stepTimelineState.events = [];
@@ -183,6 +186,9 @@
     window.resetStepTimeline = resetStepTimeline;
 
     function clearStepTimeline() {
+        if (!document.getElementById('step-timeline-track')) {
+            return;
+        }
         stepTimelineState.step = null;
         stepTimelineState.startedAt = null;
         stepTimelineState.events = [];
@@ -191,6 +197,9 @@
     window.clearStepTimeline = clearStepTimeline;
 
     function appendTimelineEvent(eventName, payload, forcedType, eventTime) {
+        if (!document.getElementById('step-timeline-track')) {
+            return;
+        }
         if (eventName === 'step' || !stepTimelineState.startedAt) {
             return;
         }
@@ -389,6 +398,9 @@
     });
 
     function bootCursor() {
+        if (!document.getElementById('step-timeline-track')) {
+            return;
+        }
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', startStepTimelineCursorLoop);
         } else {

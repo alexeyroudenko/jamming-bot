@@ -1369,6 +1369,8 @@ spec:
           value: "app-service"
         - name: BOT_YAML_PATH
           value: "/app/bot_config/bot.yaml"
+        - name: RQ_RESULT_TTL_SECONDS
+          value: "1800"
         volumeMounts:
         - name: bot-config
           mountPath: /app/bot_config/bot.yaml

@@ -37,6 +37,8 @@ BLOCKED_DOMAINS = frozenset({"canine.tools"})
 ROBOTS_CACHE = {}  # origin -> (RobotFileParser, fetch_timestamp)
 ROBOTS_CACHE_TTL_SEC = 86400  # 24h
 
+MAX_PAGE_FETCH_BYTES = int(os.getenv("BOT_MAX_PAGE_BYTES", str(4 * 1024 * 1024)))
+
 FLASK_HOST = os.getenv('FLASK_HOST', 'flask')
 FLASK_PORT = os.getenv('FLASK_PORT', '5000')
 STEP_URL = f"http://{FLASK_HOST}:{FLASK_PORT}/bot/step/"
@@ -133,6 +135,81 @@ async def robots_can_fetch(client, url):
         rp.parse([])
         ROBOTS_CACHE[origin] = (rp, now)
         return True
+
+
+def _url_heuristic_stream(url: str) -> bool:
+    """True for URLs that are commonly infinite HTTP streams (Icecast/Shoutcast-style)."""
+    try:
+        p = urlparse(url)
+        path = (p.path or "").lower().rstrip("/")
+        last_seg = path.split("/")[-1] if path else ""
+        if last_seg == "stream":
+            return True
+        port = p.port
+        if port and "stream" in path:
+            if port in {8000, 8001, 8443, 2020, 8088}:
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _skip_body_for_content_type(content_type: str) -> bool:
+    """Do not buffer body for obvious non-HTML media (streams)."""
+    ct = (content_type or "").lower()
+    if ct.startswith("audio/") or ct.startswith("video/"):
+        return True
+    if "application/vnd.apple.mpegurl" in ct or "application/x-mpegurl" in ct:
+        return True
+    return False
+
+
+async def _fetch_http_page_bytes(client: httpx.AsyncClient, url: str):
+    """Stream GET with bounded read; headers available before body."""
+    headers = {
+        "Accept-Language": "en-US, en;q=0.5",
+        "Accept-Charset": "utf-8",
+        "Accept-Encoding": "gzip",
+        "User-Agent": USER_AGENT,
+    }
+    timeout = httpx.Timeout(10.0, connect=10.0)
+    chunks: list[bytes] = []
+    total = 0
+    status_code = 0
+    resp_headers: httpx.Headers | None = None
+    async with client.stream(
+        "GET",
+        url,
+        headers=headers,
+        timeout=timeout,
+        follow_redirects=True,
+    ) as resp:
+        status_code = resp.status_code
+        resp_headers = resp.headers
+        ct = str(resp_headers.get("content-type", "")).lower()
+        if _skip_body_for_content_type(ct):
+            return status_code, resp_headers, b""
+
+        async for chunk in resp.aiter_bytes():
+            if not chunk:
+                continue
+            remaining = MAX_PAGE_FETCH_BYTES - total
+            if remaining <= 0:
+                break
+            take = chunk[:remaining]
+            chunks.append(take)
+            total += len(take)
+            if total >= MAX_PAGE_FETCH_BYTES:
+                logging.info(
+                    "response truncated at %d bytes for %s",
+                    MAX_PAGE_FETCH_BYTES,
+                    url,
+                )
+                break
+
+    assert resp_headers is not None
+    return status_code, resp_headers, b"".join(chunks)
+
 
 class GracefulKiller:
   kill_now = False
@@ -671,7 +748,16 @@ class NetSpider():
                         #
                         self.notify_about_eventp("retrieve_page", current_url)
                         logging.debug(f"start load  {current_url}")
-                
+
+                        if _url_heuristic_stream(current_url):
+                            logging.warning(
+                                f"step {self.step_number} \t SKIP \t {current_url} \t heuristic stream URL"
+                            )
+                            self.step.status_code = 908
+                            self.notify_about_eventp("error_stream_url_heuristic", current_url)
+                            self.notify_about_step(self.step)
+                            return
+
                         async with httpx.AsyncClient(follow_redirects=True) as client:
                             if not await robots_can_fetch(client, current_url):
                                 logging.warning(f"step {self.step_number} \t ROBOTS \t {current_url} \t disallowed by robots.txt")
@@ -680,20 +766,13 @@ class NetSpider():
                                 self.notify_about_step(self.step)
                                 return
                             async with telemetry.fetch_page_span(current_url) as fetch_span:
-                                response = await client.get(
-                                    current_url,
-                                    headers={
-                                        'Accept-Language': 'en-US, en;q=0.5',
-                                        'Accept-Charset': 'utf-8',
-                                        'Accept-Encoding': 'gzip',
-                                        'User-Agent': USER_AGENT,
-                                    },
-                                    timeout=10,
+                                status_code, resp_headers, body = await _fetch_http_page_bytes(
+                                    client, current_url
                                 )
                                 if fetch_span is not None and fetch_span.is_recording():
                                     fetch_span.set_attribute(
                                         "http.response.status_code",
-                                        response.status_code,
+                                        status_code,
                                     )
                         # Resolve hostname to IP for geo (response.extensions is not the remote IP)
                         ip_addr = "0"
@@ -712,7 +791,7 @@ class NetSpider():
                         ip = (ip_addr, 0)
                 
                 
-                        headers_dump = json.dumps(dict(response.headers))                    
+                        headers_dump = json.dumps(dict(resp_headers))
                         #logging.info(f"headers: {headers_dump}")
                 
                         self.notify_about_eventp("headers", headers_dump)
@@ -720,11 +799,11 @@ class NetSpider():
                         text = ""
                         link_elements = []
                 
-                        self.step.status_code = response.status_code
+                        self.step.status_code = status_code
                         self.step.headers = f"{headers_dump}"
                         self.step.ip = ip[0]
                 
-                        content_type = str(response.headers.get("Content-Type", "").lower())
+                        content_type = str(resp_headers.get("Content-Type", "").lower())
                 
                         if "html" not in content_type:
                 
@@ -732,15 +811,18 @@ class NetSpider():
                             self.notify_about_eventp("step_error_content", content_type)                        
                             self.notify_about_step(self.step)
                 
-                        elif response.status_code != 200 :
-                            logging.warning(f"step {self.step_number} \t {response.status_code} \t {current_base_domain} \t {src_url} > {current_url} \t {ip}")                                                
-                            self.notify_about_eventp("step_error_status", response.status_code)                        
+                        elif status_code != 200 :
+                            logging.warning(f"step {self.step_number} \t {status_code} \t {current_base_domain} \t {src_url} > {current_url} \t {ip}")                                                
+                            self.notify_about_eventp("step_error_status", status_code)                        
                             self.notify_about_step(self.step)
                 
-                        else:                        
-                            encoding = response.charset_encoding or 'utf-8'
+                        else:
+                            page_response = httpx.Response(
+                                status_code, headers=resp_headers, content=body
+                            )
+                            encoding = page_response.charset_encoding or "utf-8"
                             self.notify_about_eventp("analyze_page_fix_codepage", encoding)
-                            html_content = response.content.decode('utf-8', errors='replace')
+                            html_content = body.decode("utf-8", errors="replace")
                 
                 
                             #
@@ -773,7 +855,7 @@ class NetSpider():
                 
                 
                 
-                            soup = BeautifulSoup(response.content, "html.parser", from_encoding="utf-8")                         
+                            soup = BeautifulSoup(body, "html.parser", from_encoding="utf-8")                         
                             self.notify_about_eventp("analyze_page_remove_nav", content_type) 
                 
                 
@@ -788,7 +870,7 @@ class NetSpider():
                 
                             self.notify_about_eventp("analyze_page_finish", content_type)
                 
-                            logging.info(f"step {self.step.number} \t {response.status_code} \t {current_base_domain} \t {src_url} > {current_url} \t {len(link_elements)} \t {ip}")
+                            logging.info(f"step {self.step.number} \t {status_code} \t {current_base_domain} \t {src_url} > {current_url} \t {len(link_elements)} \t {ip}")
                 
                 
                 

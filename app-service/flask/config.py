@@ -47,7 +47,8 @@ def getConfig():
         'do_save': 0,
         'do_analyze': 1,
         'do_mood': 1,
-        'do_screenshot': 1,
+        'do_screenshot': 0,
+        'do_image_analyze': 0,
         'do_storage': 1,
     }
     
@@ -68,6 +69,8 @@ def getConfig():
             redis.set('do_mood', defaults['do_mood'])
         if not redis.get('do_screenshot'):
             redis.set('do_screenshot', defaults['do_screenshot'])
+        if not redis.get('do_image_analyze'):
+            redis.set('do_image_analyze', defaults['do_image_analyze'])
         if not redis.get('do_storage'):
             redis.set('do_storage', defaults['do_storage'])
     except Exception as e:

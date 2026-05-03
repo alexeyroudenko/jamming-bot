@@ -69,6 +69,8 @@ MOOD_LAST_COLLECT_TTL = int(os.getenv("MOOD_LAST_COLLECT_TTL", "86400"))
 _sublink_listener_started = False
 _sublink_listener_lock = threading.Lock()
 POLL_THREAD_LIMIT = max(1, int(os.getenv("POLL_THREAD_LIMIT", "64")))
+# Сколько секунд RQ хранит результат finished-job в Redis (видно на /queue/). Раньше было жёстко 270с — список почти всегда «пустой».
+RQ_RESULT_TTL = max(60, int(os.getenv("RQ_RESULT_TTL_SECONDS", "1800")))
 VIEWER_STALE_TTL_SECONDS = max(15, int(os.getenv("VIEWER_STALE_TTL_SECONDS", "60")))
 VIEWER_SWEEP_INTERVAL_SECONDS = max(5, int(os.getenv("VIEWER_SWEEP_INTERVAL_SECONDS", "15")))
 _viewer_last_sweep_monotonic = 0.0
@@ -396,8 +398,8 @@ def _ctrl_log(action: str, source: str):
 
 def _ensure_redis_defaults():
     defaults = {'value': 0.5, 'do_pass': 0.5, 'do_geo': 1.0,
-                'do_save': 1.0, 'do_analyze': 1.0, 'do_mood': 1.0, 'do_screenshot': 1.0,
-                'do_image_analyze': 1.0, 'do_storage': 1.0, 'sleep_time': 2.0,
+                'do_save': 1.0, 'do_analyze': 1.0, 'do_mood': 1.0, 'do_screenshot': 0.0,
+                'do_image_analyze': 0.0, 'do_storage': 1.0, 'sleep_time': 2.0,
                 'random_time': 2.0, 'backfill_sleep': 2.0, 'backfill_timeout': 4.0,
                 'backfill_active': 1.0, 'fetch_concurrency': 10.0}
     for key, default in defaults.items():
@@ -414,6 +416,11 @@ def _redis_float(key: str, default: float) -> float:
         return float(raw)
     except (TypeError, ValueError):
         return default
+
+
+def _redis_flag_on(key: str, default: float = 0.0) -> bool:
+    """Как на /ctrl/: чекбокс «вкл» = float в Redis >= 0.5 (без жёсткого == 1.0)."""
+    return _redis_float(key, default) >= 0.5
 
 
 BOT_YAML_KEYS = ("send_events", "send_sublinks", "log_events")
@@ -521,62 +528,6 @@ def _emit_presence_step(step_number, phase="update"):
     )
 
 
-def _run_early_storage(
-    store_payload: dict,
-    step_number: str,
-    is_silent: bool,
-    trace_carrier=None,
-):
-    """POST /store in background (non-blocking /bot/step/); keep-alive via storage_http."""
-
-    def _post_retries():
-        last_error = None
-        for idx, delay in enumerate((0.0, 0.8, 1.6)):
-            if delay > 0:
-                time.sleep(delay)
-            try:
-                store_resp = storage_http.storage_post_store(store_payload, timeout=12)
-                store_resp.raise_for_status()
-                last_error = None
-                break
-            except Exception as e:
-                last_error = e
-                logger.warning("step: early storage retry=%s/3 failed: %s", idx + 1, e)
-        if last_error is not None:
-            raise last_error
-        logger.info("step: early storage OK for step %s", step_number)
-        if is_silent:
-            _emit_presence_step(step_number, phase="store")
-
-    span_cm = contextlib.nullcontext()
-    if (
-        os.getenv("OTEL_TRACING_ENABLED", "0") == "1"
-        and trace_carrier
-        and isinstance(trace_carrier, dict)
-    ):
-        try:
-            from opentelemetry import trace
-            from opentelemetry.propagate import extract
-            from opentelemetry.trace import SpanKind
-
-            otel_ctx = extract(trace_carrier)
-            tracer = trace.get_tracer(__name__)
-            span_cm = tracer.start_as_current_span(
-                "rq.do_storage",
-                context=otel_ctx,
-                kind=SpanKind.INTERNAL,
-            )
-        except Exception as exc:
-            logger.debug("early storage OTEL span setup failed: %s", exc)
-            span_cm = contextlib.nullcontext()
-
-    try:
-        with span_cm:
-            _post_retries()
-    except Exception as e:
-        logger.warning("step: early storage failed: %s", e)
-
-
 def _persist_semantic_last_collect(payload):
     """Store last semantic_collect payload so /semantic/ can poll after a missed Socket.IO event."""
     if not isinstance(payload, dict):
@@ -649,13 +600,18 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                             "mood_collect step=%s",
                             emit_payload.get("step_number"),
                         )
-                    if not silent:
+                    if not silent and event_name != "storage":
                         socketio.emit(event_name, emit_payload)
-                    if event_name != "mood_collect":
+                    if event_name == "storage" and silent and step_key:
+                        try:
+                            _emit_presence_step(step_key.split(":")[-1], phase="store")
+                        except Exception:
+                            pass
+                    if event_name not in ("mood_collect", "storage"):
                         _save_to_step_hash(step_key, job.result)
                     if event_name == "image_analyzed":
                         _store_step_analysis(step_key, job.result)
-                    elif event_name != "mood_collect":
+                    elif event_name not in ("mood_collect", "storage"):
                         _patch_storage(step_key, job.result)
                         if silent and step_key:
                             _emit_presence_step(step_key.split(":")[-1], phase=event_name)
@@ -686,7 +642,7 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                                         snippet,
                                         sem,
                                         timeout=120,
-                                        result_ttl=300,
+                                        result_ttl=max(RQ_RESULT_TTL, 300),
                                         step_number=str(snum),
                                     )
                                     _poll_job_and_emit(
@@ -716,7 +672,7 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                                     car,
                                     seg,
                                     timeout=60,
-                                    result_ttl=270,
+                                    result_ttl=RQ_RESULT_TTL,
                                     step_number=step_num,
                                     step_url=step_url,
                                 )
@@ -1117,7 +1073,7 @@ def _enqueue_image_analysis_followup(step_key, screenshot_result, silent=False):
             car,
             payload,
             timeout=120,
-            result_ttl=270,
+            result_ttl=RQ_RESULT_TTL,
         )
         _poll_job_and_emit(job, "image_analyzed", timeout=120, step_key=step_key, silent=silent)
     except Exception as e:
@@ -1912,7 +1868,6 @@ def sublink_add():
 def step():
     logger.info("step start")
     if request.method == 'POST':
-        current_cfg = getConfig()
         data = request.form.to_dict()
 
         step_number.set(int(data['number']))
@@ -1939,10 +1894,7 @@ def step():
         }
         _save_to_step_hash(step_key, partial_data)
 
-        early_store = (
-            float(current_cfg.get('do_save', 0)) == 1.0
-            or float(current_cfg.get('do_storage', 0)) == 1.0
-        )
+        early_store = _redis_flag_on("do_save") or _redis_flag_on("do_storage")
 
         trace_wrap = (
             data["status_string"] == "ok"
@@ -1961,14 +1913,20 @@ def step():
                 if early_store and data.get('url'):
                     try:
                         store_payload = dict(jobs.step_payload_for_store(data))
-                        threading.Thread(
-                            target=_run_early_storage,
-                            args=(store_payload, str(data["number"]), is_silent, carrier),
-                            name="early-storage",
-                            daemon=True,
-                        ).start()
+                        job_st = enqueue_with_trace(
+                            queue,
+                            redis_connection,
+                            jobs.do_storage,
+                            store_payload,
+                            timeout=120,
+                            result_ttl=RQ_RESULT_TTL,
+                        )
+                        # Видна в RQ; PATCH по шагу идёт из analyze/других событий — не дублируем storage→_patch
+                        _poll_job_and_emit(
+                            job_st, "storage", timeout=120, step_key=step_key, silent=is_silent
+                        )
                     except Exception as e:
-                        logger.warning("step: early storage thread spawn failed: %s", e)
+                        logger.warning("step: do_storage enqueue failed: %s", e)
 
                 if data['status_string'] == "ok":
                     set_step_span_attributes(
@@ -1982,40 +1940,48 @@ def step():
                         socketio.emit('step', data)
 
                     # GEO — fire-and-forget with background poll
-                    if float(current_cfg['do_geo']) == 1.0:
+                    if _redis_flag_on("do_geo"):
                         if not is_silent:
                             send_node_red_event(f"try {data.keys()}")
                         if "ip" in data.keys():
                             ip = data['ip']
                             if ip != "0":
-                                job = enqueue_with_trace(queue, redis_connection, jobs.do_geo, ip, timeout=90, result_ttl=270)
+                                job = enqueue_with_trace(queue, redis_connection, jobs.do_geo, ip, timeout=90, result_ttl=RQ_RESULT_TTL)
                                 _poll_job_and_emit(job, 'location', timeout=90, step_key=step_key, silent=is_silent)
                                 pending_jobs.append(job)
 
                     # ANALYZE — fire-and-forget with background poll
-                    if float(current_cfg['do_analyze']) == 1.0:
+                    if _redis_flag_on("do_analyze"):
                         logger.info(f"step do_analyze")
                         html = data.get('html', data.get('text', ''))
                         job = enqueue_with_trace(
                             queue, redis_connection, jobs.analyze, html,
                             step_number=data.get('number'), step_url=data.get('url'),
-                            timeout=90, result_ttl=270,
+                            timeout=90, result_ttl=RQ_RESULT_TTL,
                         )
                         _poll_job_and_emit(job, 'analyzed', timeout=90, step_key=step_key, silent=is_silent)
                         pending_jobs.append(job)
 
                     # SCREENSHOT — fire-and-forget with background poll
-                    if float(current_cfg['do_screenshot']) == 1.0:
+                    if _redis_flag_on("do_screenshot"):
                         step_text = (data.get('text') or '').strip()
                         if data.get('url') and len(step_text) > 128:
                             logger.info(f"step do_screenshot")
-                            job = enqueue_with_trace(queue, redis_connection, jobs.do_screenshot, data, timeout=120, result_ttl=270)
+                            job = enqueue_with_trace(queue, redis_connection, jobs.do_screenshot, data, timeout=120, result_ttl=RQ_RESULT_TTL)
                             _poll_job_and_emit(job, 'screenshot', timeout=120, step_key=step_key, silent=is_silent)
                             pending_jobs.append(job)
 
                     # STORAGE updates happen incrementally via _poll_job_and_emit → _patch_storage
-        elif data['status_string'] != "ok":
-            logger.info(f"skip step actions")
+                else:
+                    # Ошибочный шаг (не 200): всё равно показать URL/статус в панелях главной,
+                    # иначе на странице шумят только granular-события из /bot/events/, а log_url пуст.
+                    if not is_silent:
+                        socketio.emit("step", data)
+                    logger.info("step status not ok — skipped analyze/geo/screenshot")
+        elif data["status_string"] != "ok":
+            if not is_silent:
+                socketio.emit("step", data)
+            logger.info("skip step actions (no trace_wrap, non-ok step)")
 
     return "done"
 
