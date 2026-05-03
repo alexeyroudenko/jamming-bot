@@ -2,7 +2,9 @@
 import os
 import sys
 import csv
+import gzip
 import json
+import zlib
 import random
 import signal
 import socket
@@ -164,14 +166,66 @@ def _skip_body_for_content_type(content_type: str) -> bool:
     return False
 
 
-async def _fetch_http_page_bytes(client: httpx.AsyncClient, url: str):
-    """Stream GET with bounded read; headers available before body."""
+class _BodyDecodeError(Exception):
+    """Wire bytes could not be decoded per Content-Encoding (retry may help)."""
+
+
+def _decode_http_body_raw(body: bytes, resp_headers: httpx.Headers) -> bytes:
+    """
+    Apply Content-Encoding manually after aiter_raw().
+    Avoids httpx/httpcore auto-decode (which logs zlib warnings and may not retry).
+    If header says gzip but bytes look like plain HTML, trust the bytes.
+    """
+    ce = (resp_headers.get("content-encoding") or "").strip().lower()
+    if not ce or ce == "identity":
+        return body
+    out = body
+    try:
+        if "gzip" in ce or "x-gzip" in ce:
+            if len(out) >= 2 and out[:2] != b"\x1f\x8b":
+                # Mislabeled: common CDN bug — body already uncompressed
+                return out
+            out = gzip.decompress(out)
+        elif "deflate" in ce:
+            try:
+                out = zlib.decompress(out, +zlib.MAX_WBITS)
+            except zlib.error:
+                out = zlib.decompress(out, -zlib.MAX_WBITS)
+        elif "br" in ce:
+            try:
+                import brotli
+
+                out = brotli.decompress(out)
+            except ImportError:
+                logging.warning(
+                    "Content-Encoding br but brotli not installed; passing raw bytes for url decode"
+                )
+                return out
+        else:
+            return body
+    except (zlib.error, OSError, EOFError) as e:
+        raise _BodyDecodeError(str(e)) from e
+    except Exception as e:
+        raise _BodyDecodeError(str(e)) from e
+    return out
+
+
+async def _fetch_http_page_bytes_once(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    accept_encoding: str,
+    extra_headers: dict | None = None,
+):
+    """Stream GET; read wire bytes via aiter_raw(), then decode Content-Encoding ourselves."""
     headers = {
         "Accept-Language": "en-US, en;q=0.5",
         "Accept-Charset": "utf-8",
-        "Accept-Encoding": "gzip",
+        "Accept-Encoding": accept_encoding,
         "User-Agent": USER_AGENT,
     }
+    if extra_headers:
+        headers.update(extra_headers)
     timeout = httpx.Timeout(10.0, connect=10.0)
     chunks: list[bytes] = []
     total = 0
@@ -190,7 +244,7 @@ async def _fetch_http_page_bytes(client: httpx.AsyncClient, url: str):
         if _skip_body_for_content_type(ct):
             return status_code, resp_headers, b""
 
-        async for chunk in resp.aiter_bytes():
+        async for chunk in resp.aiter_raw():
             if not chunk:
                 continue
             remaining = MAX_PAGE_FETCH_BYTES - total
@@ -208,7 +262,42 @@ async def _fetch_http_page_bytes(client: httpx.AsyncClient, url: str):
                 break
 
     assert resp_headers is not None
-    return status_code, resp_headers, b"".join(chunks)
+    raw_body = b"".join(chunks)
+    try:
+        decoded = _decode_http_body_raw(raw_body, resp_headers)
+    except _BodyDecodeError:
+        raise
+    return status_code, resp_headers, decoded
+
+
+async def _fetch_http_page_bytes(client: httpx.AsyncClient, url: str):
+    """
+    Prefer identity + raw wire + manual decode (fixes broken gzip from many CDNs).
+    Retries: no-cache headers, then ask for gzip (smaller) if decode still fails.
+    """
+    strategies: list[tuple[str, dict | None]] = [
+        ("identity", None),
+        ("identity", {"Cache-Control": "no-cache", "Pragma": "no-cache"}),
+        ("gzip", None),
+    ]
+    last_err: _BodyDecodeError | None = None
+    for enc, extra in strategies:
+        try:
+            return await _fetch_http_page_bytes_once(
+                client, url, accept_encoding=enc, extra_headers=extra
+            )
+        except _BodyDecodeError as e:
+            last_err = e
+            logging.debug(
+                "fetch %s decode failed (%s), trying next strategy (%s)",
+                url,
+                e,
+                enc,
+            )
+            continue
+    if last_err:
+        raise last_err
+    raise RuntimeError("fetch strategies exhausted")
 
 
 class GracefulKiller:
