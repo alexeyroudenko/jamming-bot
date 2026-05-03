@@ -24,6 +24,15 @@ const Navbar = () => {
                     <NavLink to="/graph">
                     Graph
                     </NavLink>
+                    <NavLink to="/tags3d">
+                    Tags 3D
+                    </NavLink>
+                    <NavLink to="/sentiment-vortex">
+                    Sentiment vortex
+                    </NavLink>
+                    <NavLink to="/vectorfield-3d">
+                    Vectorfield 3D
+                    </NavLink>
                 </NavMenu>
             </Nav>
     );
