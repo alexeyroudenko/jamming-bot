@@ -547,6 +547,8 @@ services:
 
   frontend:
     build: ./frontend
+    # Именованный том node_modules: при старте подтягиваем зависимости из bind-mounted package.json/yarn.lock
+    command: ["sh", "-c", "yarn install --frozen-lockfile && exec yarn start"]
     environment:
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true

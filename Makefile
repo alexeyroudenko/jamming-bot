@@ -22,6 +22,11 @@ flask:
 frontend:	
 	docker compose up -d frontend --build
 
+# Обновить node_modules во фронтовом томе (после смены package.json / yarn.lock)
+.PHONY: frontend-yarn
+frontend-yarn:
+	docker compose exec -T frontend yarn install --frozen-lockfile
+
 .PHONY: tags-service
 tags-service:	
 	docker compose up -d tags_service --build
