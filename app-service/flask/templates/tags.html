@@ -93,7 +93,9 @@
   } else if (DAYS_QUERY_SUFFIX === '?days=7') {
     document.title = 'Jamming bot — Tag Cloud (7 days)';
   }
-  var REFRESH_INTERVAL = 30000;
+  var REFRESH_INTERVAL = 60000;
+  /** Совпадает с дефолтом count у /api/tags/get/. */
+  var MAX_CLOUD_TAGS = 200;
   var REPEL_RADIUS = 150;
   var REPEL_STRENGTH = 42;
   var RETURN_SPEED = 0.09;
