@@ -6,7 +6,8 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - ./data/redis:/data
+      # Named volume: avoids slow NTFS bind-mount on Docker Desktop for Windows
+      - bots_app_semantic_redis_data:/data
     networks:
       - app_network
 
@@ -50,7 +51,7 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8005
     volumes:
       - ./semantic-service:/app
-      - ./semantic-service/data:/app/data
+      - bots_app_semantic_semantic_data:/app/data
     ports:
       - "8005:8005"
     networks:
@@ -121,6 +122,8 @@ services:
 
 volumes:
   bots_app_semantic_pg_data:
+  bots_app_semantic_redis_data:
+  bots_app_semantic_semantic_data:
 
 networks:
   app_network:
