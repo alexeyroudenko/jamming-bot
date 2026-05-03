@@ -72,6 +72,7 @@
 <div id="console"></div>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
+<script src="/flask_static/d3.layout.cloud.js"></script>
 <script>
 (function () {
   var API = '/api/tags/get/';
@@ -84,6 +85,10 @@
   var HIGHLIGHT_COLOR = 'rgb(0,255,160)';
   var HIGHLIGHT_DECAY = 0.015;
   var FLOAT_AMPLITUDE = 8;
+  var RESIZE_LAYOUT_MS = 220;
+  var layoutGen = 0;
+  var lastLayoutSignature = '';
+  var resizeLayoutTimer = null;
 
   function highlightTags(names) {
     for (var i = 0; i < names.length; i++) {
@@ -120,6 +125,7 @@
   var particleMap = {};
   var particles = [];
   var raf;
+  var lastTagRows = null;
 
   function resize() {
     W = window.innerWidth;
@@ -129,12 +135,20 @@
   }
   resize();
 
+  function scheduleResizeLayout() {
+    if (resizeLayoutTimer) clearTimeout(resizeLayoutTimer);
+    resizeLayoutTimer = setTimeout(function () {
+      resizeLayoutTimer = null;
+      lastLayoutSignature = '';
+      if (lastTagRows && lastTagRows.length) {
+        mergeParticles(lastTagRows);
+      }
+    }, RESIZE_LAYOUT_MS);
+  }
+
   window.addEventListener('resize', function () {
     resize();
-    particles.forEach(function (p) {
-      p.homeX = Math.min(W - 40, Math.max(40, p.homeX));
-      p.homeY = Math.min(H - 20, Math.max(44, p.homeY));
-    });
+    scheduleResizeLayout();
   });
 
   canvas.addEventListener('mousemove', function (e) {
@@ -167,13 +181,6 @@
     mouse.y = -9999;
   });
 
-  function randomPos(tw, th) {
-    var margin = 50;
-    var x = margin + Math.random() * (W - tw - margin * 2) + tw / 2;
-    var y = margin + Math.random() * (H - th - margin * 2) + th / 2;
-    return { x: x, y: y };
-  }
-
   function calcSize(count, maxCount) {
     var minSize = 11;
     var maxSize = Math.min(W, H) / 9;
@@ -192,58 +199,85 @@
     return ctx.measureText(text).width;
   }
 
-  // Scatter placement: random positions with overlap relaxation
-  function scatterPlace(list) {
-    // Measure all
-    for (var i = 0; i < list.length; i++) {
-      var p = list[i];
-      p._w = measureWord(p.text, p.size);
-      p._h = p.size;
+  function tagsSignature(rows) {
+    var copy = rows.slice().sort(function (a, b) {
+      if (a.name < b.name) return -1;
+      if (a.name > b.name) return 1;
+      return 0;
+    });
+    var parts = [];
+    for (var i = 0; i < copy.length; i++) {
+      parts.push(copy[i].name + ':' + copy[i].count);
     }
-
-    // Sort biggest first for placement priority
-    list.sort(function (a, b) { return b.size - a.size; });
-
-    // Place each word randomly, with a few retries to avoid overlap
-    var placed = [];
-    for (var i = 0; i < list.length; i++) {
-      var p = list[i];
-      var best = null;
-      var bestOverlap = Infinity;
-
-      for (var attempt = 0; attempt < 30; attempt++) {
-        var pos = randomPos(p._w, p._h);
-        var overlapCount = 0;
-
-        for (var j = 0; j < placed.length; j++) {
-          var q = placed[j];
-          if (rectsOverlap(pos.x, pos.y, p._w, p._h, q.homeX, q.homeY, q._w, q._h)) {
-            overlapCount++;
-          }
-        }
-
-        if (overlapCount === 0) {
-          best = pos;
-          break;
-        }
-        if (overlapCount < bestOverlap) {
-          bestOverlap = overlapCount;
-          best = pos;
-        }
-      }
-
-      p.homeX = best.x;
-      p.homeY = best.y;
-      placed.push(p);
-    }
+    return parts.join('|');
   }
 
-  function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
-    var al = ax - aw / 2 - PAD, ar = ax + aw / 2 + PAD;
-    var at = ay - ah / 2 - PAD, ab = ay + ah / 2 + PAD;
-    var bl = bx - bw / 2 - PAD, br = bx + bw / 2 + PAD;
-    var bt = by - bh / 2 - PAD, bb = by + bh / 2 + PAD;
-    return al < br && ar > bl && at < bb && ab > bt;
+  function runCloudLayout(rows, callback) {
+    if (typeof d3 === 'undefined' || !d3.layout || typeof d3.layout.cloud !== 'function') {
+      console.error('d3.layout.cloud is not available');
+      callback([]);
+      return;
+    }
+    var maxCount = 1;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].count > maxCount) maxCount = rows[i].count;
+    }
+    var words = [];
+    for (var j = 0; j < rows.length; j++) {
+      var r = rows[j];
+      words.push({
+        text: r.name,
+        size: Math.round(calcSize(r.count, maxCount)),
+        count: r.count
+      });
+    }
+    var myGen = ++layoutGen;
+    d3.layout.cloud()
+      .size([W, H])
+      .words(words)
+      .padding(PAD)
+      .font(FONT)
+      .fontStyle('normal')
+      .fontWeight('normal')
+      .fontSize(function (d) { return d.size; })
+      .rotate(function () { return Math.random() < 0.5 ? 0 : 90; })
+      .on('end', function (placedWords) {
+        if (myGen !== layoutGen) return;
+        callback(placedWords || []);
+      })
+      .start();
+  }
+
+  function applyLayoutFromPlaced(placedWords) {
+    var placedMap = {};
+    for (var i = 0; i < placedWords.length; i++) {
+      var w = placedWords[i];
+      placedMap[w.text] = w;
+    }
+    var nActive = 0;
+    for (var key in particleMap) {
+      if (!particleMap[key].removing) nActive++;
+    }
+    if (placedWords.length < nActive) {
+      console.warn('[tags cloud] placed ' + placedWords.length + ' / ' + nActive);
+    }
+    for (var k in particleMap) {
+      var p = particleMap[k];
+      if (p.removing) continue;
+      var pl = placedMap[k];
+      if (pl) {
+        p.homeX = W / 2 + pl.x;
+        p.homeY = H / 2 + pl.y;
+        p.rotate = typeof pl.rotate === 'number' ? pl.rotate : 0;
+        var fs = p.targetSize || p.size;
+        p._w = measureWord(p.text, fs);
+        p._h = fs;
+      } else {
+        p.homeX = W / 2;
+        p.homeY = H / 2;
+        p.rotate = 0;
+      }
+    }
   }
 
   function ambientNoiseOffset(p, timeSec) {
@@ -254,23 +288,23 @@
     };
   }
 
-  function mergeParticles(tags) {
+  function mergeParticles(tagRows) {
+    lastTagRows = tagRows;
+    var sig = tagsSignature(tagRows);
     var maxCount = 1;
-    for (var i = 0; i < tags.length; i++) {
-      if (tags[i].count > maxCount) maxCount = tags[i].count;
+    for (var i = 0; i < tagRows.length; i++) {
+      if (tagRows[i].count > maxCount) maxCount = tagRows[i].count;
     }
 
     var newMap = {};
-    var toPlace = [];
 
-    for (var i = 0; i < tags.length; i++) {
-      var t = tags[i];
+    for (var i = 0; i < tagRows.length; i++) {
+      var t = tagRows[i];
       var key = t.name;
       var size = calcSize(t.count, maxCount);
       var color = calcColor(t.count, maxCount);
 
       if (particleMap[key]) {
-        // Existing tag: update size/color, keep position
         var p = particleMap[key];
         p.targetSize = size;
         p.targetColor = color;
@@ -281,7 +315,6 @@
         p.opacity = typeof p.opacity === 'number' ? p.opacity : 1;
         newMap[key] = p;
       } else {
-        // New tag: create particle, will need placement
         var p = {
           text: t.name,
           count: t.count,
@@ -289,24 +322,23 @@
           targetSize: size,
           color: color,
           targetColor: color,
-          homeX: 0, homeY: 0,
-          x: 0, y: 0,
+          homeX: W / 2, homeY: H / 2,
+          x: W / 2, y: H / 2,
           vx: 0, vy: 0,
           opacity: 0,
           removing: false,
           highlightT: 0,
           noisePhase: Math.random() * Math.PI * 2,
           driftAmp: 1.5 + Math.random() * FLOAT_AMPLITUDE,
+          rotate: 0,
           _w: 0, _h: 0
         };
         p._w = measureWord(p.text, size);
         p._h = size;
         newMap[key] = p;
-        toPlace.push(p);
       }
     }
 
-    // Mark removed tags for fade-out
     for (var key in particleMap) {
       if (!newMap[key]) {
         var p = particleMap[key];
@@ -315,20 +347,17 @@
       }
     }
 
-    // Place only new tags in random spots
-    if (toPlace.length) {
-      scatterPlace(toPlace);
-      for (var i = 0; i < toPlace.length; i++) {
-        var p = toPlace[i];
-        p.x = p.homeX;
-        p.y = p.homeY;
-      }
-    }
-
     particleMap = newMap;
     particles = [];
     for (var key in particleMap) {
       particles.push(particleMap[key]);
+    }
+
+    if (sig !== lastLayoutSignature) {
+      lastLayoutSignature = sig;
+      runCloudLayout(tagRows, function (placedWords) {
+        applyLayoutFromPlaced(placedWords);
+      });
     }
   }
 
@@ -417,28 +446,35 @@
         p.highlightT = Math.max(0, p.highlightT - HIGHLIGHT_DECAY);
       }
 
-      // Draw
+      // Draw (support d3-cloud rotation: 0° / 90°)
       var fontSize = Math.round(p.size);
       ctx.font = fontSize + 'px ' + FONT;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
+      var rot = typeof p.rotate === 'number' ? p.rotate : 0;
+      var rad = rot * Math.PI / 180;
+
+      function drawLabel(fill, alpha, shadowBlur) {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        if (rad) ctx.rotate(rad);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = fill;
+        if (shadowBlur) {
+          ctx.shadowColor = HIGHLIGHT_COLOR;
+          ctx.shadowBlur = shadowBlur;
+        }
+        ctx.fillText(p.text, 0, 0);
+        ctx.restore();
+      }
+
       if (p.highlightT > 0) {
         var ht = p.highlightT;
-        ctx.globalAlpha = p.opacity * ht * 0.6;
-        ctx.shadowColor = HIGHLIGHT_COLOR;
-        ctx.shadowBlur = 20 * ht;
-        ctx.fillStyle = HIGHLIGHT_COLOR;
-        ctx.fillText(p.text, p.x, p.y);
-        ctx.shadowBlur = 0;
-
-        ctx.globalAlpha = p.opacity;
-        ctx.fillStyle = lerpColor(p.color, HIGHLIGHT_COLOR, ht);
-        ctx.fillText(p.text, p.x, p.y);
+        drawLabel(HIGHLIGHT_COLOR, p.opacity * ht * 0.6, 20 * ht);
+        drawLabel(lerpColor(p.color, HIGHLIGHT_COLOR, ht), p.opacity, 0);
       } else {
-        ctx.globalAlpha = p.opacity;
-        ctx.fillStyle = p.color;
-        ctx.fillText(p.text, p.x, p.y);
+        drawLabel(p.color, p.opacity, 0);
       }
     }
 
