@@ -82,6 +82,7 @@ import Blank from "./pages/graph";
 import Semantic from "./pages/semantic";
 import Steps from './components/Steps';
 import AtlasPage from './pages/atlas';
+import TagEmbedPage from './pages/tagEmbed';
 
 /** Routes + nav; wrapped by `Router` in `App` (and by `MemoryRouter` in tests). */
 export function AppContent() {
@@ -95,6 +96,22 @@ export function AppContent() {
         <Route path="/atlas" element={<AtlasPage />} />
         <Route path="/words" element={<Navigate to="/semantic" replace />} />
         <Route path="/graph" element={<Blank />} />
+        <Route
+          path="/tags3d"
+          element={<TagEmbedPage title="Tags 3D" path="/tags/3d/" />}
+        />
+        <Route
+          path="/sentiment-vortex"
+          element={
+            <TagEmbedPage title="Sentiment vortex" path="/tags/sentiment-vortex/" />
+          }
+        />
+        <Route
+          path="/vectorfield-3d"
+          element={
+            <TagEmbedPage title="Vectorfield 3D" path="/tags/vectorfield-3d/" />
+          }
+        />
       </Routes>
     </>
   );
