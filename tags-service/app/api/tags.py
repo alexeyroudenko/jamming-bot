@@ -82,7 +82,7 @@ async def delete_tag(id: int):
 
 @tags.get('/tags/group/', response_model=List[TagOut])
 async def get_tags_group(
-    count: int = Query(100, ge=1),
+    count: int = Query(200, ge=1),
     page: int = Query(0, ge=0),
     days: int = Query(0, ge=0),
 ):
