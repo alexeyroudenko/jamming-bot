@@ -46,7 +46,7 @@
 </nav>
 
 <div class="tags-vis-toolbar">
-  <button type="button" class="tags-vis-btn" id="btn-show-text" aria-pressed="false">Show text</button>
+  <button type="button" class="tags-vis-btn" id="btn-show-text" aria-pressed="true">Hide text</button>
   <button type="button" class="tags-vis-btn" id="btn-auto-camera" aria-pressed="false">Auto camera</button>
   <button type="button" class="tags-vis-btn" id="btn-freeze">Freeze</button>
   <button type="button" class="tags-vis-btn" id="btn-export">Export PNG</button>
@@ -85,7 +85,7 @@
   var points, trailPoints;
   var geom, trailGeom;
   var labelObjs = [];
-  var showTextLabels = false;
+  var showTextLabels = true;
   var autoCamera = false;
   var autoT = 0;
   var autoSphere = new THREE.Spherical();
@@ -136,6 +136,38 @@
   function updateLabelVisibility() {
     for (var i = 0; i < labelObjs.length; i++) {
       labelObjs[i].visible = showTextLabels && i < nActive;
+    }
+  }
+
+  function syncLabelBlinkStyles(now) {
+    var baseShadow = '0 1px 1px rgba(0, 0, 0, 0.9)';
+    for (var i = 0; i < labelObjs.length; i++) {
+      var el = labelObjs[i].element;
+      if (!el) continue;
+      if (i >= nActive) {
+        el.style.color = '';
+        el.style.textShadow = '';
+        continue;
+      }
+      if (now >= blinkFrom[i] && now < blinkUntil[i]) {
+        var u = (now - blinkFrom[i]) / (blinkUntil[i] - blinkFrom[i]);
+        var pulse = 0.55 + 0.45 * Math.sin(u * Math.PI);
+        var k = 0.72 * pulse;
+        var r = Math.round(212 * (1 - k) + 255 * k);
+        var g = Math.round(212 * (1 - k) + 255 * k);
+        var b = Math.round(216 * (1 - k) + 255 * k);
+        el.style.color = 'rgb(' + r + ',' + g + ',' + b + ')';
+        el.style.textShadow =
+          '0 0 ' +
+          (4 * pulse).toFixed(1) +
+          'px rgba(255,255,255,' +
+          (0.35 + 0.45 * pulse).toFixed(2) +
+          '), ' +
+          baseShadow;
+      } else {
+        el.style.color = '';
+        el.style.textShadow = '';
+      }
     }
   }
 
@@ -584,6 +616,8 @@
 
   var btnShowText = document.getElementById('btn-show-text');
   if (btnShowText) {
+    btnShowText.setAttribute('aria-pressed', showTextLabels ? 'true' : 'false');
+    btnShowText.textContent = showTextLabels ? 'Hide text' : 'Show text';
     btnShowText.addEventListener('click', function () {
       showTextLabels = !showTextLabels;
       btnShowText.setAttribute('aria-pressed', showTextLabels ? 'true' : 'false');
@@ -622,6 +656,7 @@
       stepPhysics();
     }
     syncLabelPositions();
+    syncLabelBlinkStyles(performance.now());
     if (autoCamera && !TagsVisControls.frozen) {
       stepAutoCamera();
     } else {

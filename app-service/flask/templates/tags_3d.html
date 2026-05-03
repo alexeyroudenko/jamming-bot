@@ -96,6 +96,7 @@
 <script>
 (function () {
   var API = '/api/tags/get/';
+  var DISPLAY_COUNT_MULT = 2;
   var MAX_TAGS = 600;
   var SPHERE_RADIUS = 14;
   var RADIUS_SPREAD = 0.42;
@@ -461,7 +462,8 @@
     }
 
     var tags = data.map(function (row) {
-      return { name: String(row.name || ''), count: Number(row.count) || 0 };
+      var raw = Number(row.count) || 0;
+      return { name: String(row.name || ''), count: raw * DISPLAY_COUNT_MULT };
     }).filter(function (t) { return t.name.length > 0; });
 
     tags.sort(function (a, b) { return b.count - a.count; });
