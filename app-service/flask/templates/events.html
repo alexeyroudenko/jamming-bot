@@ -2,11 +2,7 @@
 {% block title %}Jamming bot — events{% endblock %}
 {% block body_class %}jb-events{% endblock %}
 {% block primary_nav %}
-<a class="bot-link-chip" href="/">dashboard</a>
-<a class="bot-link-chip is-primary" href="/events/">events</a>
-<a class="bot-link-chip" href="/tags/">tag cloud</a>
-<a class="bot-link-chip" href="/path/map/">path map</a>
-<a class="bot-link-chip" href="/semantic/">semantic</a>
+{% include "components/bot_primary_nav_full.html" %}
 {% endblock %}
 {% block content %}
 <main class="jb-events-main">
