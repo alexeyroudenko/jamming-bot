@@ -79,15 +79,7 @@
 
 <nav>
   <div>
-    <a href="/">← home</a>
-    <a href="/tags/">2D cloud</a>
-    <a href="/tags/constellation/">constellation</a>
-    <a href="/tags/vectorfield/">vector field</a>
-    <a href="/tags/vectorfield-3d/">vector 3D</a>
-    <a href="/tags/chaos-attractor/">chaos</a>
-    <a href="/geo/">geo globe</a>
-    <a href="/tags/phrases/">phrases</a>
-    <a href="/tags/sentiment-vortex/">sentiment vortex</a>
+    {% include "components/explorer_nav_plain.html" %}
   </div>
   <span id="status"></span>
 </nav>
@@ -104,6 +96,7 @@
 <script>
 (function () {
   var API = '/api/tags/get/';
+  var DISPLAY_COUNT_MULT = 2;
   var MAX_TAGS = 600;
   var SPHERE_RADIUS = 14;
   var RADIUS_SPREAD = 0.42;
@@ -196,6 +189,38 @@
     return sprite;
   }
 
+  function refreshSprite(sprite, name, count, maxCount) {
+    if (sprite.material && sprite.material.map) {
+      sprite.material.map.dispose();
+    }
+    var t = maxCount > 0 ? Math.min(1, Math.max(0, count / maxCount)) : 0;
+    var fontPx = Math.round(FONT_MIN * TEXT_SCALE_MULT * (1 + 1.5 * t));
+    var pad = 10;
+    var canvas2d = document.createElement('canvas');
+    var ctx = canvas2d.getContext('2d');
+    ctx.font = 'bold ' + fontPx + 'px monospace';
+    var w = Math.ceil(ctx.measureText(name).width) + pad * 2;
+    var h = fontPx + pad * 2;
+    canvas2d.width = w;
+    canvas2d.height = h;
+    ctx.font = 'bold ' + fontPx + 'px monospace';
+    var bright = Math.round(80 + t * 175);
+    ctx.fillStyle = 'rgb(' + bright + ',' + bright + ',' + bright + ')';
+    ctx.fillText(name, pad, fontPx + pad / 2);
+    var tex = new THREE.CanvasTexture(canvas2d);
+    tex.needsUpdate = true;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    sprite.material.map = tex;
+    sprite.material.needsUpdate = true;
+    var scale = SCALE_MIN * TEXT_SCALE_MULT * (1 + 3 * t);
+    sprite.scale.set(scale * w / h, scale, 1);
+    sprite.userData.name = name;
+    sprite.userData.count = count;
+    sprite.userData.baseScaleX = scale * w / h;
+    sprite.userData.baseScaleY = scale;
+  }
+
   var renderer;
   try {
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
@@ -226,6 +251,8 @@
   var raycaster = new THREE.Raycaster();
   var pointer = new THREE.Vector2();
   var sprites = [];
+  var tagsSceneInitialized = false;
+  var lastMaxCountForSprites = -1;
   var _depthPos = new THREE.Vector3();
   var _depthFar = new THREE.Color(0x383838);
   var _depthNear = new THREE.Color(0xffffff);
@@ -402,30 +429,48 @@
     }
   }
 
-  function loadTags(data) {
-    while (scene.children.length) {
-      scene.remove(scene.children[0]);
+  function disposeTagSprite(sp) {
+    scene.remove(sp);
+    if (sp.material && sp.material.map) {
+      sp.material.map.dispose();
+    }
+    if (sp.material) {
+      sp.material.dispose();
+    }
+  }
+
+  function clearAllTagSprites() {
+    for (var i = 0; i < sprites.length; i++) {
+      disposeTagSprite(sprites[i]);
     }
     sprites = [];
     spriteByName = {};
+    tagsSceneInitialized = false;
+    lastMaxCountForSprites = -1;
+  }
 
+  function loadTags(data) {
     if (!Array.isArray(data)) {
       showApiError('Unexpected API response (not a list).');
+      clearAllTagSprites();
       return;
     }
     if (data.length === 0) {
+      clearAllTagSprites();
       statusEl.textContent = 'no tags';
       return;
     }
 
     var tags = data.map(function (row) {
-      return { name: String(row.name || ''), count: Number(row.count) || 0 };
+      var raw = Number(row.count) || 0;
+      return { name: String(row.name || ''), count: raw * DISPLAY_COUNT_MULT };
     }).filter(function (t) { return t.name.length > 0; });
 
     tags.sort(function (a, b) { return b.count - a.count; });
     tags = tags.slice(0, MAX_TAGS);
 
     if (tags.length === 0) {
+      clearAllTagSprites();
       statusEl.textContent = 'no valid tag names';
       return;
     }
@@ -435,14 +480,59 @@
       if (tags[i].count > maxCount) maxCount = tags[i].count;
     }
 
-    for (var j = 0; j < tags.length; j++) {
-      var sp = makeSprite(tags[j].name, tags[j].count, maxCount);
-      sp.position.copy(chaoticPosition(j, tags.length, SPHERE_RADIUS));
-      scene.add(sp);
-      sprites.push(sp);
-      spriteByName[tags[j].name] = sp;
+    if (!tagsSceneInitialized) {
+      tagsSceneInitialized = true;
+      lastMaxCountForSprites = maxCount;
+      for (var j0 = 0; j0 < tags.length; j0++) {
+        var sp0 = makeSprite(tags[j0].name, tags[j0].count, maxCount);
+        sp0.position.copy(chaoticPosition(j0, tags.length, SPHERE_RADIUS));
+        scene.add(sp0);
+        sprites.push(sp0);
+        spriteByName[tags[j0].name] = sp0;
+      }
+      statusEl.textContent = tags.length + ' tags (max ' + MAX_TAGS + ')';
+      return;
     }
 
+    var have = {};
+    var newSprites = [];
+    var newByName = {};
+    var maxChanged = maxCount !== lastMaxCountForSprites;
+    lastMaxCountForSprites = maxCount;
+
+    for (var j = 0; j < tags.length; j++) {
+      var nm = tags[j].name;
+      var cnt = tags[j].count;
+      have[nm] = true;
+      var sp = spriteByName[nm];
+      if (sp) {
+        var countChanged = sp.userData.count !== cnt;
+        if (countChanged) {
+          flashSpriteRed(sp);
+        }
+        if (countChanged || maxChanged) {
+          refreshSprite(sp, nm, cnt, maxCount);
+        }
+        newByName[nm] = sp;
+        newSprites.push(sp);
+      } else {
+        sp = makeSprite(nm, cnt, maxCount);
+        sp.position.copy(chaoticPosition(j, tags.length, SPHERE_RADIUS));
+        scene.add(sp);
+        newByName[nm] = sp;
+        newSprites.push(sp);
+      }
+    }
+
+    for (var k = 0; k < sprites.length; k++) {
+      var old = sprites[k];
+      if (!have[old.userData.name]) {
+        disposeTagSprite(old);
+      }
+    }
+
+    sprites = newSprites;
+    spriteByName = newByName;
     statusEl.textContent = tags.length + ' tags (max ' + MAX_TAGS + ')';
   }
 

@@ -41,19 +41,12 @@
 <nav class="tags-vis-nav" aria-label="Subpages">
   <div>
     <span class="tags-vis-title">Sentiment vortex</span>
-    <a href="/">← home</a>
-    <a href="/tags/">2D cloud</a>
-    <a href="/tags/3d/">3D cloud</a>
-    <a href="/tags/constellation/">constellation</a>
-    <a href="/tags/vectorfield/">vector field</a>
-    <a href="/tags/vectorfield-3d/">vector 3D</a>
-    <a href="/tags/phrases/">phrases</a>
-    <a href="/tags/chaos-attractor/">chaos</a>
+    {% include "components/explorer_nav_plain.html" %}
   </div>
 </nav>
 
 <div class="tags-vis-toolbar">
-  <button type="button" class="tags-vis-btn" id="btn-show-text" aria-pressed="false">Show text</button>
+  <button type="button" class="tags-vis-btn" id="btn-show-text" aria-pressed="true">Hide text</button>
   <button type="button" class="tags-vis-btn" id="btn-auto-camera" aria-pressed="false">Auto camera</button>
   <button type="button" class="tags-vis-btn" id="btn-freeze">Freeze</button>
   <button type="button" class="tags-vis-btn" id="btn-export">Export PNG</button>
@@ -92,7 +85,7 @@
   var points, trailPoints;
   var geom, trailGeom;
   var labelObjs = [];
-  var showTextLabels = false;
+  var showTextLabels = true;
   var autoCamera = false;
   var autoT = 0;
   var autoSphere = new THREE.Spherical();
@@ -102,6 +95,10 @@
   var lastMeanPolarity = null;
   var glitchUntil = 0;
   var kickOmega = 0;
+  var hasSeededScene = false;
+  var slotText = [];
+  var blinkFrom = [];
+  var blinkUntil = [];
 
   var state = {
     theta: [],
@@ -139,6 +136,38 @@
   function updateLabelVisibility() {
     for (var i = 0; i < labelObjs.length; i++) {
       labelObjs[i].visible = showTextLabels && i < nActive;
+    }
+  }
+
+  function syncLabelBlinkStyles(now) {
+    var baseShadow = '0 1px 1px rgba(0, 0, 0, 0.9)';
+    for (var i = 0; i < labelObjs.length; i++) {
+      var el = labelObjs[i].element;
+      if (!el) continue;
+      if (i >= nActive) {
+        el.style.color = '';
+        el.style.textShadow = '';
+        continue;
+      }
+      if (now >= blinkFrom[i] && now < blinkUntil[i]) {
+        var u = (now - blinkFrom[i]) / (blinkUntil[i] - blinkFrom[i]);
+        var pulse = 0.55 + 0.45 * Math.sin(u * Math.PI);
+        var k = 0.72 * pulse;
+        var r = Math.round(212 * (1 - k) + 255 * k);
+        var g = Math.round(212 * (1 - k) + 255 * k);
+        var b = Math.round(216 * (1 - k) + 255 * k);
+        el.style.color = 'rgb(' + r + ',' + g + ',' + b + ')';
+        el.style.textShadow =
+          '0 0 ' +
+          (4 * pulse).toFixed(1) +
+          'px rgba(255,255,255,' +
+          (0.35 + 0.45 * pulse).toFixed(2) +
+          '), ' +
+          baseShadow;
+      } else {
+        el.style.color = '';
+        el.style.textShadow = '';
+      }
     }
   }
 
@@ -305,10 +334,19 @@
     }
   }
 
+  function clearBlinkSlots() {
+    for (var bi = 0; bi < MAX_PARTICLES; bi++) {
+      blinkFrom[bi] = 0;
+      blinkUntil[bi] = 0;
+    }
+  }
+
   function applyPayload(items) {
     var n = Math.min(items.length, MAX_PARTICLES);
     if (n === 0) {
       nActive = 0;
+      hasSeededScene = false;
+      clearBlinkSlots();
       geom.setDrawRange(0, 0);
       trailGeom.setDrawRange(0, 0);
       for (var zi = 0; zi < labelObjs.length; zi++) {
@@ -318,20 +356,90 @@
       statusEl.textContent = 'no phrases — add tags or wait for combine';
       return;
     }
-    resetState(n);
+
+    if (!hasSeededScene) {
+      hasSeededScene = true;
+      resetState(n);
+      clearBlinkSlots();
+      for (var i = 0; i < n; i++) {
+        var it0 = items[i];
+        var p0 = typeof it0.polarity === 'number' ? it0.polarity : 0;
+        var s0 = typeof it0.subjectivity === 'number' ? it0.subjectivity : 0.5;
+        state.polarity[i] = p0;
+        state.subjectivity[i] = s0;
+        var txt0 = typeof it0.text === 'string' ? it0.text : '';
+        slotText[i] = txt0;
+        labelObjs[i].element.textContent = truncPhrase(txt0, 56);
+      }
+      for (var j0 = n; j0 < labelObjs.length; j0++) {
+        labelObjs[j0].element.textContent = '';
+        labelObjs[j0].visible = false;
+      }
+      syncAttributesFromState();
+      updateLabelVisibility();
+      syncLabelPositions();
+      return;
+    }
+
+    var now = performance.now();
+    var ot = state.theta.slice(0, nActive);
+    var or = state.r.slice(0, nActive);
+    var oz = state.z.slice(0, nActive);
+    var oo = state.omega.slice(0, nActive);
+    var oldSlot = slotText.slice(0, nActive);
+    var oldUsed = {};
+    var stagger = 0;
+
+    state.theta.length = n;
+    state.r.length = n;
+    state.z.length = n;
+    state.polarity.length = n;
+    state.subjectivity.length = n;
+    state.omega.length = n;
+
     for (var i = 0; i < n; i++) {
       var it = items[i];
       var p = typeof it.polarity === 'number' ? it.polarity : 0;
       var s = typeof it.subjectivity === 'number' ? it.subjectivity : 0.5;
+      var txt = typeof it.text === 'string' ? it.text : '';
+      var oj = -1;
+      for (var j = 0; j < nActive; j++) {
+        if (!oldUsed[j] && oldSlot[j] === txt) {
+          oj = j;
+          break;
+        }
+      }
+      if (oj >= 0) {
+        oldUsed[oj] = true;
+        state.theta[i] = ot[oj];
+        state.r[i] = or[oj];
+        state.z[i] = oz[oj];
+        state.omega[i] = oo[oj];
+        blinkFrom[i] = now + stagger;
+        blinkUntil[i] = blinkFrom[i] + 100;
+        stagger += 20;
+      } else {
+        state.theta[i] = Math.random() * Math.PI * 2;
+        state.r[i] = 5 + Math.random() * 8;
+        state.z[i] = (Math.random() - 0.5) * 3;
+        state.omega[i] = 0.35 + Math.random() * 0.4;
+        blinkFrom[i] = 0;
+        blinkUntil[i] = 0;
+      }
       state.polarity[i] = p;
       state.subjectivity[i] = s;
-      var txt = typeof it.text === 'string' ? it.text : '';
+      slotText[i] = txt;
       labelObjs[i].element.textContent = truncPhrase(txt, 56);
+    }
+    for (var k = n; k < MAX_PARTICLES; k++) {
+      blinkFrom[k] = 0;
+      blinkUntil[k] = 0;
     }
     for (var j = n; j < labelObjs.length; j++) {
       labelObjs[j].element.textContent = '';
       labelObjs[j].visible = false;
     }
+    nActive = n;
     syncAttributesFromState();
     updateLabelVisibility();
     syncLabelPositions();
@@ -436,10 +544,21 @@
       pos[ix + 1] = y;
       pos[ix + 2] = z;
 
-      var c = colorForPolarity(p);
-      col[ix] = c.x;
-      col[ix + 1] = c.y;
-      col[ix + 2] = c.z;
+      var cref = colorForPolarity(p);
+      var cx = cref.x;
+      var cy = cref.y;
+      var cz = cref.z;
+      if (now >= blinkFrom[i] && now < blinkUntil[i]) {
+        var u = (now - blinkFrom[i]) / (blinkUntil[i] - blinkFrom[i]);
+        var pulse = 0.55 + 0.45 * Math.sin(u * Math.PI);
+        var k = 0.72 * pulse;
+        cx = cx * (1 - k) + k;
+        cy = cy * (1 - k) + k;
+        cz = cz * (1 - k) + k;
+      }
+      col[ix] = cx;
+      col[ix + 1] = cy;
+      col[ix + 2] = cz;
       sz[i] = 2.2 + Math.abs(p) * 3.6 + s * 1.5;
     }
     geom.attributes.position.needsUpdate = true;
@@ -497,6 +616,8 @@
 
   var btnShowText = document.getElementById('btn-show-text');
   if (btnShowText) {
+    btnShowText.setAttribute('aria-pressed', showTextLabels ? 'true' : 'false');
+    btnShowText.textContent = showTextLabels ? 'Hide text' : 'Show text';
     btnShowText.addEventListener('click', function () {
       showTextLabels = !showTextLabels;
       btnShowText.setAttribute('aria-pressed', showTextLabels ? 'true' : 'false');
@@ -535,6 +656,7 @@
       stepPhysics();
     }
     syncLabelPositions();
+    syncLabelBlinkStyles(performance.now());
     if (autoCamera && !TagsVisControls.frozen) {
       stepAutoCamera();
     } else {

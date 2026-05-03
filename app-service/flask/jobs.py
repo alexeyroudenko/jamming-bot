@@ -17,6 +17,7 @@ from rq.decorators import job
 from rq import get_current_job
 from rq_helpers import redis_connection
 from telemetry import init_telemetry, with_trace_context, set_step_span_attributes
+import storage_http
 
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
@@ -24,7 +25,6 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 TAGS_SERVICE_URL = os.getenv('TAGS_SERVICE_URL', 'http://tags_service:8000')
 SEMANTIC_SERVICE_URL = os.getenv('SEMANTIC_SERVICE_URL', 'http://semantic_service:8005')
 MOOD_SERVICE_URL = os.getenv("MOOD_SERVICE_URL", "http://mood_service:8020")
-STORAGE_SERVICE_URL = os.getenv('STORAGE_SERVICE_URL', 'http://storage_service:7781')
 IMAGE_ANALYZE_SERVICE_URL = os.getenv('IMAGE_ANALYZE_SERVICE_URL', 'http://image-analyze-service:8006')
 IP_SERVICE_URL = os.getenv('IP_SERVICE_URL', 'http://bots.arthew0.online:8004')
 RENDERER_SERVICE_URL = os.getenv('RENDERER_SERVICE_URL', 'http://html-renderer-service:3000')
@@ -74,6 +74,90 @@ if os.getenv("OTEL_TRACING_ENABLED", "0") == "1":
     RequestsInstrumentor().instrument()
 
 POD_NAME = os.environ.get('HOSTNAME', 'unknown')
+
+
+def _otel_screenshot_renderer_spans(response, response_received_wall_ns, rq_parent_span=None):
+    """Attributes + child spans for page load vs screenshot (html-renderer headers).
+
+    Child spans use explicit start/end times so Jaeger shows separate waterfall bars.
+    Pass *rq_parent_span* (snapshot before requests.get) so children attach under rq.do_screenshot,
+    not under the auto-instrumented HTTP client span.
+    """
+    if os.getenv("OTEL_TRACING_ENABLED", "0") != "1":
+        return
+    try:
+        from opentelemetry import trace
+        from opentelemetry.trace import SpanKind
+
+        parent = rq_parent_span or trace.get_current_span()
+        if not parent or not parent.is_recording():
+            return
+        h = response.headers
+        pl_raw = h.get("X-Page-Load-Ms") or h.get("x-page-load-ms")
+        sm_raw = h.get("X-Screenshot-Ms") or h.get("x-screenshot-ms")
+        tm_raw = h.get("X-Total-Ms") or h.get("x-total-ms")
+        pl_ms = None
+        sm_ms = None
+        tm_ms = None
+        if pl_raw is not None:
+            try:
+                pl_ms = int(pl_raw)
+                parent.set_attribute("renderer.page_load_ms", pl_ms)
+            except (TypeError, ValueError):
+                pass
+        if sm_raw is not None:
+            try:
+                sm_ms = int(sm_raw)
+                parent.set_attribute("renderer.screenshot_ms", sm_ms)
+            except (TypeError, ValueError):
+                pass
+        if tm_raw is not None:
+            try:
+                tm_ms = int(tm_raw)
+                parent.set_attribute("renderer.total_ms", tm_ms)
+            except (TypeError, ValueError):
+                pass
+
+        if pl_ms is None or sm_ms is None or pl_ms < 0 or sm_ms < 0:
+            return
+
+        tracer = trace.get_tracer(__name__)
+        # Server ordering: page_load finishes, then screenshot; align synthetic timeline to response receipt.
+        ss_end_ns = int(response_received_wall_ns)
+        ss_start_ns = ss_end_ns - int(sm_ms * 1e6)
+        pl_end_ns = ss_start_ns
+        pl_start_ns = pl_end_ns - int(pl_ms * 1e6)
+
+        from opentelemetry.trace import use_span
+
+        with use_span(parent):
+            span_load = tracer.start_span(
+                "renderer.page_load",
+                kind=SpanKind.INTERNAL,
+                start_time=pl_start_ns,
+            )
+            span_load.set_attributes(
+                {
+                    "renderer.phase": "page_load",
+                    "renderer.duration_ms": pl_ms,
+                }
+            )
+            span_load.end(end_time=pl_end_ns)
+
+            span_shot = tracer.start_span(
+                "renderer.screenshot",
+                kind=SpanKind.INTERNAL,
+                start_time=ss_start_ns,
+            )
+            span_shot.set_attributes(
+                {
+                    "renderer.phase": "screenshot_capture",
+                    "renderer.duration_ms": sm_ms,
+                }
+            )
+            span_shot.end(end_time=ss_end_ns)
+    except Exception:
+        pass
 
 
 def _tags_bulk_post(names, timeout=60):
@@ -190,9 +274,19 @@ def add_tags_from_steps():
 
     num_iterations = min(len(files), MAX_STEPS)
     for i, file in enumerate(files[0:MAX_STEPS]):
-        contents = open(file).readlines()
-        step = int(contents[0].strip())
-        text = open(files_txt[step-1]).read().strip().replace("\n", "")
+        with open(file, encoding="utf-8", errors="ignore") as fp:
+            first_line = fp.readline().strip()
+        if not first_line:
+            continue
+        try:
+            step = int(first_line)
+        except ValueError:
+            continue
+        txt_path = files_txt[step - 1] if 0 <= step - 1 < len(files_txt) else None
+        if not txt_path:
+            continue
+        with open(txt_path, encoding="utf-8", errors="ignore") as fp:
+            text = fp.read().strip().replace("\n", "")
         
         with sentry_sdk.start_span(op="http.client", description=f"semantic+tags step {step}"):
             url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
@@ -335,12 +429,12 @@ def analyze(html, step_number=None, step_url=None):
         with sentry_sdk.start_span(op="http.client", description="semantic_service /tags/"):
             url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
             headers = {'content-type': 'application/json'}
-            rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
-            rr.raise_for_status()
-            sem_data = rr.json()
-            sentry_sdk.logger.info(f"semantic_service data: {sem_data}")
-            entities = sem_data.get("entities", []) or []
             if len(text) > 128:
+                rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
+                rr.raise_for_status()
+                sem_data = rr.json()
+                sentry_sdk.logger.info(f"semantic_service data: {sem_data}")
+                entities = sem_data.get("entities", []) or []            
                 words = sem_data.get('words', []) or []
                 hrases = sem_data.get('hrases', []) or []
                 noun_phrases = hrases
@@ -555,9 +649,19 @@ def do_screenshot(data):
             'json_on_error': 'true',
         }
         last_error = None
+        response_received_wall_ns = None
+        rq_otel_parent_for_renderer = None
+        if os.getenv("OTEL_TRACING_ENABLED", "0") == "1":
+            try:
+                from opentelemetry import trace as _otel_trace
+
+                rq_otel_parent_for_renderer = _otel_trace.get_current_span()
+            except Exception:
+                rq_otel_parent_for_renderer = None
         for attempt in range(1, SCREENSHOT_RENDER_RETRIES + 1):
             try:
                 response = requests.get(render_url, params=params, timeout=60)
+                response_received_wall_ns = time.time_ns()
                 break
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
                 last_error = e
@@ -590,6 +694,12 @@ def do_screenshot(data):
                 pass
         response.raise_for_status()
         image_bytes = response.content
+        if response_received_wall_ns is not None:
+            _otel_screenshot_renderer_spans(
+                response,
+                response_received_wall_ns,
+                rq_parent_span=rq_otel_parent_for_renderer,
+            )
         span.set_data("image_size", len(image_bytes))
 
     with sentry_sdk.start_span(op="s3", description="s3 upload screenshot") as span:
@@ -719,12 +829,9 @@ def do_storage(data):
 
     payload = step_payload_for_store(data)
 
-    url = f"{STORAGE_SERVICE_URL}/store"
-    headers = {'content-type': 'application/json'}
     try:
         with sentry_sdk.start_span(op="http.client", description="storage_service /store"):
-            response = requests.post(url, data=json.dumps(payload, default=str),
-                                     headers=headers, timeout=30)
+            response = storage_http.storage_post_store(payload, timeout=30)
             response.raise_for_status()
         r = response.json() if response.content else {}
     except Exception as e:
@@ -799,50 +906,43 @@ def clean_tsv_data():
     backup_file = "data/data_backup.tsv"
     
     try:
-        # Read the file
+        total_lines = 0
         with open(input_file, 'r', encoding='utf-8', errors='ignore') as f:
-            lines = f.readlines()
-        
-        total_lines = len(lines)
-        cleaned_lines = []
-        
-        for i, line in enumerate(lines):
-            # Remove line breaks within the line content
-            clean_line = line.replace('\n', ' ').replace('\r', ' ')
-            
-            # Split by tabs to get individual fields
-            fields = clean_line.split('\t')
-            
-            # Clean each field
-            cleaned_fields = []
-            for field in fields:
-                # Remove special characters that might cause issues
-                field = remove_special_characters(field)
-                # Replace multiple spaces with single space
-                field = ' '.join(field.split())
-                cleaned_fields.append(field)
-            
-            # Rejoin with tabs and add newline at end
-            cleaned_line = '\t'.join(cleaned_fields) + '\n'
-            cleaned_lines.append(cleaned_line)
-            
-            # Update progress
-            if i % 100 == 0:
-                self_job = get_current_job()
-                self_job.meta['progress'] = {
-                    'num_iterations': total_lines,
-                    'iteration': i,
-                    'percent': i / total_lines * 100
-                }
-                self_job.save_meta()
+            for _ in f:
+                total_lines += 1
+
+        cleaned_lines = 0
+        with open(input_file, 'r', encoding='utf-8', errors='ignore') as src, open(output_file, 'w', encoding='utf-8') as dst:
+            for i, line in enumerate(src, start=1):
+                # Remove line breaks within the line content
+                clean_line = line.replace('\n', ' ').replace('\r', ' ')
+
+                # Split by tabs to get individual fields
+                fields = clean_line.split('\t')
+
+                # Clean each field
+                cleaned_fields = []
+                for field in fields:
+                    field = remove_special_characters(field)
+                    field = ' '.join(field.split())
+                    cleaned_fields.append(field)
+
+                dst.write('\t'.join(cleaned_fields) + '\n')
+                cleaned_lines += 1
+
+                # Update progress
+                if i % 100 == 0:
+                    self_job = get_current_job()
+                    self_job.meta['progress'] = {
+                        'num_iterations': max(total_lines, 1),
+                        'iteration': i,
+                        'percent': i / max(total_lines, 1) * 100
+                    }
+                    self_job.save_meta()
         
         # Create backup of original file
         import shutil
         shutil.copy2(input_file, backup_file)
-        
-        # Write cleaned data to output file
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.writelines(cleaned_lines)
         
         # Replace original with cleaned version
         shutil.move(output_file, input_file)
@@ -859,7 +959,7 @@ def clean_tsv_data():
         return {
             "status": "success",
             "total_lines": total_lines,
-            "cleaned_lines": len(cleaned_lines),
+            "cleaned_lines": cleaned_lines,
             "backup_file": backup_file,
             "pod": POD_NAME,
         }

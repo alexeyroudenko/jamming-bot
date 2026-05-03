@@ -1,0 +1,36 @@
+# OpenTelemetry Collector (docker compose): OTLP in → Jaeger (HTTP) + Coroot (gRPC).
+# Set in .env: COROOT_OTEL_API_KEY, COROOT_OTLP_GRPC_ADDR (default host.docker.internal:4317 — port-forward Coroot 4317 to host or change).
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+processors:
+  batch: {}
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+exporters:
+  otlphttp/jaeger:
+    endpoint: http://jaeger:4318
+    tls:
+      insecure: true
+  otlp/coroot:
+    endpoint: ${env:COROOT_OTLP_GRPC_ADDR}
+    tls:
+      insecure: true
+    compression: none
+    headers:
+      x-api-key: ${env:COROOT_OTEL_API_KEY:-}
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/jaeger, otlp/coroot]
+  telemetry:
+    logs:
+      level: warn

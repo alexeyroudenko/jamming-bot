@@ -11,14 +11,7 @@
 <nav class="tags-vis-nav" aria-label="Subpages">
   <div>
     <span class="tags-vis-title">Constellation</span>
-    <a href="/">← home</a>
-    <a href="/tags/">2D cloud</a>
-    <a href="/tags/3d/">3D cloud</a>
-    <a href="/tags/vectorfield/">vector field</a>
-    <a href="/tags/vectorfield-3d/">vector 3D</a>
-    <a href="/tags/chaos-attractor/">chaos</a>
-    <a href="/tags/phrases/">phrases</a>
-    <a href="/tags/sentiment-vortex/">sentiment vortex</a>
+    {% include "components/explorer_nav_plain.html" %}
   </div>
 </nav>
 
@@ -57,7 +50,7 @@
   var TAGS_API = '/api/tags/get/';
   var EMB_API = '/api/tags/embeddings/';
   var DEFAULT_VISIBLE_COUNT = 56;
-  var PAGE_SIZE = 50;
+  var PAGE_SIZE = 200;
   var MAX_DPR = 2;
   var LINK_LENGTH = Math.min(window.innerWidth, window.innerHeight) * 0.18;
   var VIEW_SCALE_MIN = 0.35;

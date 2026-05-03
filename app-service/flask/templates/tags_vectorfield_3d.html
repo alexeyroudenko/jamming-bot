@@ -11,14 +11,7 @@
 <nav class="tags-vis-nav" aria-label="Subpages">
   <div>
     <span class="tags-vis-title">Vector field 3D</span>
-    <a href="/">← home</a>
-    <a href="/tags/">2D cloud</a>
-    <a href="/tags/3d/">3D cloud</a>
-    <a href="/tags/vectorfield/">vector field 2D</a>
-    <a href="/tags/constellation/">constellation</a>
-    <a href="/tags/chaos-attractor/">chaos</a>
-    <a href="/tags/phrases/">phrases</a>
-    <a href="/tags/sentiment-vortex/">sentiment vortex</a>
+    {% include "components/explorer_nav_plain.html" %}
   </div>
 </nav>
 
@@ -48,7 +41,7 @@
   <label class="tags-vis-density-label" for="vf3-anchor-count">Count anchors</label>
   <input id="vf3-anchor-count" class="tags-vis-select" type="range" min="0" max="256" step="1" value="32" aria-label="Count anchors">
   <span class="tags-vis-status" id="vf3-anchor-count-value">32</span>
-  <button type="button" class="tags-vis-btn" id="btn-anchor-labels" aria-pressed="false" title="Show tag labels (projected; 3D view only — no drag)">Anchor labels</button>
+  <button type="button" class="tags-vis-btn" id="btn-anchor-labels" aria-pressed="true" title="Show tag labels (projected; 3D view only — no drag)">Anchor labels</button>
   <button type="button" class="tags-vis-btn" id="btn-show-vectors" aria-pressed="false" title="Sample field direction on a coarse 3D grid">Field vectors</button>
   <button type="button" class="tags-vis-btn" id="btn-freeze">Freeze</button>
   <button type="button" class="tags-vis-btn" id="btn-export">Export PNG</button>
@@ -59,7 +52,7 @@
 <div class="tags-vis-scanlines" aria-hidden="true"></div>
 <div class="tags-vis-canvas-host">
   <canvas id="vf3"></canvas>
-  <div id="vf3-anchors-layer" class="vf-anchors-layer is-hidden" aria-hidden="true"></div>
+  <div id="vf3-anchors-layer" class="vf-anchors-layer" aria-hidden="false"></div>
 </div>
 <p class="tags-vis-hint">Drag to orbit · wheel zoom · white particles in 3D · Field vectors: cyan segments · labels are projected (read-only)</p>
 
@@ -112,7 +105,7 @@
   var positions, velocities;
   var reloadTimer = null;
   var anchorLayer = document.getElementById('vf3-anchors-layer');
-  var showAnchorLabels = false;
+  var showAnchorLabels = true;
   var showVectors = false;
   var vectorGeom = null;
   var vectorLines = null;
@@ -441,7 +434,8 @@
     renderer.setClearColor(0x09090b, 1);
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(55, 1, 0.1, 5000);
-    camera.position.set(0, 0, WORLD_HALF * 2.45);
+    /* Legacy mid: WORLD_HALF * 2.45; ~two wheel steps * 0.81; extra 2x zoom-in * 0.5 → 0.405 */
+    camera.position.set(0, 0, WORLD_HALF * 2.45 * 0.405);
 
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -963,10 +957,14 @@
     var btn = document.getElementById('btn-anchor-labels');
     if (!btn) return;
     try {
-      if (sessionStorage.getItem('tags-vectorfield-3d-anchor-labels') === '1') {
+      if (sessionStorage.getItem('tags-vectorfield-3d-anchor-labels') === '0') {
+        setAnchorLabelsVisible(false);
+      } else {
         setAnchorLabelsVisible(true);
       }
-    } catch (e) {}
+    } catch (e) {
+      setAnchorLabelsVisible(true);
+    }
     btn.addEventListener('click', function () {
       setAnchorLabelsVisible(!showAnchorLabels);
     });

@@ -137,3 +137,63 @@ k3s-cert-manager:
 k3s-apply:
 	@test -f k8s-secrets.yaml && kubectl apply -f k8s-secrets.yaml || echo "WARN: k8s-secrets.yaml not found — create it from k8s-secrets.yaml.template"
 	kubectl apply -f deployment.yaml
+
+.PHONY: k3s-traefik-stabilize
+k3s-traefik-stabilize:
+	kubectl -n kube-system patch deployment traefik --type='json' -p='[{"op":"replace","path":"/spec/template/spec/containers/0/livenessProbe/timeoutSeconds","value":5},{"op":"replace","path":"/spec/template/spec/containers/0/readinessProbe/timeoutSeconds","value":5},{"op":"replace","path":"/spec/template/spec/containers/0/livenessProbe/initialDelaySeconds","value":10},{"op":"replace","path":"/spec/template/spec/containers/0/readinessProbe/initialDelaySeconds","value":10}]'
+	kubectl -n kube-system rollout restart deployment/traefik
+	kubectl -n kube-system rollout status deployment/traefik --timeout=240s
+
+# Coroot CE + operator (namespace coroot). HTTPS UI: https://coroot.jamming-bot.arthew0.online/
+# Docs: docs/monitoring/coroot-runbook.md — chart versions pinned below.
+COROOT_OPERATOR_CHART_VERSION ?= 0.9.4
+COROOT_CE_CHART_VERSION ?= 0.3.3
+
+.PHONY: k3s-coroot
+k3s-coroot:
+	helm repo add coroot https://coroot.github.io/helm-charts 2>/dev/null || true
+	helm repo update coroot
+	kubectl create namespace coroot --dry-run=client -o yaml | kubectl apply -f -
+	kubectl label namespace coroot pod-security.kubernetes.io/enforce=privileged --overwrite
+	helm upgrade --install coroot-operator coroot/coroot-operator \
+		--namespace coroot \
+		--version $(COROOT_OPERATOR_CHART_VERSION) \
+		--wait --timeout 10m
+	helm upgrade --install coroot coroot/coroot-ce \
+		--namespace coroot \
+		--version $(COROOT_CE_CHART_VERSION) \
+		--values docs/monitoring/coroot-values.yaml \
+		--wait --timeout 30m
+	@echo "Coroot: kubectl get pods,ingress -n coroot"
+	@echo "UI: https://coroot.jamming-bot.arthew0.online/"
+
+.PHONY: k3s-coroot-prometheus-ksm-scrape
+# Patches Coroot's Prometheus init config to scrape chart kube-state-metrics (UI health check).
+k3s-coroot-prometheus-ksm-scrape:
+	./scripts/coroot-prometheus-add-kube-state-metrics-scrape.sh
+
+.PHONY: k3s-coroot-uninstall
+k3s-coroot-uninstall:
+	-helm uninstall coroot -n coroot
+	-helm uninstall coroot-operator -n coroot
+	@echo "Optional: kubectl delete namespace coroot"
+
+# kube-state-metrics (namespace kube-state-metrics) — cluster state metrics for Prometheus/Coroot.
+# Chart: https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-state-metrics
+KUBE_STATE_METRICS_CHART_VERSION ?= 7.3.0
+
+.PHONY: k3s-kube-state-metrics
+k3s-kube-state-metrics:
+	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
+	helm repo update prometheus-community
+	kubectl create namespace kube-state-metrics --dry-run=client -o yaml | kubectl apply -f -
+	helm upgrade --install kube-state-metrics prometheus-community/kube-state-metrics \
+		--namespace kube-state-metrics \
+		--version $(KUBE_STATE_METRICS_CHART_VERSION) \
+		--wait --timeout 10m
+	@echo "Smoke: kubectl get pods,svc -n kube-state-metrics"
+
+.PHONY: k3s-kube-state-metrics-uninstall
+k3s-kube-state-metrics-uninstall:
+	-helm uninstall kube-state-metrics -n kube-state-metrics
+	@echo "Optional: kubectl delete namespace kube-state-metrics"

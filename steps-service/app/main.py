@@ -32,6 +32,7 @@ DEFAULT_STEPS_CSV_URL = os.getenv(
     "http://storage_service:7781/export/csv",
 )
 DEFAULT_REFRESH_SECONDS = int(os.getenv("STEPS_REFRESH_SECONDS", "60"))
+DEFAULT_LATEST_LIMIT = max(1, min(int(os.getenv("STEPS_LATEST_LIMIT", "10000")), 20000))
 DEFAULT_OUTPUT_DIR = Path(
     os.getenv("STEPS_OUTPUT_DIR", "/tmp/steps-service")
 ).resolve()
@@ -70,7 +71,7 @@ def fetch_bytes(url: str) -> bytes:
         return response.read()
 
 
-def fetch_json(url: str):
+def fetch_json(url: str, *, timeout: float = 30):
     request = urllib.request.Request(
         url,
         headers={
@@ -78,7 +79,7 @@ def fetch_json(url: str):
             "User-Agent": "steps-service/1.0",
         },
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
+    with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -1372,6 +1373,46 @@ def build_image_url(image_type: str) -> str:
     return f"{DEFAULT_IMAGE_URL}?type={urllib.parse.quote(image_type)}"
 
 
+def build_latest_url() -> str:
+    base = DEFAULT_LATEST_URL.rstrip("/")
+    sep = "&" if "?" in base else "?"
+    return f"{base}{sep}limit={DEFAULT_LATEST_LIMIT}"
+
+
+def fetch_steps_payload_sync() -> dict:
+    """
+    Prefer JSON /get/latest via app-service (light); fall back to full CSV export.
+    """
+    try:
+        body = fetch_json(build_latest_url(), timeout=90)
+        data = body.get("data")
+        if not isinstance(data, list):
+            raise ValueError("latest response missing data array")
+        fields = body.get("fields")
+        if not isinstance(fields, list) or not fields:
+            fields = list(data[0].keys()) if data else []
+        raw_total = body.get("total_lines")
+        try:
+            total_lines = int(raw_total) if raw_total is not None else len(data)
+        except (TypeError, ValueError):
+            total_lines = len(data)
+        return {
+            "fields": fields,
+            "returned_lines": len(data),
+            "total_lines": total_lines,
+            "data": data,
+        }
+    except Exception as exc:
+        logger.warning("steps payload: latest failed (%s), using CSV export", exc)
+        rows = fetch_csv_rows(DEFAULT_STEPS_CSV_URL)
+        return {
+            "fields": list(rows[0].keys()) if rows else [],
+            "returned_lines": len(rows),
+            "total_lines": len(rows),
+            "data": rows,
+        }
+
+
 async def fetch_snapshot(image_type: str) -> ImageSnapshot:
     png_bytes = await asyncio.to_thread(fetch_bytes, build_image_url(image_type))
     width, height = parse_png_dimensions(png_bytes)
@@ -1380,49 +1421,50 @@ async def fetch_snapshot(image_type: str) -> ImageSnapshot:
 
 
 async def refresh_presence() -> None:
-    image_urls = {image_type: build_image_url(image_type) for image_type in SUPPORTED_IMAGE_TYPES}
+    """
+    Refresh default presence PNG + step rows. Other image types load on demand via /api/image.
+    Step rows prefer STEPS_LATEST_URL (JSON); CSV only on failure.
+    """
+    default_url = build_image_url(DEFAULT_IMAGE_TYPE)
     async with state_lock:
         snapshots = dict(state.snapshots or {})
         payload = dict(state.steps_payload) if state.steps_payload else None
 
-    image_results = await asyncio.gather(
-        *[
-            asyncio.to_thread(fetch_bytes, image_url)
-            for image_url in image_urls.values()
-        ],
-        return_exceptions=True,
-    )
-    csv_result = await asyncio.gather(
-        asyncio.to_thread(fetch_csv_rows, DEFAULT_STEPS_CSV_URL),
+    default_result, payload_data = await asyncio.gather(
+        asyncio.to_thread(fetch_bytes, default_url),
+        asyncio.to_thread(fetch_steps_payload_sync),
         return_exceptions=True,
     )
 
     errors = []
-    for image_type, result in zip(image_urls.keys(), image_results):
-        if isinstance(result, Exception):
-            errors.append(f"{image_type}: {result}")
-            continue
-        width, height = parse_png_dimensions(result)
-        await asyncio.to_thread(write_snapshot, DEFAULT_OUTPUT_DIR, image_type, result)
-        snapshots[image_type] = ImageSnapshot(width=width, height=height, png_bytes=result)
-
-    csv_rows = csv_result[0]
-    if isinstance(csv_rows, Exception):
-        errors.append(f"csv: {csv_rows}")
+    if isinstance(default_result, Exception):
+        errors.append(f"{DEFAULT_IMAGE_TYPE}: {default_result}")
     else:
-        payload = {
-            "fields": list(csv_rows[0].keys()) if csv_rows else [],
-            "returned_lines": len(csv_rows),
-            "total_lines": len(csv_rows),
-            "data": csv_rows,
-        }
+        width, height = parse_png_dimensions(default_result)
+        await asyncio.to_thread(
+            write_snapshot, DEFAULT_OUTPUT_DIR, DEFAULT_IMAGE_TYPE, default_result
+        )
+        snapshots[DEFAULT_IMAGE_TYPE] = ImageSnapshot(
+            width=width, height=height, png_bytes=default_result
+        )
+
+    if isinstance(payload_data, Exception):
+        errors.append(f"payload: {payload_data}")
+    else:
+        payload = payload_data
 
     if not snapshots:
         err_text = "; ".join(errors) if errors else "no per-fetch details"
         raise RuntimeError(f"No image snapshots available after refresh: {err_text}")
     if payload is None:
-        err_text = "; ".join(errors) if errors else "no per-fetch details"
-        raise RuntimeError(f"Steps payload not available after refresh: {err_text}")
+        # Presence image is enough for /ready; empty step map until next refresh.
+        payload = {
+            "fields": [],
+            "returned_lines": 0,
+            "total_lines": 0,
+            "data": [],
+        }
+        errors.append("payload: empty fallback (latest/CSV failed; will retry)")
 
     async with state_lock:
         state.snapshots = snapshots
@@ -1481,6 +1523,26 @@ app = FastAPI(
 @app.get("/", response_class=HTMLResponse)
 async def root() -> HTMLResponse:
     return HTMLResponse(render_html())
+
+
+@app.get("/live")
+async def live():
+    """Cheap liveness for kubelet — does not depend on storage or locks."""
+    return {"status": "alive"}
+
+
+@app.get("/ready")
+async def ready():
+    """Readiness: default snapshot loaded (503 while warming up)."""
+    async with state_lock:
+        default_snapshot = (state.snapshots or {}).get(DEFAULT_IMAGE_TYPE)
+        ok = bool(default_snapshot and default_snapshot.png_bytes)
+    if ok:
+        return {"status": "ok"}
+    return JSONResponse(
+        {"status": "warming_up", "detail": "default presence image not loaded yet"},
+        status_code=503,
+    )
 
 
 @app.get("/healthz")

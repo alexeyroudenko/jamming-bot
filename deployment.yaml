@@ -10,7 +10,7 @@ metadata:
   name: html-renderer
   namespace: jamming-bot
 spec:
-  replicas: 2
+  replicas: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -132,7 +132,7 @@ metadata:
   name: semantic-service
   namespace: jamming-bot
 spec:
-  replicas: 2
+  replicas: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -369,10 +369,10 @@ spec:
           mountPath: /tmp/backfill
         resources:
           requests:
-            cpu: "50m"
+            cpu: "100m"
             memory: "256Mi"
           limits:
-            cpu: "250m"
+            cpu: "1000m"
             memory: "1024Mi"
         startupProbe:
           tcpSocket:
@@ -430,6 +430,8 @@ spec:
           value: "http://storage-service/export/img"
         - name: STEPS_LATEST_URL
           value: "http://app-service/api/storage_latest/"
+        - name: STEPS_LATEST_LIMIT
+          value: "3000"
         - name: STEPS_CSV_URL
           value: "http://storage-service/export/csv"
         - name: STEPS_REFRESH_SECONDS
@@ -438,25 +440,27 @@ spec:
           value: "/app/data"
         resources:
           requests:
-            cpu: "100m"
+            cpu: "150m"
             memory: "512Mi"
           limits:
-            cpu: "250m"
+            cpu: "750m"
             memory: "2048Mi"
         readinessProbe:
           httpGet:
-            path: /healthz
+            path: /ready
             port: 8007
           initialDelaySeconds: 5
-          periodSeconds: 10
-          timeoutSeconds: 5
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 5
         livenessProbe:
           httpGet:
-            path: /healthz
+            path: /live
             port: 8007
-          initialDelaySeconds: 15
-          periodSeconds: 20
-          timeoutSeconds: 5
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 3
+          failureThreshold: 5
         volumeMounts:
         - name: steps-data
           mountPath: /app/data
@@ -522,20 +526,27 @@ spec:
             cpu: "250m"
             memory: "256Mi"
         startupProbe:
-          tcpSocket:
+          httpGet:
+            path: /healthz
             port: 8000
-          failureThreshold: 15
+          initialDelaySeconds: 5
           periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 36
         readinessProbe:
           httpGet:
             path: /healthz
             port: 8000
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         livenessProbe:
           httpGet:
             path: /healthz
             port: 8000
           periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service
@@ -777,6 +788,139 @@ spec:
     targetPort: 16686
     nodePort: 31686
 ---
+# ===================== otel-collector (OTLP fan-out: Jaeger + Coroot) =====================
+# Apps use OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318 (HTTP OTLP).
+# Coroot: gRPC OTLP on coroot-coroot.coroot:4317 + header x-api-key from Secret COROOT_OTEL_API_KEY.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: jamming-bot
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      batch: {}
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+    exporters:
+      otlphttp/jaeger:
+        endpoint: http://jaeger:4318
+        tls:
+          insecure: true
+      otlp/coroot:
+        endpoint: coroot-coroot.coroot.svc.cluster.local:4317
+        tls:
+          insecure: true
+        # Coroot gRPC без gzip-распаковки в ответе; иначе: Decompressor is not installed for grpc-encoding "gzip"
+        compression: none
+        # Пустой default, если ключа нет в Secret — под стартует; верни ключ в jamming-bot-secrets для Coroot.
+        headers:
+          x-api-key: ${env:COROOT_OTEL_API_KEY:-}
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlphttp/jaeger, otlp/coroot]
+      telemetry:
+        logs:
+          level: warn
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: jamming-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+      - name: otel-collector
+        image: otel/opentelemetry-collector-contrib:0.115.1
+        imagePullPolicy: IfNotPresent
+        args:
+        - --config=/etc/otelcol/config.yaml
+        env:
+        - name: COROOT_OTEL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: COROOT_OTEL_API_KEY
+              optional: true
+        ports:
+        - containerPort: 4317
+          name: otlp-grpc
+        - containerPort: 4318
+          name: otlp-http
+        - containerPort: 13133
+          name: health
+        volumeMounts:
+        - name: config
+          mountPath: /etc/otelcol
+          readOnly: true
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 13133
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 13133
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+      volumes:
+      - name: config
+        configMap:
+          name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: jamming-bot
+spec:
+  type: ClusterIP
+  selector:
+    app: otel-collector
+  ports:
+  - name: otlp-grpc
+    protocol: TCP
+    port: 4317
+    targetPort: otlp-grpc
+  - name: otlp-http
+    protocol: TCP
+    port: 4318
+    targetPort: otlp-http
+  - name: health
+    protocol: TCP
+    port: 13133
+    targetPort: health
+---
 # ===================== worker-service (rq workers) =====================
 apiVersion: apps/v1
 kind: Deployment
@@ -784,7 +928,7 @@ metadata:
   name: worker-service
   namespace: jamming-bot
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: worker-service
@@ -849,7 +993,7 @@ spec:
         - name: OTEL_TRACING_ENABLED
           value: "1"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: "http://jaeger:4318"
+          value: "http://otel-collector:4318"
         - name: OTEL_SERVICE_NAME
           value: "app-service-worker"
         resources:
@@ -981,6 +1125,12 @@ spec:
           value: "app-service"
         - name: FLASK_PORT
           value: "80"
+        - name: OTEL_TRACING_ENABLED
+          value: "1"
+        - name: OTEL_SERVICE_NAME
+          value: "bot-service"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://otel-collector:4318"
         volumeMounts:
         - name: bot-db
           mountPath: /app/data
@@ -1082,7 +1232,7 @@ spec:
     targetPort: 8010
 ---
 # ===================== ip-service =====================
-# GeoIP DB (dbip-city-lite) is downloaded at image build; override with IP_MMDB_PATH + volume if needed.
+# GeoIP DB (GeoLite2-City) is downloaded at image build; override with IP_MMDB_PATH + volume if needed.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -1214,11 +1364,13 @@ spec:
         - name: OTEL_TRACING_ENABLED
           value: "1"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: "http://jaeger:4318"
+          value: "http://otel-collector:4318"
         - name: OTEL_SERVICE_NAME
           value: "app-service"
         - name: BOT_YAML_PATH
           value: "/app/bot_config/bot.yaml"
+        - name: RQ_RESULT_TTL_SECONDS
+          value: "1800"
         volumeMounts:
         - name: bot-config
           mountPath: /app/bot_config/bot.yaml
@@ -1229,16 +1381,29 @@ spec:
           limits:
             cpu: "1000m"
             memory: "1Gi"
+        startupProbe:
+          httpGet:
+            path: /status
+            port: 5000
+          failureThreshold: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
         readinessProbe:
-          tcpSocket:
+          httpGet:
+            path: /status
             port: 5000
-          initialDelaySeconds: 60
+          initialDelaySeconds: 20
           periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
         livenessProbe:
-          tcpSocket:
+          httpGet:
+            path: /status
             port: 5000
-          initialDelaySeconds: 90
+          initialDelaySeconds: 45
           periodSeconds: 20
+          timeoutSeconds: 3
+          failureThreshold: 3
       volumes:
       - name: bot-config
         hostPath:
@@ -1501,7 +1666,7 @@ metadata:
   name: html-renderer-ingress
   namespace: jamming-bot
   annotations:
-    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-semantic@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-steps@kubernetescrd,jamming-bot-strip-tags@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-data@kubernetescrd,jamming-bot-strip-app@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-steps@kubernetescrd,jamming-bot-strip-tags@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-data@kubernetescrd,jamming-bot-strip-app@kubernetescrd
 spec:
   rules:
     - http:
@@ -1528,13 +1693,7 @@ spec:
               name: keywords-service
               port:
                 number: 80
-        - path: /semantic
-          pathType: Prefix
-          backend:
-            service:
-              name: semantic-service
-              port:
-                number: 80
+        # /semantic/ and /semantic/* are Flask (app-service); API is internal or https://semantic.jamming-bot.arthew0.online/
         - path: /storage
           pathType: Prefix
           backend:
@@ -1639,7 +1798,8 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     # strip-tags is not applied here: /tags/* UI paths must reach app-service with full path. Tags REST API uses jamming-bot-tags-api-ingress (strip /tags only for /tags/api/*).
-    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-semantic@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-steps@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-data@kubernetescrd,jamming-bot-strip-app@kubernetescrd
+    # strip-semantic is not applied: /semantic/* UI is Flask on app-service; do not route /semantic to semantic-service (FastAPI has no / page — only /api/v1/semantic/...).
+    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-keywords@kubernetescrd,jamming-bot-strip-storage@kubernetescrd,jamming-bot-strip-steps@kubernetescrd,jamming-bot-strip-ip@kubernetescrd,jamming-bot-strip-data@kubernetescrd,jamming-bot-strip-app@kubernetescrd
 spec:
   tls:
   - hosts:
@@ -1709,13 +1869,6 @@ spec:
           backend:
             service:
               name: keywords-service
-              port:
-                number: 80
-        - path: /semantic
-          pathType: Prefix
-          backend:
-            service:
-              name: semantic-service
               port:
                 number: 80
         - path: /ip
@@ -1829,8 +1982,8 @@ metadata:
 spec:
   scaleTargetRef:
     name: worker-service
-  minReplicaCount: 2
-  maxReplicaCount: 10
+  minReplicaCount: 1
+  maxReplicaCount: 4
   cooldownPeriod: 60
   pollingInterval: 10
   triggers:
@@ -1843,6 +1996,7 @@ spec:
 ---
 # ===================== KEDA: html-renderer autoscaler =====================
 # Screenshot jobs (do_screenshot) call html-renderer; scale up earlier under queue load.
+# Caps tuned for single-node (~8 CPU): fewer Chromium replicas = less RAM/CPU thrash.
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -1851,8 +2005,8 @@ metadata:
 spec:
   scaleTargetRef:
     name: html-renderer
-  minReplicaCount: 2
-  maxReplicaCount: 8
+  minReplicaCount: 1
+  maxReplicaCount: 2
   cooldownPeriod: 90
   pollingInterval: 10
   triggers:

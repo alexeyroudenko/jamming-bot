@@ -42,6 +42,23 @@ services:
     networks:
       - app_network
 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    container_name: otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./docker/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+    environment:
+      COROOT_OTEL_API_KEY: ${COROOT_OTEL_API_KEY:-}
+      COROOT_OTLP_GRPC_ADDR: ${COROOT_OTLP_GRPC_ADDR:-host.docker.internal:4317}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - jaeger
+    networks:
+      - app_network
+
   redis: 
     image: redis:7-alpine
     container_name: redis
@@ -75,7 +92,7 @@ services:
       - S3_PORT=${S3_PORT}
       - S3_BUCKET_NAME=${S3_BUCKET_NAME}
       - OTEL_TRACING_ENABLED=${OTEL_TRACING_ENABLED:-0}
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=app-service
       - BOT_YAML_PATH=/app/bot_config/bot.yaml
       - DATA_SERVICE_URL=http://data_service:8010
@@ -98,6 +115,7 @@ services:
       - redis
       - tags_service
       - jaeger
+      - otel-collector
       - image_analyze_service
       - mood_service
     networks:
@@ -349,7 +367,7 @@ services:
           cpus: '0.5'
           memory: 1G
 
-  worker:    
+  worker:
     build: ./app-service
     image: worker-image
     command: rq worker --name worker --disable-job-desc-logging --url redis://redis:6379/0
@@ -373,7 +391,7 @@ services:
       - REMOTE_STORAGE_URL=${REMOTE_STORAGE_URL:-https://storage.jamming-bot.arthew0.online}
       - REMOTE_TAGS_URL=${REMOTE_TAGS_URL:-https://tags.jamming-bot.arthew0.online}
       - OTEL_TRACING_ENABLED=${OTEL_TRACING_ENABLED:-0}
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=app-service-worker
     volumes:
       - type: bind
@@ -385,6 +403,7 @@ services:
     depends_on:
       - redis
       - jaeger
+      - otel-collector
       - image_analyze_service
       - mood_service
     networks:
@@ -417,7 +436,7 @@ services:
       - REMOTE_STORAGE_URL=${REMOTE_STORAGE_URL:-https://storage.jamming-bot.arthew0.online}
       - REMOTE_TAGS_URL=${REMOTE_TAGS_URL:-https://tags.jamming-bot.arthew0.online}
       - OTEL_TRACING_ENABLED=${OTEL_TRACING_ENABLED:-0}
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=app-service-worker
     volumes:
       - type: bind
@@ -429,6 +448,7 @@ services:
     depends_on:
       - redis
       - jaeger
+      - otel-collector
       - image_analyze_service
       - mood_service
     networks:
@@ -462,7 +482,7 @@ services:
       - REMOTE_STORAGE_URL=${REMOTE_STORAGE_URL:-https://storage.jamming-bot.arthew0.online}
       - REMOTE_TAGS_URL=${REMOTE_TAGS_URL:-https://tags.jamming-bot.arthew0.online}
       - OTEL_TRACING_ENABLED=${OTEL_TRACING_ENABLED:-0}
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=app-service-worker
     volumes:
       - type: bind
@@ -474,6 +494,7 @@ services:
     depends_on:
       - redis
       - jaeger
+      - otel-collector
       - image_analyze_service
       - mood_service
     networks:

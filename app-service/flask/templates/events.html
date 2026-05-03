@@ -1,0 +1,36 @@
+{% extends "base_dashboard.html" %}
+{% block title %}Jamming bot — events{% endblock %}
+{% block body_class %}jb-events{% endblock %}
+{% block primary_nav %}
+{% include "components/bot_primary_nav_full.html" %}
+{% endblock %}
+{% block content %}
+<main class="jb-events-main">
+  <section id="step-timeline-panel" class="bot-panel bot-step-timeline-panel" aria-live="polite">
+    <div id="step-timeline-track" class="bot-step-timeline-track">
+      <div class="bot-step-timeline-empty">Waiting for step...</div>
+      <div id="step-timeline-cursor" class="bot-step-timeline-cursor" hidden></div>
+    </div>
+    <div id="step-timeline-meta" hidden>Waiting for step...</div>
+    <div id="step-timeline-caption" hidden></div>
+    <div class="bot-section-label" hidden>Step timeline</div>
+  </section>
+  <section id="logs-panel" class="bot-panel bot-logs-panel" aria-live="polite">
+    <div class="bot-workers-head">
+      <span class="bot-section-label">Logs</span>
+      <span id="logs-meta" class="bot-workers-meta">0 events</span>
+    </div>
+    <div id="logs-list" class="bot-logs-table">
+      <div class="bot-logs-empty">Waiting for socket events...</div>
+    </div>
+  </section>
+</main>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+/* Минимальные заглушки: на /events/ нет полноэкранного логина с overlay из bot.html */
+function showLoginForm() { window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname); }
+function handleLogout() { window.location.href = '/logout'; }
+document.body.classList.remove('is-admin');
+</script>
+{% endblock %}

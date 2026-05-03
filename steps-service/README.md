@@ -5,10 +5,13 @@ FastAPI service that proxies step PNG snapshots, renders them as a fullscreen ba
 ## Environment
 
 - `STEPS_IMAGE_URL` — source PNG URL, default `http://localhost:5000/api/storage_img/`
-- `STEPS_LATEST_URL` — source latest-steps JSON URL, default `http://localhost:5000/api/storage_latest/`
-- `STEPS_CSV_URL` — source CSV export used to build full step map for tooltip, default `http://storage_service:7781/export/csv`
-- `STEPS_REFRESH_SECONDS` — image refresh interval in seconds, default `60`
+- `STEPS_LATEST_URL` — source latest-steps JSON URL (preferred for refresh), default `http://localhost:5000/api/storage_latest/`
+- `STEPS_LATEST_LIMIT` — max rows requested from latest (`?limit=`), default `3000`, capped at `20000`
+- `STEPS_CSV_URL` — CSV export used only if latest JSON fails, default `http://storage_service:7781/export/csv`
+- `STEPS_REFRESH_SECONDS` — background refresh interval in seconds, default `60`
 - `STEPS_OUTPUT_DIR` — directory for cached step PNG snapshots, default `/tmp/steps-service`
+
+Background refresh loads only the **default** presence PNG (`status_code`) plus step rows from **latest JSON** (not full CSV unless latest fails). Other PNG modes are fetched on demand when the UI requests `/api/image`.
 
 ## Modes
 
@@ -24,7 +27,9 @@ FastAPI service that proxies step PNG snapshots, renders them as a fullscreen ba
 - `GET /` — fullscreen HTML page with support for `?type=...`
 - `GET /api/image` — latest proxied PNG snapshot
 - `GET /api/latest` — cached full step payload (debug/compat endpoint, not required by `/steps` UI)
-- `GET /healthz` — current image cache status
+- `GET /healthz` — current image cache status (diagnostics)
+- `GET /live` — instant liveness (Kubernetes)
+- `GET /ready` — readiness when default snapshot is loaded (`503` while warming up)
 
 ## Backfill panel
 

@@ -40,3 +40,24 @@ def get_all_jobs():
     return all_jobs
 
 
+def get_all_jobs_paginated(limit=200, offset=0):
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 200
+    try:
+        offset = int(offset)
+    except (TypeError, ValueError):
+        offset = 0
+    limit = max(1, min(limit, 5000))
+    offset = max(0, offset)
+    all_job_ids = get_all_job_ids()
+    selected_ids = all_job_ids[offset: offset + limit]
+    jobs = []
+    for job_id in selected_ids:
+        job = get_job_from_id(job_id)
+        if job is not None:
+            jobs.append(job)
+    return jobs, len(all_job_ids)
+
+

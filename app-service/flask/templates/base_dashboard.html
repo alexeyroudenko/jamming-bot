@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+  <title>{% block title %}Jamming bot{% endblock %}</title>
+  <link rel="manifest" href="/flask_static/manifest.json">
+  <link rel="icon" href="/flask_static/favicon.ico" type="image/x-icon">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Jamming Bot">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#000000">
+  <link rel="apple-touch-icon" href="/flask_static/logo192.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="/flask_static/logo192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="/flask_static/logo512.png">
+  <meta name="description" content="Jamming bot visualization and monitoring">
+  <link rel="stylesheet" href="/flask_static/dashboard_panels.css">
+  {% block head_extra %}{% endblock %}
+</head>
+<body class="jb-dashboard {% block body_class %}{% endblock %}">
+  <div class="bot-topbar">
+    <section class="bot-panel bot-primary-panel">
+      <div class="bot-primary-head">
+        <div class="bot-brand">
+          <span class="bot-brand-kicker">Jamming Bot v2.1.0</span>
+        </div>
+        <div class="bot-nav-grid">
+          {% block primary_nav %}
+            {% include "components/bot_primary_nav_full.html" %}
+          {% endblock %}
+        </div>
+        <div class="bot-auth-slot">
+          <div class="guest-only">
+            <a class="bot-login-link" href="#" onclick="showLoginForm(); return false;">login <span id="login"></span></a>
+          </div>
+          <div class="admin-only">
+            <button class="bot-action bot-action-danger" onclick="handleLogout()">logout</button>
+          </div>
+        </div>
+      </div>
+      <div class="bot-section"></div>
+    </section>
+    <div class="bot-side-column">
+      {% include "components/bot_status_panel.html" %}
+      {% block topbar_extra %}{% endblock %}
+    </div>
+  </div>
+
+  {% block content %}{% endblock %}
+
+  <script src="https://code.jquery.com/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
+  <script src="/flask_static/dashboard_socket.js"></script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

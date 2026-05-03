@@ -1,0 +1,31 @@
+# Values for Helm chart coroot/coroot-ce → Coroot CR spec (see charts/coroot-ce/templates/coroot.yaml).
+# Chart versions pinned in Makefile target `k3s-coroot` / docs/monitoring/coroot-runbook.md
+#
+# Install (after operator): helm upgrade --install coroot coroot/coroot-ce -n coroot -f docs/monitoring/coroot-values.yaml
+
+metricsRefreshInterval: 15s
+
+# Minimal footprint for homelab/single-node k3s; bump for production loads.
+storage:
+  size: 10Gi
+
+prometheus:
+  storage:
+    size: 10Gi
+
+clickhouse:
+  shards: 1
+  replicas: 1
+  storage:
+    size: 40Gi
+
+ingress:
+  className: traefik
+  host: coroot.jamming-bot.arthew0.online
+  path: /
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  tls:
+    hosts:
+      - coroot.jamming-bot.arthew0.online
+    secretName: coroot-jamming-bot-tls
