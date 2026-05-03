@@ -25,6 +25,12 @@
       pointer-events: none;
       margin-top: -10px;
     }
+    body.tags-sentiment-vortex:not(.sv-panel-visible) .tags-vis-toolbar {
+      display: none !important;
+    }
+    body.tags-sentiment-vortex.sv-panel-visible .tags-vis-toolbar {
+      display: flex !important;
+    }
     .tags-vis-grain {
       pointer-events: none;
       position: fixed;
@@ -45,7 +51,7 @@
   </div>
 </nav>
 
-<div class="tags-vis-toolbar">
+<div id="semantic-force-panel" class="tags-vis-toolbar" aria-label="Параметры визуализации">
   <button type="button" class="tags-vis-btn" id="btn-show-text" aria-pressed="true">Hide text</button>
   <button type="button" class="tags-vis-btn" id="btn-auto-camera" aria-pressed="false">Auto camera</button>
   <button type="button" class="tags-vis-btn" id="btn-freeze">Freeze</button>
@@ -57,7 +63,7 @@
 <div class="tags-vis-scanlines" aria-hidden="true"></div>
 <div class="tags-vis-grain" aria-hidden="true"></div>
 <div class="tags-vis-canvas-host"><canvas id="vortex"></canvas></div>
-<p class="tags-vis-hint">VADER compound → radial drift · neutral fraction → subjectivity noise · refresh on tags_updated</p>
+<p class="tags-vis-hint">VADER compound → radial drift · neutral fraction → subjectivity noise · refresh on tags_updated · <kbd>i</kbd> panel</p>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js" crossorigin="anonymous"></script>
@@ -678,6 +684,21 @@
   tick();
   reloadData();
   setInterval(reloadData, REFRESH_MS);
+
+  function isTypingTarget(el) {
+    if (!el || !el.tagName) return false;
+    var t = el.tagName;
+    if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return true;
+    if (el.isContentEditable) return true;
+    return false;
+  }
+  window.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'i' && ev.key !== 'I') return;
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (isTypingTarget(document.activeElement)) return;
+    ev.preventDefault();
+    document.body.classList.toggle('sv-panel-visible');
+  });
 })();
 </script>
 </body>
