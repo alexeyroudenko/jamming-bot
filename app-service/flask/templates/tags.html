@@ -23,7 +23,7 @@
       left: 0;
       width: 100%;
       padding: 12px 20px;
-      font-size: 11px;
+      font-size: 8px;
       color: #666;
       z-index: 10;
       display: flex;
@@ -31,7 +31,7 @@
     }
     nav a { color: #555; text-decoration: none; margin-right: 12px; }
     nav a:hover { color: #fff; }
-    #status { color: #888; font-size: 10px; }
+    #status { color: #888; font-size: 7px; }
 
     canvas { display: block; cursor: default; }
 
@@ -47,7 +47,7 @@
       overflow-y: auto;
       padding: 6px 10px;
       font-family: monospace;
-      font-size: 10px;
+      font-size: 7px;
       color: #555;
       z-index: 20;
       pointer-events: auto;
@@ -78,11 +78,12 @@
 (function () {
   var API_BASE = {{ tags_api_base|tojson }};
   var API = (API_BASE || '') + '/api/tags/get/';
-  /** Sanitized ?days=N from page URL (fixed at load); omitted = all-time API. */
+  /** Sanitized ?days=N or ?day=N (fixed at load); omitted = all-time API. `day` is alias for `days`. */
   var DAYS_QUERY_SUFFIX = (function () {
     var sp = new URLSearchParams(window.location.search);
-    if (!sp.has('days')) return '';
-    var raw = sp.get('days');
+    var raw = null;
+    if (sp.has('days')) raw = sp.get('days');
+    else if (sp.has('day')) raw = sp.get('day');
     if (raw === null || raw === '') return '';
     var d = parseInt(raw, 10);
     if (isNaN(d) || d < 0) return '';
@@ -90,6 +91,8 @@
   })();
   if (DAYS_QUERY_SUFFIX === '?days=0') {
     document.title = 'Jamming bot — Tag Cloud (today)';
+  } else if (DAYS_QUERY_SUFFIX === '?days=1') {
+    document.title = 'Jamming bot — Tag Cloud (1 day)';
   } else if (DAYS_QUERY_SUFFIX === '?days=7') {
     document.title = 'Jamming bot — Tag Cloud (7 days)';
   }
@@ -100,15 +103,29 @@
   var REPEL_STRENGTH = 42;
   var RETURN_SPEED = 0.09;
   var FONT = 'monospace';
-  var PAD = 12;
+  /** Все размеры шрифта облака: −30% к прежним. */
+  var FONT_SIZE_SCALE = 0.7;
+  /** Меньше — плотнее укладка в d3-cloud (px между спрайтами). */
+  var CLOUD_PADDING = 3;
   var HIGHLIGHT_COLOR = 'rgb(255,0,0)';
-  var HIGHLIGHT_DECAY = 0.015;
+  var HIGHLIGHT_FLASH_MS = 220;
   var RESIZE_LAYOUT_MS = 220;
   var layoutGen = 0;
   var lastLayoutSignature = '';
   var resizeLayoutTimer = null;
   var cloudLayoutW = 256;
   var cloudLayoutH = 256;
+
+  function scheduleHighlightFlashEnd() {
+    if (highlightFlashTimer) clearTimeout(highlightFlashTimer);
+    highlightFlashTimer = setTimeout(function () {
+      highlightFlashTimer = null;
+      for (var j = 0; j < particles.length; j++) {
+        particles[j].highlightT = 0;
+      }
+      redraw();
+    }, HIGHLIGHT_FLASH_MS);
+  }
 
   function highlightTags(names) {
     for (var i = 0; i < names.length; i++) {
@@ -117,6 +134,8 @@
         p.highlightT = 1.0;
       }
     }
+    redraw();
+    scheduleHighlightFlashEnd();
   }
 
   var statusEl = document.getElementById('status');
@@ -148,40 +167,7 @@
   var particleMap = {};
   var particles = [];
   var lastTagRows = null;
-  var highlightRafId = null;
-  var revealTimer = null;
-  var REVEAL_DT_MS = 25;
-
-  function cancelRevealAnimation() {
-    if (revealTimer !== null) {
-      clearTimeout(revealTimer);
-      revealTimer = null;
-    }
-  }
-
-  /** После компоновки: от меньшего размера к большему, шаг REVEAL_DT_MS. */
-  function startRevealAnimation() {
-    cancelRevealAnimation();
-    if (!particles.length) return;
-    var order = particles.slice().sort(function (a, b) {
-      var sa = a.targetSize != null ? a.targetSize : a.size;
-      var sb = b.targetSize != null ? b.targetSize : b.size;
-      if (sa !== sb) return sa - sb;
-      return String(a.text).localeCompare(String(b.text));
-    });
-    var idx = 0;
-    function step() {
-      if (idx >= order.length) {
-        revealTimer = null;
-        return;
-      }
-      order[idx].opacity = 1;
-      idx++;
-      redraw();
-      revealTimer = window.setTimeout(step, REVEAL_DT_MS);
-    }
-    revealTimer = window.setTimeout(step, REVEAL_DT_MS);
-  }
+  var highlightFlashTimer = null;
 
   function syncContentMetrics() {
     contentTop = NAV_OFFSET;
@@ -217,15 +203,15 @@
   /**
    * Размер по рангу (0 = самый частый): крупные / средний пояс / мелкий хвост (доли ниже).
    */
-  var SIZE_LARGE_FRAC = 0.03;
-  var SIZE_MEDIUM_FRAC = 0.06;
+  var SIZE_LARGE_FRAC = 0.01;
+  var SIZE_MEDIUM_FRAC = 0.2;
   var SMALL_TAIL_EXP = 4.0;
 
   function calcSizeForRank(rank, total) {
     var ref = Math.min(W, contentH);
-    var maxSize = ref / 9.2;
-    var minSize = Math.max(5, ref / 52);
-    if (total <= 1) return Math.round(maxSize);
+    var maxSize = (ref / 8.2) * FONT_SIZE_SCALE;
+    var minSize = Math.max(5, ref / 52) * FONT_SIZE_SCALE;
+    if (total <= 1) return Math.max(1, Math.round(maxSize));
     var n = total;
     var nL = Math.max(1, Math.round(n * SIZE_LARGE_FRAC));
     var nM = Math.max(1, Math.round(n * SIZE_MEDIUM_FRAC));
@@ -252,7 +238,7 @@
 
   var WORD_COLOR = '#e8e8ed';
 
-  /** ~60% горизонтально, ~40% вертикально (стабильно по тексту). */
+  /** Как на [Word Cloud](https://www.jasondavies.com/wordcloud/): в основном горизонтально, часть вертикально. */
   function cloudRotateDeg(text) {
     var s = String(text || '');
     var h = 0;
@@ -313,7 +299,7 @@
     d3.layout.cloud()
       .size([layoutW, layoutH])
       .words(words)
-      .padding(PAD)
+      .padding(CLOUD_PADDING)
       .font(FONT)
       .fontStyle('normal')
       .fontWeight('bold')
@@ -321,7 +307,7 @@
       .rotate(function (d) {
         return cloudRotateDeg(d.text);
       })
-      .spiral('rectangular')
+      .spiral('archimedean')
       .on('end', function (placedWords) {
         if (myGen !== layoutGen) return;
         callback(placedWords || []);
@@ -335,20 +321,57 @@
       var w = placedWords[i];
       placedMap[w.text] = w;
     }
-    var scaleX = (0.96 * W) / cloudLayoutW;
-    var scaleY = (0.96 * contentH) / cloudLayoutH;
-    var scale = Math.min(scaleX, scaleY);
+    var marginX = 0.02;
+    var marginY = 0.025;
+    var availW = W * (1 - 2 * marginX);
+    var availH = contentH * (1 - 2 * marginY);
     var cx = W * 0.5;
     var cy = cloudCenterY;
-    /** Горизонтальный овал после равномерного scale (визуально шире, ниже). */
-    var ovalKX = 1.14;
-    var ovalKY = 0.86;
+
+    var minLx = Infinity;
+    var maxLx = -Infinity;
+    var minLy = Infinity;
+    var maxLy = -Infinity;
+    for (var bi = 0; bi < placedWords.length; bi++) {
+      var bw = placedWords[bi];
+      if (typeof bw.x !== 'number' || bw.x0 == null) continue;
+      minLx = Math.min(minLx, bw.x + bw.x0);
+      maxLx = Math.max(maxLx, bw.x + bw.x1);
+      minLy = Math.min(minLy, bw.y + bw.y0);
+      maxLy = Math.max(maxLy, bw.y + bw.y1);
+    }
+    var bboxW = maxLx - minLx;
+    var bboxH = maxLy - minLy;
+    var midX = (minLx + maxLx) * 0.5;
+    var midY = (minLy + maxLy) * 0.5;
+    var packScale;
+    if (!isFinite(bboxW) || !isFinite(bboxH) || bboxW < 12 || bboxH < 12) {
+      packScale = Math.min(availW / cloudLayoutW, availH / cloudLayoutH);
+      midX = 0;
+      midY = 0;
+    } else {
+      packScale = Math.min(availW / bboxW, availH / bboxH) * 0.97;
+    }
+
+    /** Лёгкий овал по aspect ratio; коэффициенты ближе к 1 — меньше «дыр» по краям. */
+    var contentAR = W / Math.max(120, contentH);
+    var ovalKX;
+    var ovalKY;
+    if (contentAR >= 1) {
+      ovalKX = 1.01 + 0.06 * Math.min(1, (contentAR - 1) / 1.6);
+      ovalKY = 0.99 - 0.05 * Math.min(1, (contentAR - 1) / 1.6);
+    } else {
+      ovalKX = 0.99 + 0.04 * Math.min(1, 1 / contentAR - 1);
+      ovalKY = 1.005 + 0.03 * Math.min(1, 1 / contentAR - 1);
+    }
+    ovalKX = Math.min(1.1, Math.max(0.98, ovalKX));
+    ovalKY = Math.min(1.03, Math.max(0.92, ovalKY));
     for (var k in particleMap) {
       var p = particleMap[k];
       var pl = placedMap[k];
       if (pl) {
-        p.homeX = cx + pl.x * scale * ovalKX;
-        p.homeY = cy + pl.y * scale * ovalKY;
+        p.homeX = cx + (pl.x - midX) * packScale * ovalKX;
+        p.homeY = cy + (pl.y - midY) * packScale * ovalKY;
         p.rotate = typeof pl.rotate === 'number' ? pl.rotate : 0;
         var fs = p.targetSize || p.size;
         p._w = measureWord(p.text, fs);
@@ -435,29 +458,16 @@
     function finishLayout(placedWords) {
       applyLayoutFromPlaced(placedWords || []);
       pruneUnplacedParticles(placedWords || []);
-      syncParticlesLayout(false);
-      for (var ki = 0; ki < particles.length; ki++) {
-        particles[ki].opacity = 0;
-      }
+      syncParticlesLayout(true);
       redraw();
-      ensureHighlightLoop();
-      startRevealAnimation();
     }
 
     if (sig !== lastLayoutSignature) {
       lastLayoutSignature = sig;
-      cancelRevealAnimation();
-      syncParticlesLayout(false);
-      for (var kj = 0; kj < particles.length; kj++) {
-        particles[kj].opacity = 0;
-      }
-      redraw();
       runCloudLayout(rowsForCloud, finishLayout);
     } else {
-      cancelRevealAnimation();
       syncParticlesLayout();
       redraw();
-      ensureHighlightLoop();
     }
   }
 
@@ -553,35 +563,6 @@
       }
     }
     ctx.globalAlpha = 1;
-  }
-
-  function ensureHighlightLoop() {
-    var need = false;
-    for (var i = 0; i < particles.length; i++) {
-      if (particles[i].highlightT > 0) {
-        need = true;
-        break;
-      }
-    }
-    if (!need || highlightRafId != null) return;
-
-    function tick() {
-      var any = false;
-      for (var j = 0; j < particles.length; j++) {
-        var p = particles[j];
-        if (p.highlightT > 0) {
-          p.highlightT = Math.max(0, p.highlightT - HIGHLIGHT_DECAY);
-          if (p.highlightT > 0) any = true;
-        }
-      }
-      redraw();
-      if (any) {
-        highlightRafId = requestAnimationFrame(tick);
-      } else {
-        highlightRafId = null;
-      }
-    }
-    highlightRafId = requestAnimationFrame(tick);
   }
 
   fetchAndDraw();
