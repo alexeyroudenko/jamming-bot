@@ -36,6 +36,7 @@
     canvas { display: block; cursor: default; }
 
     #console {
+      display: none;
       position: fixed;
       bottom: 0;
       left: 0;
@@ -56,7 +57,7 @@
     #console::-webkit-scrollbar { display: none; }
     #console .line { white-space: pre; margin: 0; }
     #console .ts { color: #333; }
-    #console .ws { color: #4a8; }
+    #console .ws { color: #ff0000; }
   </style>
 </head>
 <body>
@@ -81,14 +82,16 @@
   var REPEL_STRENGTH = 80;
   var RETURN_SPEED = 0.06;
   var FONT = 'monospace';
-  var PAD = 6;
-  var HIGHLIGHT_COLOR = 'rgb(0,255,160)';
+  var PAD = 8;
+  var HIGHLIGHT_COLOR = 'rgb(255,0,0)';
   var HIGHLIGHT_DECAY = 0.015;
   var FLOAT_AMPLITUDE = 8;
   var RESIZE_LAYOUT_MS = 220;
   var layoutGen = 0;
   var lastLayoutSignature = '';
   var resizeLayoutTimer = null;
+  var cloudLayoutW = 256;
+  var cloudLayoutH = 256;
 
   function highlightTags(names) {
     for (var i = 0; i < names.length; i++) {
@@ -182,7 +185,7 @@
   });
 
   function calcSize(count, maxCount) {
-    var minSize = 11;
+    var minSize = 11 / 3;
     var maxSize = Math.min(W, H) / 9;
     var ratio = Math.sqrt(count / maxCount);
     return minSize + ratio * (maxSize - minSize);
@@ -197,6 +200,15 @@
   function measureWord(text, size) {
     ctx.font = size + 'px ' + FONT;
     return ctx.measureText(text).width;
+  }
+
+  function hashStringAngleRad(key) {
+    var h = 0;
+    for (var i = 0; i < key.length; i++) {
+      h = ((h << 5) - h) + key.charCodeAt(i);
+      h |= 0;
+    }
+    return (Math.abs(h) % 360) * Math.PI / 180;
   }
 
   function tagsSignature(rows) {
@@ -231,9 +243,15 @@
         count: r.count
       });
     }
+    var layoutW = Math.floor(W * 0.92);
+    var layoutH = Math.floor(H * 0.52);
+    if (layoutW < 64) layoutW = 64;
+    if (layoutH < 64) layoutH = 64;
+    cloudLayoutW = layoutW;
+    cloudLayoutH = layoutH;
     var myGen = ++layoutGen;
     d3.layout.cloud()
-      .size([W, H])
+      .size([layoutW, layoutH])
       .words(words)
       .padding(PAD)
       .font(FONT)
@@ -261,21 +279,28 @@
     if (placedWords.length < nActive) {
       console.warn('[tags cloud] placed ' + placedWords.length + ' / ' + nActive);
     }
+    var scaleX = (0.92 * W) / cloudLayoutW;
+    var scaleY = (0.72 * H) / cloudLayoutH;
+    var orphanR = Math.min(W, H) * 0.38;
     for (var k in particleMap) {
       var p = particleMap[k];
       if (p.removing) continue;
       var pl = placedMap[k];
       if (pl) {
-        p.homeX = W / 2 + pl.x;
-        p.homeY = H / 2 + pl.y;
+        p.homeX = W / 2 + pl.x * scaleX;
+        p.homeY = H / 2 + pl.y * scaleY;
         p.rotate = typeof pl.rotate === 'number' ? pl.rotate : 0;
         var fs = p.targetSize || p.size;
         p._w = measureWord(p.text, fs);
         p._h = fs;
       } else {
-        p.homeX = W / 2;
-        p.homeY = H / 2;
+        var ang = hashStringAngleRad(k);
+        p.homeX = W / 2 + orphanR * Math.cos(ang);
+        p.homeY = H / 2 + orphanR * Math.sin(ang);
         p.rotate = 0;
+        var fsOr = p.targetSize || p.size;
+        p._w = measureWord(p.text, fsOr);
+        p._h = fsOr;
       }
     }
   }
