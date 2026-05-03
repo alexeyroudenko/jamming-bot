@@ -31,7 +31,7 @@
     }
     nav a { color: #555; text-decoration: none; margin-right: 12px; }
     nav a:hover { color: #fff; }
-    #status { color: #333; font-size: 10px; }
+    #status { color: #888; font-size: 10px; }
 
     canvas { display: block; cursor: default; }
 
@@ -78,15 +78,14 @@
 (function () {
   var API_BASE = {{ tags_api_base|tojson }};
   var API = (API_BASE || '') + '/api/tags/get/';
-  var REFRESH_INTERVAL = 30000;
-  var REPEL_RADIUS = 150;
-  var REPEL_STRENGTH = 42;
-  var RETURN_SPEED = 0.09;
-  var FONT = 'monospace';
-  var PAD = 12;
+  var REFRESH_INTERVAL = 60000;
+  /** Single family for canvas + d3-cloud collision canvas (must match). */
+  var FONT = 'Segoe UI';
+  var PAD = 2;
+  /** Max tags passed to d3-cloud (by count). */
+  var MAX_CLOUD_TAGS = 200;
   var HIGHLIGHT_COLOR = 'rgb(255,0,0)';
   var HIGHLIGHT_DECAY = 0.015;
-  var FLOAT_AMPLITUDE = 3;
   var RESIZE_LAYOUT_MS = 220;
   var layoutGen = 0;
   var lastLayoutSignature = '';
@@ -97,7 +96,7 @@
   function highlightTags(names) {
     for (var i = 0; i < names.length; i++) {
       var p = particleMap[names[i]];
-      if (p && !p.removing) {
+      if (p) {
         p.highlightT = 1.0;
       }
     }
@@ -125,17 +124,60 @@
   }
 
   var W, H;
-  var mouse = { x: -9999, y: -9999 };
+  var NAV_OFFSET = 48;
+  var contentTop = NAV_OFFSET;
+  var contentH = 400;
+  var cloudCenterY = 0;
   var particleMap = {};
   var particles = [];
-  var raf;
   var lastTagRows = null;
+  var highlightRafId = null;
+  var revealTimer = null;
+  var REVEAL_DT_MS = 25;
+
+  function cancelRevealAnimation() {
+    if (revealTimer !== null) {
+      clearTimeout(revealTimer);
+      revealTimer = null;
+    }
+  }
+
+  /** После компоновки: от меньшего размера к большему, шаг REVEAL_DT_MS. */
+  function startRevealAnimation() {
+    cancelRevealAnimation();
+    if (!particles.length) return;
+    var order = particles.slice().sort(function (a, b) {
+      var sa = a.targetSize != null ? a.targetSize : a.size;
+      var sb = b.targetSize != null ? b.targetSize : b.size;
+      if (sa !== sb) return sa - sb;
+      return String(a.text).localeCompare(String(b.text));
+    });
+    var idx = 0;
+    function step() {
+      if (idx >= order.length) {
+        revealTimer = null;
+        return;
+      }
+      order[idx].opacity = 1;
+      idx++;
+      redraw();
+      revealTimer = window.setTimeout(step, REVEAL_DT_MS);
+    }
+    revealTimer = window.setTimeout(step, REVEAL_DT_MS);
+  }
+
+  function syncContentMetrics() {
+    contentTop = NAV_OFFSET;
+    contentH = Math.max(120, H - contentTop - 16);
+    cloudCenterY = contentTop + contentH * 0.5;
+  }
 
   function resize() {
     W = window.innerWidth;
     H = window.innerHeight;
     canvas.width = W;
     canvas.height = H;
+    syncContentMetrics();
   }
   resize();
 
@@ -155,61 +197,58 @@
     scheduleResizeLayout();
   });
 
-  canvas.addEventListener('mousemove', function (e) {
-    mouse.x = e.clientX;
-    mouse.y = e.clientY;
-  });
-  canvas.addEventListener('mouseleave', function () {
-    mouse.x = -9999;
-    mouse.y = -9999;
-  });
+  /**
+   * Размер по рангу (0 = самый частый): крупные / средний пояс / мелкий хвост (доли ниже).
+   */
+  var SIZE_LARGE_FRAC = 0.03;
+  var SIZE_MEDIUM_FRAC = 0.06;
+  var SMALL_TAIL_EXP = 4.0;
 
-  canvas.addEventListener('touchstart', function (e) {
-    e.preventDefault();
-    var t = e.touches[0];
-    mouse.x = t.clientX;
-    mouse.y = t.clientY;
-  }, { passive: false });
-  canvas.addEventListener('touchmove', function (e) {
-    e.preventDefault();
-    var t = e.touches[0];
-    mouse.x = t.clientX;
-    mouse.y = t.clientY;
-  }, { passive: false });
-  canvas.addEventListener('touchend', function () {
-    mouse.x = -9999;
-    mouse.y = -9999;
-  });
-  canvas.addEventListener('touchcancel', function () {
-    mouse.x = -9999;
-    mouse.y = -9999;
-  });
-
-  function calcSize(count, maxCount) {
-    var maxSize = Math.min(W, H) / 9;
-    var minSize = maxSize / 7;
-    var ratio = Math.sqrt(count / maxCount);
-    return minSize + ratio * (maxSize - minSize);
+  function calcSizeForRank(rank, total) {
+    var ref = Math.min(W, contentH);
+    var maxSize = ref / 9.2;
+    var minSize = Math.max(5, ref / 52);
+    if (total <= 1) return Math.round(maxSize);
+    var n = total;
+    var nL = Math.max(1, Math.round(n * SIZE_LARGE_FRAC));
+    var nM = Math.max(1, Math.round(n * SIZE_MEDIUM_FRAC));
+    if (nL + nM > n) nM = Math.max(1, n - nL);
+    var nS = n - nL - nM;
+    var d = maxSize - minSize;
+    var span;
+    if (rank < nL) {
+      var t = nL <= 1 ? 0 : rank / (nL - 1);
+      span = 1 - t * 0.14;
+    } else if (rank < nL + nM) {
+      var i = rank - nL;
+      var u = nM <= 1 ? 0 : i / (nM - 1);
+      span = 0.8 - u * 0.26;
+    } else if (nS <= 0) {
+      span = 0.5;
+    } else {
+      var j = rank - nL - nM;
+      var v = nS <= 1 ? 0 : j / (nS - 1);
+      span = 0.52 * Math.pow(1 - v, SMALL_TAIL_EXP);
+    }
+    return Math.max(minSize, Math.round(minSize + span * d));
   }
 
-  function calcColor(count, maxCount) {
-    var ratio = Math.sqrt(count / maxCount);
-    var bright = 35 + Math.round(ratio * 190);
-    return 'rgb(' + bright + ',' + bright + ',' + bright + ')';
+  var WORD_COLOR = '#e8e8ed';
+
+  /** ~60% горизонтально, ~40% вертикально (стабильно по тексту). */
+  function cloudRotateDeg(text) {
+    var s = String(text || '');
+    var h = 0;
+    for (var i = 0; i < s.length; i++) {
+      h = ((h << 5) - h) + s.charCodeAt(i);
+      h |= 0;
+    }
+    return (Math.abs(h) % 10) < 6 ? 0 : 90;
   }
 
   function measureWord(text, size) {
-    ctx.font = size + 'px ' + FONT;
+    ctx.font = 'bold ' + size + 'px ' + FONT;
     return ctx.measureText(text).width;
-  }
-
-  function hashStringAngleRad(key) {
-    var h = 0;
-    for (var i = 0; i < key.length; i++) {
-      h = ((h << 5) - h) + key.charCodeAt(i);
-      h |= 0;
-    }
-    return (Math.abs(h) % 360) * Math.PI / 180;
   }
 
   function tagsSignature(rows) {
@@ -225,29 +264,32 @@
     return parts.join('|');
   }
 
+  function rowsForCloudLayout(tagRows) {
+    var sorted = tagRows.slice().sort(function (a, b) {
+      return (b.count || 0) - (a.count || 0);
+    });
+    return sorted.slice(0, Math.min(sorted.length, MAX_CLOUD_TAGS));
+  }
+
   function runCloudLayout(rows, callback) {
     if (typeof d3 === 'undefined' || !d3.layout || typeof d3.layout.cloud !== 'function') {
       console.error('d3.layout.cloud is not available');
       callback([]);
       return;
     }
-    var maxCount = 1;
-    for (var i = 0; i < rows.length; i++) {
-      if (rows[i].count > maxCount) maxCount = rows[i].count;
-    }
+    var nRows = rows.length;
     var words = [];
-    for (var j = 0; j < rows.length; j++) {
+    for (var j = 0; j < nRows; j++) {
       var r = rows[j];
       words.push({
         text: r.name,
-        size: Math.round(calcSize(r.count, maxCount)),
+        size: calcSizeForRank(j, nRows),
         count: r.count
       });
     }
-    var layoutW = Math.floor(W * 0.92);
-    var layoutH = Math.floor(H * 0.52);
-    if (layoutW < 64) layoutW = 64;
-    if (layoutH < 64) layoutH = 64;
+    /* Размер полотна ≈ как у области контента — то же соотношение сторон, что и у экрана под навбаром (d3 кладёт слова в этот прямоугольник). */
+    var layoutW = Math.max(64, Math.floor(W * 0.96));
+    var layoutH = Math.max(64, Math.floor(contentH * 0.96));
     cloudLayoutW = layoutW;
     cloudLayoutH = layoutH;
     var myGen = ++layoutGen;
@@ -257,9 +299,12 @@
       .padding(PAD)
       .font(FONT)
       .fontStyle('normal')
-      .fontWeight('normal')
+      .fontWeight('bold')
       .fontSize(function (d) { return d.size; })
-      .rotate(function () { return Math.random() < 0.5 ? 0 : 90; })
+      .rotate(function (d) {
+        return cloudRotateDeg(d.text);
+      })
+      .spiral('rectangular')
       .on('end', function (placedWords) {
         if (myGen !== layoutGen) return;
         callback(placedWords || []);
@@ -273,63 +318,67 @@
       var w = placedWords[i];
       placedMap[w.text] = w;
     }
-    var nActive = 0;
-    for (var key in particleMap) {
-      if (!particleMap[key].removing) nActive++;
-    }
-    if (placedWords.length < nActive) {
-      console.warn('[tags cloud] placed ' + placedWords.length + ' / ' + nActive);
-    }
-    var scaleX = (0.92 * W) / cloudLayoutW;
-    var scaleY = (0.72 * H) / cloudLayoutH;
+    var scaleX = (0.96 * W) / cloudLayoutW;
+    var scaleY = (0.96 * contentH) / cloudLayoutH;
     var scale = Math.min(scaleX, scaleY);
-    var orphanR = Math.min(W, H) * 0.38;
+    var cx = W * 0.5;
+    var cy = cloudCenterY;
+    /** Горизонтальный овал после равномерного scale (визуально шире, ниже). */
+    var ovalKX = 1.14;
+    var ovalKY = 0.86;
     for (var k in particleMap) {
       var p = particleMap[k];
-      if (p.removing) continue;
       var pl = placedMap[k];
       if (pl) {
-        p.homeX = W / 2 + pl.x * scale;
-        p.homeY = H / 2 + pl.y * scale;
+        p.homeX = cx + pl.x * scale * ovalKX;
+        p.homeY = cy + pl.y * scale * ovalKY;
         p.rotate = typeof pl.rotate === 'number' ? pl.rotate : 0;
         var fs = p.targetSize || p.size;
         p._w = measureWord(p.text, fs);
         p._h = fs;
-      } else {
-        var ang = hashStringAngleRad(k);
-        p.homeX = W / 2 + orphanR * Math.cos(ang);
-        p.homeY = H / 2 + orphanR * Math.sin(ang);
-        p.rotate = 0;
-        var fsOr = p.targetSize || p.size;
-        p._w = measureWord(p.text, fsOr);
-        p._h = fsOr;
       }
     }
   }
 
-  function ambientNoiseOffset(p, timeSec) {
-    var phase = p.noisePhase || 0;
-    return {
-      x: Math.sin(timeSec * 0.42 + phase) * p.driftAmp + Math.cos(timeSec * 0.17 + phase * 0.7) * p.driftAmp * 0.35,
-      y: Math.cos(timeSec * 0.36 + phase * 1.3) * p.driftAmp * 0.7 + Math.sin(timeSec * 0.21 + phase * 0.4) * p.driftAmp * 0.28
-    };
+  function pruneUnplacedParticles(placedWords) {
+    var placedSet = {};
+    for (var i = 0; i < placedWords.length; i++) {
+      placedSet[placedWords[i].text] = true;
+    }
+    for (var key in particleMap) {
+      if (!placedSet[key]) delete particleMap[key];
+    }
+    particles = [];
+    for (var k in particleMap) {
+      particles.push(particleMap[k]);
+    }
+  }
+
+  function syncParticlesLayout(fullOpacity) {
+    var op = fullOpacity !== false;
+    for (var key in particleMap) {
+      var p = particleMap[key];
+      if (p.targetSize != null) p.size = p.targetSize;
+      if (p.targetColor != null) p.color = p.targetColor;
+      p.x = p.homeX;
+      p.y = p.homeY;
+      if (op) p.opacity = 1;
+    }
   }
 
   function mergeParticles(tagRows) {
     lastTagRows = tagRows;
     var sig = tagsSignature(tagRows);
-    var maxCount = 1;
-    for (var i = 0; i < tagRows.length; i++) {
-      if (tagRows[i].count > maxCount) maxCount = tagRows[i].count;
-    }
+    var rowsForCloud = rowsForCloudLayout(tagRows);
+    var nCloud = rowsForCloud.length;
 
     var newMap = {};
 
-    for (var i = 0; i < tagRows.length; i++) {
-      var t = tagRows[i];
+    for (var i = 0; i < rowsForCloud.length; i++) {
+      var t = rowsForCloud[i];
       var key = t.name;
-      var size = calcSize(t.count, maxCount);
-      var color = calcColor(t.count, maxCount);
+      var size = calcSizeForRank(i, nCloud);
+      var color = WORD_COLOR;
 
       if (particleMap[key]) {
         var p = particleMap[key];
@@ -338,38 +387,24 @@
         p.count = t.count;
         p._w = measureWord(p.text, size);
         p._h = size;
-        p.removing = false;
-        p.opacity = typeof p.opacity === 'number' ? p.opacity : 1;
         newMap[key] = p;
       } else {
         var p = {
           text: t.name,
           count: t.count,
-          size: size * 0.01,
+          size: size,
           targetSize: size,
           color: color,
           targetColor: color,
           homeX: W / 2, homeY: H / 2,
           x: W / 2, y: H / 2,
-          vx: 0, vy: 0,
-          opacity: 0,
-          removing: false,
+          opacity: 1,
           highlightT: 0,
-          noisePhase: Math.random() * Math.PI * 2,
-          driftAmp: 1.5 + Math.random() * FLOAT_AMPLITUDE,
           rotate: 0,
           _w: 0, _h: 0
         };
         p._w = measureWord(p.text, size);
         p._h = size;
-        newMap[key] = p;
-      }
-    }
-
-    for (var key in particleMap) {
-      if (!newMap[key]) {
-        var p = particleMap[key];
-        p.removing = true;
         newMap[key] = p;
       }
     }
@@ -380,11 +415,32 @@
       particles.push(particleMap[key]);
     }
 
+    function finishLayout(placedWords) {
+      applyLayoutFromPlaced(placedWords || []);
+      pruneUnplacedParticles(placedWords || []);
+      syncParticlesLayout(false);
+      for (var ki = 0; ki < particles.length; ki++) {
+        particles[ki].opacity = 0;
+      }
+      redraw();
+      ensureHighlightLoop();
+      startRevealAnimation();
+    }
+
     if (sig !== lastLayoutSignature) {
       lastLayoutSignature = sig;
-      runCloudLayout(tagRows, function (placedWords) {
-        applyLayoutFromPlaced(placedWords);
-      });
+      cancelRevealAnimation();
+      syncParticlesLayout(false);
+      for (var kj = 0; kj < particles.length; kj++) {
+        particles[kj].opacity = 0;
+      }
+      redraw();
+      runCloudLayout(rowsForCloud, finishLayout);
+    } else {
+      cancelRevealAnimation();
+      syncParticlesLayout();
+      redraw();
+      ensureHighlightLoop();
     }
   }
 
@@ -398,8 +454,9 @@
           return;
         }
         mergeParticles(tags);
-        if (!raf) animate();
-        statusEl.textContent = tags.length + ' tags';
+        var shown = Object.keys(particleMap).length;
+        statusEl.textContent =
+          tags.length + ' tags · cloud ' + shown + (tags.length > MAX_CLOUD_TAGS ? ' (top ' + MAX_CLOUD_TAGS + ' by count)' : '');
       })
       .catch(function (err) {
         console.error(err);
@@ -407,77 +464,45 @@
       });
   }
 
+  function parseColorRgb(str) {
+    if (!str) return [128, 128, 128];
+    var s = String(str).trim();
+    if (s.charAt(0) === '#') {
+      var hex = s.slice(1);
+      if (hex.length === 6) {
+        return [
+          parseInt(hex.slice(0, 2), 16),
+          parseInt(hex.slice(2, 4), 16),
+          parseInt(hex.slice(4, 6), 16)
+        ];
+      }
+    }
+    var m = s.match(/\d+/g);
+    if (m && m.length >= 3) return [Number(m[0]), Number(m[1]), Number(m[2])];
+    return [128, 128, 128];
+  }
+
   function lerpColor(from, to, t) {
-    var f = from.match(/\d+/g).map(Number);
-    var tt = to.match(/\d+/g).map(Number);
+    var f = parseColorRgb(from);
+    var tt = parseColorRgb(to);
     var r = Math.round(f[0] + (tt[0] - f[0]) * t);
     var g = Math.round(f[1] + (tt[1] - f[1]) * t);
     var b = Math.round(f[2] + (tt[2] - f[2]) * t);
     return 'rgb(' + r + ',' + g + ',' + b + ')';
   }
 
-  function animate() {
+  function redraw() {
     ctx.clearRect(0, 0, W, H);
-    var nowSec = performance.now() * 0.001;
-
-    var toRemove = [];
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
 
     for (var i = 0; i < particles.length; i++) {
       var p = particles[i];
+      var baseOp = typeof p.opacity === 'number' ? p.opacity : 1;
+      if (baseOp <= 0) continue;
 
-      // Animate size towards target
-      if (p.targetSize) {
-        p.size += (p.targetSize - p.size) * 0.08;
-      }
-
-      // Animate color
-      if (p.targetColor && p.color !== p.targetColor) {
-        p.color = lerpColor(p.color, p.targetColor, 0.08);
-      }
-
-      // Fade in new / fade out removed
-      if (p.removing) {
-        p.opacity -= 0.02;
-        if (p.opacity <= 0) {
-          toRemove.push(p.text);
-          continue;
-        }
-      } else if (p.opacity < 1) {
-        p.opacity = Math.min(1, p.opacity + 0.03);
-      }
-
-      // Mouse repel
-      var dx = p.x - mouse.x;
-      var dy = p.y - mouse.y;
-      var dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist < REPEL_RADIUS && dist > 0) {
-        var force = (REPEL_RADIUS - dist) / REPEL_RADIUS * REPEL_STRENGTH;
-        p.vx += (dx / dist) * force * 0.08;
-        p.vy += (dy / dist) * force * 0.08;
-      }
-
-      // Spring back to home
-      var drift = ambientNoiseOffset(p, nowSec);
-      p.vx += (p.homeX + drift.x - p.x) * RETURN_SPEED;
-      p.vy += (p.homeY + drift.y - p.y) * RETURN_SPEED;
-
-      p.vx *= 0.76;
-      p.vy *= 0.76;
-
-      p.x += p.vx;
-      p.y += p.vy;
-
-      // Highlight decay
-      if (p.highlightT > 0) {
-        p.highlightT = Math.max(0, p.highlightT - HIGHLIGHT_DECAY);
-      }
-
-      // Draw (support d3-cloud rotation: 0° / 90°)
       var fontSize = Math.round(p.size);
-      ctx.font = fontSize + 'px ' + FONT;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+      ctx.font = 'bold ' + fontSize + 'px ' + FONT;
 
       var rot = typeof p.rotate === 'number' ? p.rotate : 0;
       var rad = rot * Math.PI / 180;
@@ -491,32 +516,55 @@
         if (shadowBlur) {
           ctx.shadowColor = HIGHLIGHT_COLOR;
           ctx.shadowBlur = shadowBlur;
+        } else if (alpha > 0.4) {
+          ctx.shadowColor = 'rgba(0,0,0,0.85)';
+          ctx.shadowBlur = 3;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 1;
         }
         ctx.fillText(p.text, 0, 0);
         ctx.restore();
       }
 
+      var op = baseOp;
       if (p.highlightT > 0) {
         var ht = p.highlightT;
-        drawLabel(HIGHLIGHT_COLOR, p.opacity * ht * 0.6, 20 * ht);
-        drawLabel(lerpColor(p.color, HIGHLIGHT_COLOR, ht), p.opacity, 0);
+        drawLabel(HIGHLIGHT_COLOR, op * ht * 0.6, 20 * ht);
+        drawLabel(lerpColor(p.color, HIGHLIGHT_COLOR, ht), op, 0);
       } else {
-        drawLabel(p.color, p.opacity, 0);
+        drawLabel(p.color, op, 0);
       }
     }
-
     ctx.globalAlpha = 1;
+  }
 
-    // Cleanup fully faded particles
-    for (var i = 0; i < toRemove.length; i++) {
-      delete particleMap[toRemove[i]];
+  function ensureHighlightLoop() {
+    var need = false;
+    for (var i = 0; i < particles.length; i++) {
+      if (particles[i].highlightT > 0) {
+        need = true;
+        break;
+      }
     }
-    if (toRemove.length) {
-      particles = [];
-      for (var key in particleMap) particles.push(particleMap[key]);
-    }
+    if (!need || highlightRafId != null) return;
 
-    raf = requestAnimationFrame(animate);
+    function tick() {
+      var any = false;
+      for (var j = 0; j < particles.length; j++) {
+        var p = particles[j];
+        if (p.highlightT > 0) {
+          p.highlightT = Math.max(0, p.highlightT - HIGHLIGHT_DECAY);
+          if (p.highlightT > 0) any = true;
+        }
+      }
+      redraw();
+      if (any) {
+        highlightRafId = requestAnimationFrame(tick);
+      } else {
+        highlightRafId = null;
+      }
+    }
+    highlightRafId = requestAnimationFrame(tick);
   }
 
   fetchAndDraw();

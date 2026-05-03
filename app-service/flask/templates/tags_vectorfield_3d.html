@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Jamming bot — Vector field 3D</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='tags_vis_shared.css') }}">
+  <style>
+    body:not(.vf3-toolbar-visible) .tags-vis-toolbar {
+      display: none !important;
+    }
+    body.vf3-toolbar-visible .tags-vis-toolbar {
+      display: flex !important;
+    }
+  </style>
 </head>
 <body class="tags-vis-body">
 
@@ -54,7 +62,7 @@
   <canvas id="vf3"></canvas>
   <div id="vf3-anchors-layer" class="vf-anchors-layer" aria-hidden="false"></div>
 </div>
-<p class="tags-vis-hint">Drag to orbit · wheel zoom · white particles in 3D · Field vectors: cyan segments · labels are projected (read-only)</p>
+<p class="tags-vis-hint">Drag to orbit · wheel zoom · white particles in 3D · Field vectors: cyan segments · labels are projected (read-only) · <kbd>i</kbd> toolbar</p>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js" crossorigin="anonymous"></script>
@@ -68,6 +76,7 @@
   var MAX_PARTICLES_CAPACITY = 28000;
   var FLOW_SPEED = 0.05;
   var RELOAD_DEBOUNCE_MS = 550;
+  var POLL_MS = 120000;
   /** Half-extent of simulation cube (world units). */
   var WORLD_HALF = 250;
 
@@ -1056,6 +1065,22 @@
 
   tick();
   reloadData();
+  setInterval(reloadData, POLL_MS);
+
+  function vf3IsTypingTarget(el) {
+    if (!el || !el.tagName) return false;
+    var t = el.tagName;
+    if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return true;
+    if (el.isContentEditable) return true;
+    return false;
+  }
+  window.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'i' && ev.key !== 'I') return;
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (vf3IsTypingTarget(document.activeElement)) return;
+    ev.preventDefault();
+    document.body.classList.toggle('vf3-toolbar-visible');
+  });
 })();
 </script>
 </body>
