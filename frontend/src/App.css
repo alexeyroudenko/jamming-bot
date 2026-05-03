@@ -48,8 +48,15 @@ code {
   font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
 }
 
+/* Высота полосы навигации — для embed и тегов (см. --app-nav-offset) */
+:root {
+  /* запас под перенос пунктов при узком окне */
+  --app-nav-offset: 2.5rem;
+}
+
 .Nav {
-  font-size:20px;
+  font-size: calc(40px / 3);
+  line-height: 1.2;
 }
 
 .textClass {
@@ -137,6 +144,34 @@ h1 {
   overflow: hidden;
 }
 
+/* iframe-страницы: не z-index:-1 (иначе уходит под чёрный фон App и «пустой экран») */
+.legacy.tag-embed-page {
+  z-index: 0;
+  top: var(--app-nav-offset);
+  height: calc(100% - var(--app-nav-offset));
+}
+
+.tag-embed-page {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.tag-embed-page__title {
+  display: block;
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b8b8b8;
+  flex-shrink: 0;
+}
+
+.tag-embed-page__frame {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 /* legacy .events / .struct_text removed — see .tags-page-root */
 
 .semantic {
@@ -153,7 +188,7 @@ h1 {
   z-index: 0;
   box-sizing: border-box;
   width: 100%;
-  height: calc(100vh - 5.5rem);
+  height: calc(100vh - var(--app-nav-offset) - 0.25rem);
   min-height: 260px;
   padding: 0;
   overflow: hidden;

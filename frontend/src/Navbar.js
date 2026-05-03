@@ -24,6 +24,9 @@ const Navbar = () => {
                     <NavLink to="/graph">
                     Graph
                     </NavLink>
+                    <NavLink to="/tags">
+                    Tags
+                    </NavLink>
                     <NavLink to="/tags3d">
                     Tags 3D
                     </NavLink>

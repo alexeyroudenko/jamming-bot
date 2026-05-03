@@ -63,7 +63,7 @@
 
 
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import './App.css';
 
 
@@ -74,6 +74,8 @@ import {
   Routes,
   Route,
   Navigate,
+  useNavigate,
+  useLocation,
 } from "react-router-dom";
 
 
@@ -84,8 +86,95 @@ import Steps from './components/Steps';
 import AtlasPage from './pages/atlas';
 import TagEmbedPage from './pages/tagEmbed';
 
+/** Tag embed routes cycled when autoswitch is on (key "a"). */
+const TAG_EMBED_AUTOSWITCH_ROUTES = [
+  '/tags',
+  '/tags3d',
+  '/sentiment-vortex',
+  '/vectorfield-3d',
+]
+const TAG_EMBED_AUTOSWITCH_MS = 2 * 60 * 1000
+
+const TAG_EMBED_AUTOSWITCH_STORAGE_KEY = 'jamming-bot:tag-embed-autoswitch'
+
+function readTagEmbedAutoswitchFromStorage() {
+  try {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem(TAG_EMBED_AUTOSWITCH_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeTagEmbedAutoswitchToStorage(enabled) {
+  try {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(TAG_EMBED_AUTOSWITCH_STORAGE_KEY, enabled ? '1' : '0')
+  } catch {
+    /* quota / private mode */
+  }
+}
+
 /** Routes + nav; wrapped by `Router` in `App` (and by `MemoryRouter` in tests). */
 export function AppContent() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [tagEmbedAutoswitch, setTagEmbedAutoswitch] = useState(readTagEmbedAutoswitchFromStorage)
+  const intervalRef = useRef(null)
+  const pathnameRef = useRef(location.pathname)
+
+  pathnameRef.current = location.pathname
+
+  const clearAutoswitchInterval = useCallback(() => {
+    if (intervalRef.current != null) {
+      window.clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.defaultPrevented) return
+      const el = e.target
+      if (
+        el &&
+        (el.tagName === 'INPUT' ||
+          el.tagName === 'TEXTAREA' ||
+          el.tagName === 'SELECT' ||
+          (typeof el.isContentEditable === 'boolean' && el.isContentEditable))
+      ) {
+        return
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      if (e.key !== 'a' && e.key !== 'A') return
+      e.preventDefault()
+      setTagEmbedAutoswitch((v) => !v)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  useEffect(() => {
+    writeTagEmbedAutoswitchToStorage(tagEmbedAutoswitch)
+    // eslint-disable-next-line no-console
+    console.log('[tag-embed-autoswitch]', tagEmbedAutoswitch ? 'on' : 'off')
+  }, [tagEmbedAutoswitch])
+
+  useEffect(() => {
+    if (!tagEmbedAutoswitch) {
+      clearAutoswitchInterval()
+      return
+    }
+    const tick = () => {
+      const path = pathnameRef.current
+      const i = TAG_EMBED_AUTOSWITCH_ROUTES.indexOf(path)
+      const nextIdx = i === -1 ? 0 : (i + 1) % TAG_EMBED_AUTOSWITCH_ROUTES.length
+      navigate(TAG_EMBED_AUTOSWITCH_ROUTES[nextIdx])
+    }
+    intervalRef.current = window.setInterval(tick, TAG_EMBED_AUTOSWITCH_MS)
+    return clearAutoswitchInterval
+  }, [tagEmbedAutoswitch, navigate, clearAutoswitchInterval])
+
   return (
     <>
       <Navbar />
@@ -96,6 +185,10 @@ export function AppContent() {
         <Route path="/atlas" element={<AtlasPage />} />
         <Route path="/words" element={<Navigate to="/semantic" replace />} />
         <Route path="/graph" element={<Blank />} />
+        <Route
+          path="/tags"
+          element={<TagEmbedPage title="Tags" path="/tags/" />}
+        />
         <Route
           path="/tags3d"
           element={<TagEmbedPage title="Tags 3D" path="/tags/3d/" />}

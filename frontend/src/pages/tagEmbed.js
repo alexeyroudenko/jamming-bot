@@ -9,10 +9,11 @@ import '../App.css'
 export default function TagEmbedPage({ title, path }) {
   const src = tagsEmbedUrl(path)
   return (
-    <div className="legacy" style={{ width: '100%', height: '100%' }}>
-      <h1>{title}</h1>
+    <div className="legacy tag-embed-page" style={{ width: '100%', height: '100%' }}>
+      <h2 className="tag-embed-page__title">{title}</h2>
       <iframe
-        style={{ width: '100%', height: '100%', border: '0' }}
+        className="tag-embed-page__frame"
+        style={{ width: '100%', border: '0' }}
         src={src}
         title={title}
         loading="lazy"

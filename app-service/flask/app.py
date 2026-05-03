@@ -16,7 +16,18 @@ import yaml
 from rq import Worker
 
 from functools import wraps
-from flask import Flask, Response, Blueprint, jsonify, request, redirect, render_template, session, url_for
+from flask import (
+    Flask,
+    Response,
+    Blueprint,
+    jsonify,
+    request,
+    redirect,
+    render_template,
+    session,
+    url_for,
+    has_request_context,
+)
 from flask_cors import CORS, cross_origin
 from flask_socketio import SocketIO, emit
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -205,7 +216,14 @@ app.config.from_object('config.Config')
 
 @app.context_processor
 def _inject_tags_api_base():
-    return {"tags_api_base": TAGS_BROWSER_API_ORIGIN}
+    """Пустой base → fetch на тот же origin, что и страница. На localhost игнорируем TAGS_BROWSER_API_ORIGIN,
+    иначе iframe с :5000 ходит на прод и ловит CORS / пустое облако при embed с CRA :3000."""
+    base = TAGS_BROWSER_API_ORIGIN
+    if has_request_context():
+        host = (request.host or "").split(":")[0].lower()
+        if host in ("localhost", "127.0.0.1"):
+            base = ""
+    return {"tags_api_base": base}
 
 
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)

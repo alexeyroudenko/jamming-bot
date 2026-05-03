@@ -5,11 +5,14 @@ import { NavLink as Link } from "react-router-dom";
 import styled from "styled-components";
 
 export const Nav = styled.nav`
-    // background: #fff;
-    height: 5rem;
+    height: auto;
+    min-height: var(--app-nav-offset, 2.5rem);
     display: flex;
-    justify-content: space-between;
-    padding: 0.2rem calc((140vw - 700px) / 2);
+    justify-content: flex-end;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.12rem 0.4rem;
     z-index: 12;
 `;
 
@@ -18,13 +21,16 @@ export const NavLink = styled(Link)`
     display: flex;
     align-items: center;
     text-decoration: none;
-    padding: 0 1rem;
-    height: 100%;
+    padding: 0 0.35rem;
+    height: auto;
+    font-size: inherit;
+    line-height: 1.2;
     cursor: pointer;
+    white-space: nowrap;
     &.active {
         color: #bbb;
     }
-    text-shadow: 1px 1px #777777;
+    text-shadow: 0.5px 0.5px #333;
 `;
 
 export const Bars = styled(FaBars)`
@@ -42,16 +48,15 @@ export const Bars = styled(FaBars)`
 `;
 
 export const NavMenu = styled.div`
-    // background: #fff;
     display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
-    padding-left: -25%;
-    /* Second Nav */
-    margin-right: 14px;
-    /* Third Nav */
-    width: 20vw;
-
-white-space: nowrap; */
+    justify-content: flex-end;
+    gap: 0.02rem 0;
+    margin-left: auto;
+    width: auto;
+    max-width: 100%;
     @media screen and (max-width: 768px) {
         display: none;
     }
