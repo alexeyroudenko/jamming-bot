@@ -95,7 +95,8 @@
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js" crossorigin="anonymous"></script>
 <script>
 (function () {
-  var API = '/api/tags/get/';
+  var API_BASE = {{ tags_api_base|tojson }};
+  var API = (API_BASE || '') + '/api/tags/get/';
   var DISPLAY_COUNT_MULT = 2;
   var MAX_TAGS = 600;
   var SPHERE_RADIUS = 14;

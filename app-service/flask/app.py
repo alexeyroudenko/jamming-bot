@@ -57,6 +57,9 @@ DATA_SERVICE_URL = os.getenv('DATA_SERVICE_URL', 'http://data_service:8010')
 REMOTE_DATA_URL = os.getenv('REMOTE_DATA_URL', 'https://data.jamming-bot.arthew0.online')
 REMOTE_STORAGE_URL = os.getenv('REMOTE_STORAGE_URL', 'https://storage.jamming-bot.arthew0.online')
 REMOTE_TAGS_URL = os.getenv('REMOTE_TAGS_URL', 'https://tags.jamming-bot.arthew0.online')
+# Browser fetch() base for /api/tags/* on tag visualization pages (empty = same origin as the page).
+# Example: TAGS_BROWSER_API_ORIGIN=https://jamming-bot.arthew0.online — production must allow CORS from your dev origin.
+TAGS_BROWSER_API_ORIGIN = (os.getenv("TAGS_BROWSER_API_ORIGIN") or "").strip().rstrip("/")
 
 cfg = getConfig()
 redis = getRedis()
@@ -108,6 +111,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 logger.info(f"Sentry initialized for environment: {ENVIRONMENT}" if SENTRY_DSN else "Sentry not configured")
+if TAGS_BROWSER_API_ORIGIN:
+    logger.info(
+        "TAGS_BROWSER_API_ORIGIN=%s — tag visualization pages call /api/tags/* on that host",
+        TAGS_BROWSER_API_ORIGIN,
+    )
 
 DEFAULT_COMBINE_MAX_PHRASES = 512
 
@@ -194,6 +202,12 @@ app = Flask(
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 app.config.from_object('config.Config')
 
+
+@app.context_processor
+def _inject_tags_api_base():
+    return {"tags_api_base": TAGS_BROWSER_API_ORIGIN}
+
+
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 if os.getenv("OTEL_TRACING_ENABLED", "0") == "1":
     from opentelemetry.instrumentation.flask import FlaskInstrumentor
@@ -233,6 +247,8 @@ CORS_ALLOWED_ORIGINS = frozenset({
     "http://jamming-bot.arthew0.online:3000",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:5000",
+    "http://127.0.0.1:5000",
     "https://jamming-bot.arthew0.online",
     "http://jamming-bot.arthew0.online",
 })

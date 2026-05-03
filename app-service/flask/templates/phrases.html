@@ -93,8 +93,9 @@
 
 <script>
 (function () {
-  var TAGS_API = '/api/tags/get/';
-  var COMBINE_API = '/api/tags/combine/';
+  var API_BASE = {{ tags_api_base|tojson }};
+  var TAGS_API = (API_BASE || '') + '/api/tags/get/';
+  var COMBINE_API = (API_BASE || '') + '/api/tags/combine/';
   var REFRESH_INTERVAL = 60000;
   var DEFAULT_MAX_PHRASES = 512;
   var statusEl = document.getElementById('status');

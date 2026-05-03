@@ -76,7 +76,8 @@
 <script src="/flask_static/d3.layout.cloud.js"></script>
 <script>
 (function () {
-  var API = '/api/tags/get/';
+  var API_BASE = {{ tags_api_base|tojson }};
+  var API = (API_BASE || '') + '/api/tags/get/';
   var REFRESH_INTERVAL = 30000;
   var REPEL_RADIUS = 150;
   var REPEL_STRENGTH = 42;

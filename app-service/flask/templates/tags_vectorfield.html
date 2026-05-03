@@ -62,8 +62,9 @@
 <script src="{{ url_for('static', filename='tags_vis_controls.js') }}"></script>
 <script>
 (function () {
-  var TAGS_API = '/api/tags/get/';
-  var EMB_API = '/api/tags/embeddings/';
+  var API_BASE = {{ tags_api_base|tojson }};
+  var TAGS_API = (API_BASE || '') + '/api/tags/get/';
+  var EMB_API = (API_BASE || '') + '/api/tags/embeddings/';
   var MAX_PARTICLES_CAPACITY = 32000;
   /** Motion speed (lower = slower). 0.05 ≈ 20× slower than original baseline. */
   var FLOW_SPEED = 0.05;
