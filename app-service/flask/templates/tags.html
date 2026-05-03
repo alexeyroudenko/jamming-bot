@@ -79,13 +79,13 @@
   var API = '/api/tags/get/';
   var REFRESH_INTERVAL = 30000;
   var REPEL_RADIUS = 150;
-  var REPEL_STRENGTH = 80;
-  var RETURN_SPEED = 0.06;
+  var REPEL_STRENGTH = 42;
+  var RETURN_SPEED = 0.09;
   var FONT = 'monospace';
-  var PAD = 8;
+  var PAD = 12;
   var HIGHLIGHT_COLOR = 'rgb(255,0,0)';
   var HIGHLIGHT_DECAY = 0.015;
-  var FLOAT_AMPLITUDE = 8;
+  var FLOAT_AMPLITUDE = 3;
   var RESIZE_LAYOUT_MS = 220;
   var layoutGen = 0;
   var lastLayoutSignature = '';
@@ -185,8 +185,8 @@
   });
 
   function calcSize(count, maxCount) {
-    var minSize = 11 / 3;
     var maxSize = Math.min(W, H) / 9;
+    var minSize = maxSize / 7;
     var ratio = Math.sqrt(count / maxCount);
     return minSize + ratio * (maxSize - minSize);
   }
@@ -281,14 +281,15 @@
     }
     var scaleX = (0.92 * W) / cloudLayoutW;
     var scaleY = (0.72 * H) / cloudLayoutH;
+    var scale = Math.min(scaleX, scaleY);
     var orphanR = Math.min(W, H) * 0.38;
     for (var k in particleMap) {
       var p = particleMap[k];
       if (p.removing) continue;
       var pl = placedMap[k];
       if (pl) {
-        p.homeX = W / 2 + pl.x * scaleX;
-        p.homeY = H / 2 + pl.y * scaleY;
+        p.homeX = W / 2 + pl.x * scale;
+        p.homeY = H / 2 + pl.y * scale;
         p.rotate = typeof pl.rotate === 'number' ? pl.rotate : 0;
         var fs = p.targetSize || p.size;
         p._w = measureWord(p.text, fs);
@@ -460,8 +461,8 @@
       p.vx += (p.homeX + drift.x - p.x) * RETURN_SPEED;
       p.vy += (p.homeY + drift.y - p.y) * RETURN_SPEED;
 
-      p.vx *= 0.82;
-      p.vy *= 0.82;
+      p.vx *= 0.76;
+      p.vy *= 0.76;
 
       p.x += p.vx;
       p.y += p.vy;
