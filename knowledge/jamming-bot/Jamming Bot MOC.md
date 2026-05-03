@@ -17,6 +17,7 @@ description: Карта содержания проекта Jamming Bot в vault
 ## Сцены и нарратив
 
 ### Сцены и сценарии
+- [[Jamming bot AV]] — AV live как произведение; история Jamming Bot
 - [[AV лайв — сценарий]] — конспект сценария AV-лайва (линия 0–6)
 - [[Scene 0. Desert]]
 - [[Scene 1. Path]]
