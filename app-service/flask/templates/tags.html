@@ -101,7 +101,6 @@
   var MAX_CLOUD_TAGS = 200;
   var REPEL_RADIUS = 150;
   var REPEL_STRENGTH = 42;
-  var RETURN_SPEED = 0.09;
   var FONT = 'monospace';
   /** Все размеры шрифта облака: −30% к прежним. */
   var FONT_SIZE_SCALE = 0.7;
@@ -115,6 +114,11 @@
   var resizeLayoutTimer = null;
   var cloudLayoutW = 256;
   var cloudLayoutH = 256;
+  var appearRaf = null;
+  /** Скорость нарастания alpha при появлении облака (кадр). */
+  var APPEAR_OPACITY_SPEED = 0.055;
+  /** Пауза между стартом появления соседних тегов, мс (от меньшего размера к большему). */
+  var APPEAR_STAGGER_MS = 10;
 
   function scheduleHighlightFlashEnd() {
     if (highlightFlashTimer) clearTimeout(highlightFlashTimer);
@@ -406,6 +410,70 @@
     }
   }
 
+  function cancelAppearAnimation() {
+    if (appearRaf != null) {
+      cancelAnimationFrame(appearRaf);
+      appearRaf = null;
+    }
+  }
+
+  function snapParticlesToHome() {
+    for (var key in particleMap) {
+      var p = particleMap[key];
+      p.x = p.homeX;
+      p.y = p.homeY;
+      p.opacity = 1;
+    }
+  }
+
+  /** После новой d3-cloud укладки: по одному с шагом APPEAR_STAGGER_MS (от меньшего size к большему), только fade-in на месте — без разлёта от центра. */
+  function startAppearAnimation() {
+    cancelAppearAnimation();
+    for (var key in particleMap) {
+      var p = particleMap[key];
+      if (p.targetSize != null) p.size = p.targetSize;
+      if (p.targetColor != null) p.color = p.targetColor;
+      p.x = p.homeX;
+      p.y = p.homeY;
+      p.opacity = 0;
+    }
+    var order = particles.slice().sort(function (a, b) {
+      var sa = typeof a.targetSize === 'number' ? a.targetSize : a.size;
+      var sb = typeof b.targetSize === 'number' ? b.targetSize : b.size;
+      if (sa !== sb) return sa - sb;
+      if (a.text < b.text) return -1;
+      if (a.text > b.text) return 1;
+      return 0;
+    });
+    var t0 = performance.now();
+    function tick() {
+      var now = performance.now();
+      var settling = false;
+      for (var i = 0; i < order.length; i++) {
+        var p = order[i];
+        var delayMs = i * APPEAR_STAGGER_MS;
+        p.x = p.homeX;
+        p.y = p.homeY;
+        if (now - t0 < delayMs) {
+          p.opacity = 0;
+          settling = true;
+          continue;
+        }
+        p.opacity = Math.min(1, p.opacity + APPEAR_OPACITY_SPEED);
+        if (p.opacity < 0.995) settling = true;
+      }
+      redraw();
+      if (settling) {
+        appearRaf = requestAnimationFrame(tick);
+      } else {
+        snapParticlesToHome();
+        redraw();
+        appearRaf = null;
+      }
+    }
+    tick();
+  }
+
   function mergeParticles(tagRows) {
     lastTagRows = tagRows;
     var sig = tagsSignature(tagRows);
@@ -438,7 +506,7 @@
           targetColor: color,
           homeX: W / 2, homeY: H / 2,
           x: W / 2, y: H / 2,
-          opacity: 1,
+          opacity: 0,
           highlightT: 0,
           rotate: 0,
           _w: 0, _h: 0
@@ -458,14 +526,14 @@
     function finishLayout(placedWords) {
       applyLayoutFromPlaced(placedWords || []);
       pruneUnplacedParticles(placedWords || []);
-      syncParticlesLayout(true);
-      redraw();
+      startAppearAnimation();
     }
 
     if (sig !== lastLayoutSignature) {
       lastLayoutSignature = sig;
       runCloudLayout(rowsForCloud, finishLayout);
     } else {
+      cancelAppearAnimation();
       syncParticlesLayout();
       redraw();
     }
