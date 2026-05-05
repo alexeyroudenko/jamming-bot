@@ -585,7 +585,7 @@ button {
 
     .bot-workers-row,
     .bot-workers-empty {
-        grid-template-columns: minmax(90px, 1fr) minmax(56px, 0.7fr) minmax(88px, 1fr);
+        grid-template-columns: minmax(72px, 1fr) minmax(48px, 0.55fr) minmax(40px, 0.45fr) minmax(56px, 0.55fr) minmax(44px, 0.45fr);
     }
 
     .bot-workers-job,
@@ -1574,6 +1574,10 @@ function renderWorkers(payload) {
         const state = escapeHtml(worker.state || 'unknown');
         const stateClass = worker.is_busy ? 'is-busy' : 'is-idle';
         const currentJob = escapeHtml(worker.current_job_id || '—');
+        var rawStep = worker.current_job_step_number;
+        var stepCell = (rawStep === undefined || rawStep === null || rawStep === '') ? '—' : escapeHtml(String(rawStep));
+        var rawType = worker.current_job_type;
+        var typeCell = (rawType === undefined || rawType === null || rawType === '') ? '—' : escapeHtml(String(rawType));
         const queues = escapeHtml(Array.isArray(worker.queues) && worker.queues.length ? worker.queues.join(', ') : 'default');
         const heartbeat = escapeHtml(worker.heartbeat_age || '—');
         return [
@@ -1581,6 +1585,8 @@ function renderWorkers(payload) {
             '<span class="bot-workers-name" title="' + workerName + '">' + workerName + '</span>',
             '<span class="bot-workers-state">' + state + '</span>',
             '<span class="bot-workers-job" title="' + currentJob + '">' + currentJob + '</span>',
+            '<span class="bot-workers-step" title="' + stepCell + '">' + stepCell + '</span>',
+            '<span class="bot-workers-type" title="' + typeCell + '">' + typeCell + '</span>',
             '<span class="bot-workers-queues" title="' + queues + '">' + queues + '</span>',
             '<span class="bot-workers-age">' + heartbeat + '</span>',
             '</div>'

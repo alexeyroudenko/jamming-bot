@@ -907,6 +907,38 @@ def _format_relative_age(timestamp):
     return f"{delta // 3600}h"
 
 
+def _infer_queue_step_number(job):
+    """Best-effort step number for queue list (meta, kwargs, first-arg dict, result)."""
+    try:
+        meta = job.meta or {}
+        for key in ("step", "number"):
+            v = meta.get(key)
+            if v is not None and v != "":
+                return v
+        kwargs = getattr(job, "kwargs", None) or {}
+        if isinstance(kwargs, dict):
+            for key in ("step_number", "step", "number"):
+                v = kwargs.get(key)
+                if v is not None and v != "":
+                    return v
+        args = getattr(job, "args", None) or ()
+        if args and isinstance(args[0], dict):
+            d = args[0]
+            for key in ("number", "step"):
+                v = d.get(key)
+                if v is not None and v != "":
+                    return v
+        res = job.result
+        if isinstance(res, dict):
+            for key in ("step", "number"):
+                v = res.get(key)
+                if v is not None and v != "":
+                    return v
+    except Exception:
+        pass
+    return None
+
+
 def _get_rq_workers_snapshot():
     workers = []
     raw_workers = Worker.all(connection=redis_connection)
@@ -917,17 +949,28 @@ def _get_rq_workers_snapshot():
         except Exception:
             queues = []
         current_job = None
+        current_job_step_number = None
+        current_job_type = None
         try:
             job = worker.get_current_job()
-            current_job = job.id if job else None
+            if job:
+                current_job = job.id
+                current_job_step_number = _infer_queue_step_number(job)
+                meta = getattr(job, "meta", None) or {}
+                if isinstance(meta, dict):
+                    current_job_type = meta.get("type")
         except Exception:
             current_job = None
+            current_job_step_number = None
+            current_job_type = None
         last_heartbeat = getattr(worker, "last_heartbeat", None)
         workers.append({
             "name": worker.name,
             "state": getattr(worker, "state", "unknown"),
             "queues": queues,
             "current_job_id": current_job,
+            "current_job_step_number": current_job_step_number,
+            "current_job_type": current_job_type,
             "last_heartbeat": last_heartbeat.isoformat() if last_heartbeat else None,
             "heartbeat_age": _format_relative_age(last_heartbeat),
             "is_busy": bool(current_job) or getattr(worker, "state", "") == "busy",
@@ -1568,38 +1611,6 @@ def rytm_redirect():
 @app.route('/metrics')
 def metrics_endpoint():
     return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
-
-
-def _infer_queue_step_number(job):
-    """Best-effort step number for queue list (meta, kwargs, first-arg dict, result)."""
-    try:
-        meta = job.meta or {}
-        for key in ("step", "number"):
-            v = meta.get(key)
-            if v is not None and v != "":
-                return v
-        kwargs = getattr(job, "kwargs", None) or {}
-        if isinstance(kwargs, dict):
-            for key in ("step_number", "step", "number"):
-                v = kwargs.get(key)
-                if v is not None and v != "":
-                    return v
-        args = getattr(job, "args", None) or ()
-        if args and isinstance(args[0], dict):
-            d = args[0]
-            for key in ("number", "step"):
-                v = d.get(key)
-                if v is not None and v != "":
-                    return v
-        res = job.result
-        if isinstance(res, dict):
-            for key in ("step", "number"):
-                v = res.get(key)
-                if v is not None and v != "":
-                    return v
-    except Exception:
-        pass
-    return None
 
 
 @app.route('/delete_job/<job_id>', methods=["GET"])
