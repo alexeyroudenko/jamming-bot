@@ -39,6 +39,14 @@ services:
       - "4318:4318"
     environment:
       - COLLECTOR_OTLP_ENABLED=true
+      # Badger backend на диске вместо дефолтного in-memory store без cap (см. deployment.yaml).
+      - SPAN_STORAGE_TYPE=badger
+      - BADGER_EPHEMERAL=false
+      - BADGER_DIRECTORY_VALUE=/badger/data
+      - BADGER_DIRECTORY_KEY=/badger/key
+      - BADGER_SPAN_STORE_TTL=48h
+    volumes:
+      - ./data/jaeger:/badger
     networks:
       - app_network
 

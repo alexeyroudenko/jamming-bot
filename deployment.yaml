@@ -729,6 +729,18 @@ spec:
 ---
 # ===================== jaeger (tracing) =====================
 # UI: http://jamming-bot.arthew0.online:31686 or https://jaeger.jamming-bot.arthew0.online
+# Storage: Badger (диск+TTL) на PVC jaeger-data; раньше был дефолтный in-memory store без cap → утечка.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jaeger-data
+  namespace: jamming-bot
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -736,6 +748,9 @@ metadata:
   namespace: jamming-bot
 spec:
   replicas: 1
+  # Recreate: RWO PVC нельзя смонтировать в два пода во время RollingUpdate.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: jaeger
@@ -751,18 +766,32 @@ spec:
         env:
         - name: COLLECTOR_OTLP_ENABLED
           value: "true"
+        # Badger на диске вместо дефолтного in-memory: ограниченная память + TTL ретеншн.
+        - name: SPAN_STORAGE_TYPE
+          value: "badger"
+        - name: BADGER_EPHEMERAL
+          value: "false"
+        - name: BADGER_DIRECTORY_VALUE
+          value: "/badger/data"
+        - name: BADGER_DIRECTORY_KEY
+          value: "/badger/key"
+        - name: BADGER_SPAN_STORE_TTL
+          value: "48h"
         ports:
         - containerPort: 16686
           name: ui
         - containerPort: 4318
           name: otlp-http
+        volumeMounts:
+        - name: jaeger-data
+          mountPath: /badger
         resources:
           requests:
             cpu: "50m"
             memory: "64Mi"
           limits:
             cpu: "250m"
-            memory: "256Mi"
+            memory: "512Mi"
         readinessProbe:
           httpGet:
             path: /
@@ -775,6 +804,10 @@ spec:
             port: 16686
           initialDelaySeconds: 10
           periodSeconds: 20
+      volumes:
+      - name: jaeger-data
+        persistentVolumeClaim:
+          claimName: jaeger-data
 ---
 apiVersion: v1
 kind: Service
@@ -831,6 +864,12 @@ data:
           http:
             endpoint: 0.0.0.0:4318
     processors:
+      # memory_limiter ставим первым: при перегрузе вернёт RESOURCE_EXHAUSTED экспортёрам
+      # вместо OOMKill контейнера. Лимит — процент от cgroup memory limit пода.
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 80
+        spike_limit_percentage: 25
       batch: {}
     extensions:
       health_check:
@@ -854,7 +893,7 @@ data:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [batch]
+          processors: [memory_limiter, batch]
           exporters: [otlphttp/jaeger, otlp/coroot]
       telemetry:
         logs:
