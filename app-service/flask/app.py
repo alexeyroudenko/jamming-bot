@@ -51,7 +51,6 @@ from telemetry import (
     get_trace_context_for_rq,
 )
 import jobs
-from jobs import RQ_JOB_POLL_WAIT_SEC, RQ_JOB_TIMEOUT_PIPELINE_SEC
 import sync_jobs
 import storage_http
 
@@ -606,12 +605,9 @@ def _persist_mood_last_collect(payload):
         logger.warning("mood last_collect redis: %s", exc)
 
 
-def _poll_job_and_emit(job, event_name, timeout=None, poll_interval=0.5,
+def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                        step_key=None, silent=False):
     """Poll an RQ job in a background thread and emit result via SocketIO."""
-    if timeout is None:
-        timeout = RQ_JOB_POLL_WAIT_SEC
-
     def _poll():
         acquired = poll_thread_slots.acquire(blocking=False)
         if not acquired:
@@ -695,14 +691,14 @@ def _poll_job_and_emit(job, event_name, timeout=None, poll_interval=0.5,
                                         car,
                                         snippet,
                                         sem,
-                                        timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC,
+                                        timeout=120,
                                         result_ttl=max(RQ_RESULT_TTL, 300),
                                         step_number=str(snum),
                                     )
                                     _poll_job_and_emit(
                                         jm,
                                         "mood_collect",
-                                        timeout=RQ_JOB_POLL_WAIT_SEC,
+                                        timeout=120,
                                         step_key=step_key,
                                         silent=False,
                                     )
@@ -725,7 +721,7 @@ def _poll_job_and_emit(job, event_name, timeout=None, poll_interval=0.5,
                                     jobs.analyze_semantic,
                                     car,
                                     seg,
-                                    timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC,
+                                    timeout=60,
                                     result_ttl=RQ_RESULT_TTL,
                                     step_number=step_num,
                                     step_url=step_url,
@@ -733,7 +729,7 @@ def _poll_job_and_emit(job, event_name, timeout=None, poll_interval=0.5,
                                 _poll_job_and_emit(
                                     j2,
                                     "semantic_collect",
-                                    timeout=RQ_JOB_POLL_WAIT_SEC,
+                                    timeout=60,
                                     step_key=step_key,
                                     silent=False,
                                 )
@@ -911,38 +907,6 @@ def _format_relative_age(timestamp):
     return f"{delta // 3600}h"
 
 
-def _infer_queue_step_number(job):
-    """Best-effort step number for queue list (meta, kwargs, first-arg dict, result)."""
-    try:
-        meta = job.meta or {}
-        for key in ("step", "number"):
-            v = meta.get(key)
-            if v is not None and v != "":
-                return v
-        kwargs = getattr(job, "kwargs", None) or {}
-        if isinstance(kwargs, dict):
-            for key in ("step_number", "step", "number"):
-                v = kwargs.get(key)
-                if v is not None and v != "":
-                    return v
-        args = getattr(job, "args", None) or ()
-        if args and isinstance(args[0], dict):
-            d = args[0]
-            for key in ("number", "step"):
-                v = d.get(key)
-                if v is not None and v != "":
-                    return v
-        res = job.result
-        if isinstance(res, dict):
-            for key in ("step", "number"):
-                v = res.get(key)
-                if v is not None and v != "":
-                    return v
-    except Exception:
-        pass
-    return None
-
-
 def _get_rq_workers_snapshot():
     workers = []
     raw_workers = Worker.all(connection=redis_connection)
@@ -953,28 +917,17 @@ def _get_rq_workers_snapshot():
         except Exception:
             queues = []
         current_job = None
-        current_job_step_number = None
-        current_job_type = None
         try:
             job = worker.get_current_job()
-            if job:
-                current_job = job.id
-                current_job_step_number = _infer_queue_step_number(job)
-                meta = getattr(job, "meta", None) or {}
-                if isinstance(meta, dict):
-                    current_job_type = meta.get("type")
+            current_job = job.id if job else None
         except Exception:
             current_job = None
-            current_job_step_number = None
-            current_job_type = None
         last_heartbeat = getattr(worker, "last_heartbeat", None)
         workers.append({
             "name": worker.name,
             "state": getattr(worker, "state", "unknown"),
             "queues": queues,
             "current_job_id": current_job,
-            "current_job_step_number": current_job_step_number,
-            "current_job_type": current_job_type,
             "last_heartbeat": last_heartbeat.isoformat() if last_heartbeat else None,
             "heartbeat_age": _format_relative_age(last_heartbeat),
             "is_busy": bool(current_job) or getattr(worker, "state", "") == "busy",
@@ -1203,10 +1156,10 @@ def _enqueue_image_analysis_followup(step_key, screenshot_result, silent=False):
             jobs.image_analyze,
             car,
             payload,
-            timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC,
+            timeout=120,
             result_ttl=RQ_RESULT_TTL,
         )
-        _poll_job_and_emit(job, "image_analyzed", timeout=RQ_JOB_POLL_WAIT_SEC, step_key=step_key, silent=silent)
+        _poll_job_and_emit(job, "image_analyzed", timeout=120, step_key=step_key, silent=silent)
     except Exception as e:
         logger.warning(f"_enqueue_image_analysis_followup({step_key}): {e}")
 
@@ -1617,6 +1570,42 @@ def metrics_endpoint():
     return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
 
 
+def _infer_queue_step_number(job):
+    """Best-effort step number for queue list (meta, kwargs, first-arg dict, result)."""
+    try:
+        meta = job.meta or {}
+        for key in ("step", "number"):
+            v = meta.get(key)
+            if v is not None and v != "":
+                return v
+        kwargs = getattr(job, "kwargs", None) or {}
+        if isinstance(kwargs, dict):
+            for key in ("step_number", "step", "number"):
+                v = kwargs.get(key)
+                if v is not None and v != "":
+                    return v
+        args = getattr(job, "args", None) or ()
+        if args and isinstance(args[0], dict):
+            d = args[0]
+            for key in ("number", "step"):
+                v = d.get(key)
+                if v is not None and v != "":
+                    return v
+        if len(args) >= 2:
+            v = args[1]
+            if v is not None and v != "":
+                return v
+        res = job.result
+        if isinstance(res, dict):
+            for key in ("step", "number"):
+                v = res.get(key)
+                if v is not None and v != "":
+                    return v
+    except Exception:
+        pass
+    return None
+
+
 @app.route('/delete_job/<job_id>', methods=["GET"])
 def deletejob(job_id):
     job = queue.fetch_job(job_id)
@@ -1654,7 +1643,8 @@ def queue_page():
             'queue.html',
             joblist=[],
             cfg={},
-            queue_error=str(e)
+            queue_error=str(e),
+            remote_storage_url=REMOTE_STORAGE_URL.rstrip("/"),
         ), 503
     from datetime import datetime, timezone
 
@@ -1684,7 +1674,6 @@ def queue_page():
             'step_number': _infer_queue_step_number(job),
             'type': job.meta.get('type'),
             'progress': job.meta.get('progress'),
-            'result': job.result,
             'created_at': created_at,
             'started_at': started_at,
             'ended_at': ended_at,
@@ -1695,7 +1684,15 @@ def queue_page():
     except Exception as e:
         logger.warning("Redis defaults error: %s", e)
         cfg = {}
-    return render_template('queue.html', joblist=l, cfg=cfg, total_jobs=total_jobs, page=page, limit=limit)
+    return render_template(
+        'queue.html',
+        joblist=l,
+        cfg=cfg,
+        total_jobs=total_jobs,
+        page=page,
+        limit=limit,
+        remote_storage_url=REMOTE_STORAGE_URL.rstrip("/"),
+    )
 
 
 @app.route("/queue/job/<job_id>/", methods=["GET"])
@@ -2019,12 +2016,12 @@ def step():
                             redis_connection,
                             jobs.do_storage,
                             store_payload,
-                            timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC,
+                            timeout=120,
                             result_ttl=RQ_RESULT_TTL,
                         )
                         # Видна в RQ; PATCH по шагу идёт из analyze/других событий — не дублируем storage→_patch
                         _poll_job_and_emit(
-                            job_st, "storage", timeout=RQ_JOB_POLL_WAIT_SEC, step_key=step_key, silent=is_silent
+                            job_st, "storage", timeout=120, step_key=step_key, silent=is_silent
                         )
                     except Exception as e:
                         logger.warning("step: do_storage enqueue failed: %s", e)
@@ -2052,16 +2049,19 @@ def step():
                                     redis_connection,
                                     jobs.do_geo,
                                     ip,
-                                    timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC,
+                                    data.get("number"),
+                                    timeout=90,
                                     result_ttl=RQ_RESULT_TTL,
                                 )
-                                _poll_job_and_emit(
-                                    job,
-                                    'location',
-                                    timeout=RQ_JOB_POLL_WAIT_SEC,
-                                    step_key=step_key,
-                                    silent=is_silent,
-                                )
+                                try:
+                                    if job is not None:
+                                        n = data.get("number")
+                                        if n is not None and str(n).strip() != "":
+                                            job.meta["step"] = n
+                                            job.save_meta()
+                                except Exception as e:
+                                    logger.debug("geo job meta step: %s", e)
+                                _poll_job_and_emit(job, 'location', timeout=90, step_key=step_key, silent=is_silent)
                                 pending_jobs.append(job)
 
                     # ANALYZE — fire-and-forget with background poll
@@ -2069,22 +2069,11 @@ def step():
                         logger.info(f"step do_analyze")
                         html = data.get('html', data.get('text', ''))
                         job = enqueue_with_trace(
-                            queue,
-                            redis_connection,
-                            jobs.analyze,
-                            html,
-                            step_number=data.get('number'),
-                            step_url=data.get('url'),
-                            timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC,
-                            result_ttl=RQ_RESULT_TTL,
+                            queue, redis_connection, jobs.analyze, html,
+                            step_number=data.get('number'), step_url=data.get('url'),
+                            timeout=90, result_ttl=RQ_RESULT_TTL,
                         )
-                        _poll_job_and_emit(
-                            job,
-                            'analyzed',
-                            timeout=RQ_JOB_POLL_WAIT_SEC,
-                            step_key=step_key,
-                            silent=is_silent,
-                        )
+                        _poll_job_and_emit(job, 'analyzed', timeout=90, step_key=step_key, silent=is_silent)
                         pending_jobs.append(job)
 
                     # SCREENSHOT — fire-and-forget with background poll
@@ -2092,21 +2081,8 @@ def step():
                         step_text = (data.get('text') or '').strip()
                         if data.get('url') and len(step_text) > 128:
                             logger.info(f"step do_screenshot")
-                            job = enqueue_with_trace(
-                                queue,
-                                redis_connection,
-                                jobs.do_screenshot,
-                                data,
-                                timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC,
-                                result_ttl=RQ_RESULT_TTL,
-                            )
-                            _poll_job_and_emit(
-                                job,
-                                'screenshot',
-                                timeout=RQ_JOB_POLL_WAIT_SEC,
-                                step_key=step_key,
-                                silent=is_silent,
-                            )
+                            job = enqueue_with_trace(queue, redis_connection, jobs.do_screenshot, data, timeout=120, result_ttl=RQ_RESULT_TTL)
+                            _poll_job_and_emit(job, 'screenshot', timeout=120, step_key=step_key, silent=is_silent)
                             pending_jobs.append(job)
 
                     # STORAGE updates happen incrementally via _poll_job_and_emit → _patch_storage

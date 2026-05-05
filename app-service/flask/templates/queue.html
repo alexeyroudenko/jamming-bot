@@ -32,25 +32,24 @@
         <th scope="col" class="jb-table__col-id">Id</th>
         <th scope="col">Step number</th>
         <th scope="col">Type</th>
-        <th scope="col">Time</th>
+        <th scope="col" class="jb-table__col-time">Time</th>
         <th scope="col">Meta</th>
-        <th scope="col">Result</th>
         <th scope="col">Actions</th>
       </tr>
     </thead>
     <tbody>
       {% if not joblist %}
       <tr>
-        <td colspan="8" class="jb-muted">Нет задач для отображения: либо сейчас ничего не стоит в очереди и не выполняется, либо последние завершённые уже истекли по TTL, либо бот не даёт успешных загрузок страниц (не 200).</td>
+        <td colspan="7" class="jb-muted">Нет задач для отображения: либо сейчас ничего не стоит в очереди и не выполняется, либо последние завершённые уже истекли по TTL, либо бот не даёт успешных загрузок страниц (не 200).</td>
       </tr>
       {% endif %}
       {% for job in joblist %}
       <tr>
         <td>{{ job_badge(job.state) }}</td>
         <td class="jb-table__col-id"><a href="/queue/job/{{ job.id }}/" title="Открыть описание джоба"><code class="jb-code">{{ job.id }}</code></a></td>
-        <td>{% if job.step_number is not none %}{{ job.step_number }}{% else %}—{% endif %}</td>
+        <td>{% if job.step_number is not none %}<a href="{{ remote_storage_url }}/get/step/{{ job.step_number }}" rel="noopener noreferrer" target="_blank">{{ job.step_number }}</a>{% else %}—{% endif %}</td>
         <td>{{ job.type }}</td>
-        <td>
+        <td class="jb-table__col-time">
           {% if job.duration_sec is not none %}
           {{ "%.1f"|format(job.duration_sec) }}s
           {% elif job.created_at %}
@@ -68,9 +67,7 @@
           —
           {% endif %}
         </td>
-        <td>{{ job.result }}</td>
         <td>
-          <a href="/queue/job/{{ job.id }}/" class="jb-btn jb-btn--sm jb-btn--ghost">Описание</a>
           <a href="/delete_job/{{ job.id }}" class="jb-btn jb-btn--sm jb-btn--primary">Delete</a>
         </td>
       </tr>

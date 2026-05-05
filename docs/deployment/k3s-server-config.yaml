@@ -1,0 +1,21 @@
+# Фрагмент для слияния в `/etc/rancher/k3s/config.yaml` на сервере с k3s.
+#
+# Зачем: `system-reserved` и `kube-reserved` уменьшают Allocatable CPU/RAM под поды и
+# (при enforce ниже) выделяют cgroup-срезы под ОС и компоненты kubelet/containerd,
+# чтобы рабочая нагрузка не выдавливала SSH и control plane при пиках.
+#
+# Подбор значений: ориентир — узел ~8 vCPU / ~12 GiB RAM (`nproc`, `free -h`).
+# На меньшей машине уменьшите CPU/memory; на большей можно поднять резервы.
+#
+# После правок:
+#   sudo systemctl restart k3s
+# Проверка:
+#   kubectl describe node | sed -n '/Capacity:/,/Conditions:/p'
+#
+# Если kubelet не стартует — уберите строку с `enforce-node-allocatable` или
+# уменьшите резервы (иногда мешает слишком большой memory-reserved при узком лимите).
+
+kubelet-arg:
+  - "system-reserved=cpu=500m,memory=768Mi,ephemeral-storage=2Gi"
+  - "kube-reserved=cpu=700m,memory=1Gi,ephemeral-storage=2Gi"
+  - "enforce-node-allocatable=pods,kube-reserved,system-reserved"

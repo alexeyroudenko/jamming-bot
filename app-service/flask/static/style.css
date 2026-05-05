@@ -463,9 +463,19 @@ button.jb-btn {
 }
 
 .jb-table--queue .jb-table__col-id {
-  width: 10%;
-  max-width: 10%;
+  width: 26.67%;
+  max-width: 26.67%;
   word-break: break-all;
+  vertical-align: top;
+}
+
+/* Time: ~в 3 раза уже доли «обычной» колонки (~12% → ~6%); ellipsis на вырожденных длинных числах */
+.jb-table--queue .jb-table__col-time {
+  width: 6%;
+  max-width: 6%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   vertical-align: top;
 }
 

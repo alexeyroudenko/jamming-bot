@@ -8,6 +8,7 @@ import json
 import glob
 import logging
 import re
+from contextlib import contextmanager
 
 import requests
 import sentry_sdk
@@ -177,6 +178,35 @@ def _otel_screenshot_renderer_spans(response, response_received_wall_ns, rq_pare
         pass
 
 
+@contextmanager
+def _otel_screenshot_s3_upload_span(upload_bytes, s3_key):
+    """OTEL child span for S3 put_object under rq.do_screenshot (Jaeger waterfall)."""
+    if os.getenv("OTEL_TRACING_ENABLED", "0") != "1":
+        yield
+        return
+    try:
+        from opentelemetry import trace
+        from opentelemetry.trace import SpanKind
+
+        tracer = trace.get_tracer(__name__)
+        t0 = time.monotonic_ns()
+        with tracer.start_as_current_span(
+            "screenshot.s3_upload",
+            kind=SpanKind.INTERNAL,
+        ) as otel_span:
+            if otel_span.is_recording():
+                otel_span.set_attribute("screenshot.phase", "s3_upload")
+                otel_span.set_attribute("screenshot.s3_key", s3_key[:512])
+                otel_span.set_attribute("screenshot.upload_bytes", upload_bytes)
+            yield
+        dur_ms = max(0, int((time.monotonic_ns() - t0) / 1e6))
+        parent = trace.get_current_span()
+        if parent and parent.is_recording():
+            parent.set_attribute("screenshot.s3_upload_ms", dur_ms)
+    except Exception:
+        yield
+
+
 def _tags_bulk_post(names, timeout=HTTP_TAGS_BULK_TIMEOUT_SEC):
     """POST /api/v1/tags/bulk/ — пустой список не шлём."""
     if not names:
@@ -342,13 +372,15 @@ def add_tags_from_steps():
 #   
 @job('default', connection=redis_connection, timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC, result_ttl=270)
 @with_trace_context
-def do_geo(ip):
+def do_geo(ip, step_number=None):
 
-    logger.info(f"job do_geo ip {ip}")
+    logger.info(f"job do_geo ip {ip} step_number={step_number}")
     
     self_job = get_current_job()    
     self_job.meta['type'] = "geo"        
     self_job.meta['ip'] = ip
+    if step_number is not None and step_number != "":
+        self_job.meta['step'] = step_number
     self_job.save_meta()
     
     location = {'ip': ip, 'city': '', 'latitude': 0, 'longitude': 0, 'error': ''}
@@ -375,6 +407,8 @@ def do_geo(ip):
     self_job.save_meta()
 
     location['pod'] = POD_NAME
+    if step_number is not None and step_number != "":
+        location['step'] = step_number
     return location
 
 
@@ -744,13 +778,14 @@ def do_screenshot(data):
         s3_key = f"screenshots/{str(step_number).zfill(8)}-{safe_name}.jpg"
         span.set_data("s3_key", s3_key)
         s3 = _get_s3_client()
-        s3.put_object(
-            Bucket=S3_BUCKET_NAME,
-            Key=s3_key,
-            Body=image_bytes,
-            ContentType='image/jpeg',
-            ACL='public-read',
-        )
+        with _otel_screenshot_s3_upload_span(len(image_bytes), s3_key):
+            s3.put_object(
+                Bucket=S3_BUCKET_NAME,
+                Key=s3_key,
+                Body=image_bytes,
+                ContentType='image/jpeg',
+                ACL='public-read',
+            )
 
     public_url = f"https://{S3_HOST}/{S3_BUCKET_NAME}/{s3_key}"
 
