@@ -83,7 +83,8 @@ def fetch_json(url: str, *, timeout: float = 30):
         return json.loads(response.read().decode("utf-8"))
 
 
-def fetch_csv_rows(url: str) -> list[dict[str, str]]:
+def fetch_csv_rows(url: str, *, max_rows: int | None = None) -> list[dict[str, str]]:
+    """Stream CSV and keep only the last *max_rows* (avoids OOM on huge exports)."""
     request = urllib.request.Request(
         url,
         headers={
@@ -93,7 +94,15 @@ def fetch_csv_rows(url: str) -> list[dict[str, str]]:
     )
     with urllib.request.urlopen(request, timeout=60) as response:
         text = response.read().decode("utf-8", errors="replace")
-    return list(csv.DictReader(text.splitlines()))
+    reader = csv.DictReader(text.splitlines())
+    if max_rows is None or max_rows <= 0:
+        return list(reader)
+    from collections import deque
+
+    tail: deque[dict[str, str]] = deque(maxlen=max_rows)
+    for row in reader:
+        tail.append(row)
+    return list(tail)
 
 
 def parse_png_dimensions(png_bytes: bytes) -> tuple[int, int]:
@@ -1403,14 +1412,10 @@ def fetch_steps_payload_sync() -> dict:
             "data": data,
         }
     except Exception as exc:
-        logger.warning("steps payload: latest failed (%s), using CSV export", exc)
-        rows = fetch_csv_rows(DEFAULT_STEPS_CSV_URL)
-        return {
-            "fields": list(rows[0].keys()) if rows else [],
-            "returned_lines": len(rows),
-            "total_lines": len(rows),
-            "data": rows,
-        }
+        # No CSV fallback — full /export/csv loads everything into RAM and OOMs the pod.
+        # Better to retry latest on the next refresh tick than crash on a transient empty body.
+        logger.warning("steps payload: latest failed (%s); will retry on next refresh", exc)
+        raise
 
 
 async def fetch_snapshot(image_type: str) -> ImageSnapshot:

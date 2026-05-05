@@ -4,6 +4,24 @@ kind: Namespace
 metadata:
   name: jamming-bot
 ---
+# PriorityClass: critical infra (redis/app-service/html-renderer) survives node memory pressure
+# longer than chatty workers; kubelet prefers to evict lower priority first.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: jamming-bot-critical
+value: 1000000
+globalDefault: false
+description: "Critical jamming-bot pods (redis, app-service, html-renderer) — last to evict."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: jamming-bot-default
+value: 100
+globalDefault: false
+description: "Default priority for jamming-bot worker/processor pods."
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,6 +42,7 @@ spec:
       labels:
         app: html-renderer
     spec:
+      priorityClassName: jamming-bot-critical
       containers:
       - name: renderer
         image: 1325gy/my_dev:v5 # Python + Playwright версия
@@ -33,10 +52,10 @@ spec:
         resources:
           requests:
             cpu: "250m"
-            memory: "768Mi"
+            memory: "512Mi"
           limits:
             cpu: "1000m"
-            memory: "1536Mi"
+            memory: "1024Mi"
         readinessProbe:
           httpGet:
             path: /
@@ -146,6 +165,7 @@ spec:
       labels:
         app: semantic-service
     spec:
+      priorityClassName: jamming-bot-default
       containers:
       - name: semantic-service
         image: semantic-service:latest
@@ -162,10 +182,10 @@ spec:
         resources:
           requests:
             cpu: "250m"
-            memory: "1536Mi"
+            memory: "1024Mi"
           limits:
             cpu: "1"
-            memory: "2560Mi"
+            memory: "1536Mi"
         readinessProbe:
           httpGet:
             path: /health
@@ -218,6 +238,7 @@ spec:
       labels:
         app: mood-service
     spec:
+      priorityClassName: jamming-bot-default
       containers:
       - name: mood-service
         image: mood-service:latest
@@ -228,10 +249,10 @@ spec:
         resources:
           requests:
             cpu: "500m"
-            memory: "2Gi"
+            memory: "1Gi"
           limits:
             cpu: "2"
-            memory: "6Gi"
+            memory: "1536Mi"
         readinessProbe:
           httpGet:
             path: /health
@@ -279,6 +300,7 @@ spec:
       labels:
         app: image-analyze-service
     spec:
+      priorityClassName: jamming-bot-default
       tolerations:
       - key: node.kubernetes.io/disk-pressure
         operator: Exists
@@ -293,10 +315,10 @@ spec:
         resources:
           requests:
             cpu: "100m"
-            memory: "256Mi"
+            memory: "192Mi"
           limits:
             cpu: "500m"
-            memory: "768Mi"
+            memory: "384Mi"
         readinessProbe:
           httpGet:
             path: /healthz
@@ -340,6 +362,7 @@ spec:
       labels:
         app: storage-service
     spec:
+      priorityClassName: jamming-bot-critical
       tolerations:
       - key: node.kubernetes.io/disk-pressure
         operator: Exists
@@ -370,10 +393,10 @@ spec:
         resources:
           requests:
             cpu: "100m"
-            memory: "256Mi"
+            memory: "192Mi"
           limits:
             cpu: "1000m"
-            memory: "1024Mi"
+            memory: "512Mi"
         startupProbe:
           tcpSocket:
             port: 7781
@@ -418,6 +441,7 @@ spec:
       labels:
         app: steps-service
     spec:
+      priorityClassName: jamming-bot-default
       containers:
       - name: steps-service
         image: steps-service:latest
@@ -431,7 +455,7 @@ spec:
         - name: STEPS_LATEST_URL
           value: "http://app-service/api/storage_latest/"
         - name: STEPS_LATEST_LIMIT
-          value: "3000"
+          value: "1500"
         - name: STEPS_CSV_URL
           value: "http://storage-service/export/csv"
         - name: STEPS_REFRESH_SECONDS
@@ -444,7 +468,7 @@ spec:
             memory: "512Mi"
           limits:
             cpu: "750m"
-            memory: "2048Mi"
+            memory: "2Gi"
         readinessProbe:
           httpGet:
             path: /ready
@@ -665,6 +689,7 @@ spec:
       labels:
         app: redis
     spec:
+      priorityClassName: jamming-bot-critical
       containers:
       - name: redis
         image: redis:7-alpine
@@ -889,10 +914,10 @@ spec:
         resources:
           requests:
             cpu: "50m"
-            memory: "128Mi"
+            memory: "96Mi"
           limits:
             cpu: "500m"
-            memory: "512Mi"
+            memory: "256Mi"
       volumes:
       - name: config
         configMap:
@@ -937,6 +962,7 @@ spec:
       labels:
         app: worker-service
     spec:
+      priorityClassName: jamming-bot-default
       tolerations:
       - key: node.kubernetes.io/disk-pressure
         operator: Exists
@@ -1014,7 +1040,7 @@ spec:
         resources:
           requests:
             cpu: "125m"
-            memory: "128Mi"
+            memory: "192Mi"
           limits:
             cpu: "1000m"
             memory: "512Mi"
@@ -1035,6 +1061,7 @@ spec:
       labels:
         app: worker-screenshots
     spec:
+      priorityClassName: jamming-bot-default
       tolerations:
       - key: node.kubernetes.io/disk-pressure
         operator: Exists
@@ -1099,10 +1126,10 @@ spec:
         resources:
           requests:
             cpu: "125m"
-            memory: "256Mi"
+            memory: "192Mi"
           limits:
             cpu: "1000m"
-            memory: "768Mi"
+            memory: "384Mi"
 ---
 # ===================== rq-dashboard =====================
 apiVersion: apps/v1
@@ -1409,6 +1436,7 @@ spec:
       labels:
         app: app-service
     spec:
+      priorityClassName: jamming-bot-critical
       tolerations:
       - key: node.kubernetes.io/disk-pressure
         operator: Exists
@@ -1483,16 +1511,18 @@ spec:
           value: "0.5"
         - name: SCREENSHOT_PIPELINE_S3_SLACK_SEC
           value: "4"
+        - name: SLOW_REQUEST_LOG_MS
+          value: "1500"
         volumeMounts:
         - name: bot-config
           mountPath: /app/bot_config/bot.yaml
         resources:
           requests:
             cpu: "250m"
-            memory: "384Mi"
+            memory: "256Mi"
           limits:
             cpu: "1000m"
-            memory: "1Gi"
+            memory: "768Mi"
         startupProbe:
           httpGet:
             path: /status
@@ -2308,10 +2338,10 @@ spec:
         resources:
           requests:
             cpu: "100m"
-            memory: "256Mi"
+            memory: "192Mi"
           limits:
             cpu: "500m"
-            memory: "1Gi"
+            memory: "512Mi"
         readinessProbe:
           httpGet:
             path: /healthz

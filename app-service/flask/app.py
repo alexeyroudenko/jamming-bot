@@ -21,6 +21,7 @@ from flask import (
     Flask,
     Response,
     Blueprint,
+    g,
     jsonify,
     request,
     redirect,
@@ -143,6 +144,9 @@ logging.basicConfig(
     format=f'[{SVC_NAME}] %(asctime)s - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler(sys.stdout)],
 )
+# Sentry/Telemetry transport spams SSL retry warnings when ingest endpoint flaps.
+logging.getLogger("urllib3.connectionpool").setLevel(logging.ERROR)
+logging.getLogger("urllib3.util.retry").setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
 logger.info(f"Sentry initialized for environment: {ENVIRONMENT}" if SENTRY_DSN else "Sentry not configured")
 if TAGS_BROWSER_API_ORIGIN:
@@ -278,7 +282,21 @@ jobs_fetched_per_request = Histogram(
     "Jobs fetched from RQ registries per HTTP request",
     buckets=(1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, float("inf")),
 )
+slow_requests_total = Counter(
+    "flask_slow_requests_total",
+    "HTTP requests slower than SLOW_REQUEST_LOG_MS",
+    ["method", "endpoint", "status"],
+)
 poll_thread_slots = threading.BoundedSemaphore(POLL_THREAD_LIMIT)
+
+SLOW_REQUEST_LOG_MS = max(0, int(os.getenv("SLOW_REQUEST_LOG_MS", "1500")))
+# Hot endpoints that are expected to be fast / very chatty — exclude from slow log noise.
+SLOW_REQUEST_SKIP_PREFIXES = (
+    "/metrics",
+    "/status",
+    "/socket.io",
+    "/flask_static",
+)
 
 # ---------------------------------------------------------------------------
 # CORS & SocketIO
@@ -437,6 +455,7 @@ PUBLIC_PATHS = ("/", "/login")
 
 @app.before_request
 def _check_auth():
+    g._req_started_monotonic = time.monotonic()
     _ensure_sublink_listener_started()
     _prune_stale_viewers()
     if request.method == "OPTIONS":
@@ -445,6 +464,52 @@ def _check_auth():
         return
     if not session.get("logged_in"):
         return redirect(url_for("login", next=request.path))
+
+
+@app.after_request
+def _slow_request_logger(response):
+    """Log warning + bump Prometheus counter when a Flask request exceeds SLOW_REQUEST_LOG_MS.
+    Adds X-Request-Time-Ms header to make hangs visible in browser DevTools / curl."""
+    started = getattr(g, "_req_started_monotonic", None)
+    if started is None:
+        return response
+    duration_ms = int((time.monotonic() - started) * 1000)
+    try:
+        response.headers["X-Request-Time-Ms"] = str(duration_ms)
+    except Exception:
+        pass
+    path = request.path or ""
+    if any(path.startswith(p) for p in SLOW_REQUEST_SKIP_PREFIXES):
+        return response
+    if SLOW_REQUEST_LOG_MS and duration_ms >= SLOW_REQUEST_LOG_MS:
+        endpoint = request.endpoint or path
+        try:
+            slow_requests_total.labels(
+                method=request.method or "",
+                endpoint=endpoint,
+                status=str(response.status_code),
+            ).inc()
+        except Exception:
+            pass
+        trace_id = ""
+        try:
+            from opentelemetry import trace as _otel_trace
+
+            sc = _otel_trace.get_current_span().get_span_context()
+            if sc and sc.is_valid:
+                trace_id = format(sc.trace_id, "032x")
+        except Exception:
+            pass
+        logger.warning(
+            "SLOW request method=%s path=%s status=%s duration_ms=%s remote=%s trace_id=%s",
+            request.method,
+            path,
+            response.status_code,
+            duration_ms,
+            request.remote_addr or "?",
+            trace_id or "-",
+        )
+    return response
 
 
 def _ctrl_log(action: str, source: str):
