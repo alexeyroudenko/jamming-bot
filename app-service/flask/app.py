@@ -763,14 +763,14 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                                         car,
                                         snippet,
                                         sem,
-                                        timeout=120,
+                                        timeout=10,
                                         result_ttl=max(RQ_RESULT_TTL, 300),
                                         step_number=str(snum),
                                     )
                                     _poll_job_and_emit(
                                         jm,
                                         "mood_collect",
-                                        timeout=120,
+                                        timeout=10,
                                         step_key=step_key,
                                         silent=False,
                                     )
@@ -793,7 +793,7 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                                     jobs.analyze_semantic,
                                     car,
                                     seg,
-                                    timeout=60,
+                                    timeout=10,
                                     result_ttl=RQ_RESULT_TTL,
                                     step_number=step_num,
                                     step_url=step_url,
@@ -801,7 +801,7 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                                 _poll_job_and_emit(
                                     j2,
                                     "semantic_collect",
-                                    timeout=60,
+                                    timeout=10,
                                     step_key=step_key,
                                     silent=False,
                                 )
@@ -1228,10 +1228,10 @@ def _enqueue_image_analysis_followup(step_key, screenshot_result, silent=False):
             jobs.image_analyze,
             car,
             payload,
-            timeout=120,
+            timeout=10,
             result_ttl=RQ_RESULT_TTL,
         )
-        _poll_job_and_emit(job, "image_analyzed", timeout=120, step_key=step_key, silent=silent)
+        _poll_job_and_emit(job, "image_analyzed", timeout=10, step_key=step_key, silent=silent)
     except Exception as e:
         logger.warning(f"_enqueue_image_analysis_followup({step_key}): {e}")
 
@@ -2092,12 +2092,12 @@ def step():
                             redis_connection,
                             jobs.do_storage,
                             store_payload,
-                            timeout=120,
+                            timeout=10,
                             result_ttl=RQ_RESULT_TTL,
                         )
                         # Видна в RQ; PATCH по шагу идёт из analyze/других событий — не дублируем storage→_patch
                         _poll_job_and_emit(
-                            job_st, "storage", timeout=120, step_key=step_key, silent=is_silent
+                            job_st, "storage", timeout=10, step_key=step_key, silent=is_silent
                         )
                     except Exception as e:
                         logger.warning("step: do_storage enqueue failed: %s", e)
@@ -2129,12 +2129,12 @@ def step():
                                     redis_connection,
                                     jobs.do_geo,
                                     ip,
-                                    timeout=90,
+                                    timeout=10,
                                     result_ttl=RQ_RESULT_TTL,
                                     rq_job_meta=_geo_meta,
                                     step_number=_gn,
                                 )
-                                _poll_job_and_emit(job, 'location', timeout=90, step_key=step_key, silent=is_silent)
+                                _poll_job_and_emit(job, 'location', timeout=10, step_key=step_key, silent=is_silent)
                                 pending_jobs.append(job)
 
                     # ANALYZE — fire-and-forget with background poll
@@ -2144,9 +2144,9 @@ def step():
                         job = enqueue_with_trace(
                             queue, redis_connection, jobs.analyze, html,
                             step_number=data.get('number'), step_url=data.get('url'),
-                            timeout=90, result_ttl=RQ_RESULT_TTL,
+                            timeout=10, result_ttl=RQ_RESULT_TTL,
                         )
-                        _poll_job_and_emit(job, 'analyzed', timeout=90, step_key=step_key, silent=is_silent)
+                        _poll_job_and_emit(job, 'analyzed', timeout=10, step_key=step_key, silent=is_silent)
                         pending_jobs.append(job)
 
                     # SCREENSHOT — fire-and-forget with background poll
@@ -2159,10 +2159,10 @@ def step():
                                 redis_connection,
                                 jobs.do_screenshot,
                                 data,
-                                timeout=120,
+                                timeout=10,
                                 result_ttl=RQ_RESULT_TTL,
                             )
-                            _poll_job_and_emit(job, 'screenshot', timeout=120, step_key=step_key, silent=is_silent)
+                            _poll_job_and_emit(job, 'screenshot', timeout=10, step_key=step_key, silent=is_silent)
                             pending_jobs.append(job)
 
                     # STORAGE updates happen incrementally via _poll_job_and_emit → _patch_storage
