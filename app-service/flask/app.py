@@ -51,6 +51,7 @@ from telemetry import (
     get_trace_context_for_rq,
 )
 import jobs
+from jobs import RQ_JOB_POLL_WAIT_SEC, RQ_JOB_TIMEOUT_PIPELINE_SEC
 import sync_jobs
 import storage_http
 
@@ -605,9 +606,12 @@ def _persist_mood_last_collect(payload):
         logger.warning("mood last_collect redis: %s", exc)
 
 
-def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
+def _poll_job_and_emit(job, event_name, timeout=None, poll_interval=0.5,
                        step_key=None, silent=False):
     """Poll an RQ job in a background thread and emit result via SocketIO."""
+    if timeout is None:
+        timeout = RQ_JOB_POLL_WAIT_SEC
+
     def _poll():
         acquired = poll_thread_slots.acquire(blocking=False)
         if not acquired:
@@ -691,14 +695,14 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                                         car,
                                         snippet,
                                         sem,
-                                        timeout=120,
+                                        timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC,
                                         result_ttl=max(RQ_RESULT_TTL, 300),
                                         step_number=str(snum),
                                     )
                                     _poll_job_and_emit(
                                         jm,
                                         "mood_collect",
-                                        timeout=120,
+                                        timeout=RQ_JOB_POLL_WAIT_SEC,
                                         step_key=step_key,
                                         silent=False,
                                     )
@@ -721,7 +725,7 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                                     jobs.analyze_semantic,
                                     car,
                                     seg,
-                                    timeout=60,
+                                    timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC,
                                     result_ttl=RQ_RESULT_TTL,
                                     step_number=step_num,
                                     step_url=step_url,
@@ -729,7 +733,7 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                                 _poll_job_and_emit(
                                     j2,
                                     "semantic_collect",
-                                    timeout=60,
+                                    timeout=RQ_JOB_POLL_WAIT_SEC,
                                     step_key=step_key,
                                     silent=False,
                                 )
@@ -1199,10 +1203,10 @@ def _enqueue_image_analysis_followup(step_key, screenshot_result, silent=False):
             jobs.image_analyze,
             car,
             payload,
-            timeout=120,
+            timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC,
             result_ttl=RQ_RESULT_TTL,
         )
-        _poll_job_and_emit(job, "image_analyzed", timeout=120, step_key=step_key, silent=silent)
+        _poll_job_and_emit(job, "image_analyzed", timeout=RQ_JOB_POLL_WAIT_SEC, step_key=step_key, silent=silent)
     except Exception as e:
         logger.warning(f"_enqueue_image_analysis_followup({step_key}): {e}")
 
@@ -2015,12 +2019,12 @@ def step():
                             redis_connection,
                             jobs.do_storage,
                             store_payload,
-                            timeout=120,
+                            timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC,
                             result_ttl=RQ_RESULT_TTL,
                         )
                         # Видна в RQ; PATCH по шагу идёт из analyze/других событий — не дублируем storage→_patch
                         _poll_job_and_emit(
-                            job_st, "storage", timeout=120, step_key=step_key, silent=is_silent
+                            job_st, "storage", timeout=RQ_JOB_POLL_WAIT_SEC, step_key=step_key, silent=is_silent
                         )
                     except Exception as e:
                         logger.warning("step: do_storage enqueue failed: %s", e)
@@ -2043,8 +2047,21 @@ def step():
                         if "ip" in data.keys():
                             ip = data['ip']
                             if ip != "0":
-                                job = enqueue_with_trace(queue, redis_connection, jobs.do_geo, ip, timeout=90, result_ttl=RQ_RESULT_TTL)
-                                _poll_job_and_emit(job, 'location', timeout=90, step_key=step_key, silent=is_silent)
+                                job = enqueue_with_trace(
+                                    queue,
+                                    redis_connection,
+                                    jobs.do_geo,
+                                    ip,
+                                    timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC,
+                                    result_ttl=RQ_RESULT_TTL,
+                                )
+                                _poll_job_and_emit(
+                                    job,
+                                    'location',
+                                    timeout=RQ_JOB_POLL_WAIT_SEC,
+                                    step_key=step_key,
+                                    silent=is_silent,
+                                )
                                 pending_jobs.append(job)
 
                     # ANALYZE — fire-and-forget with background poll
@@ -2052,11 +2069,22 @@ def step():
                         logger.info(f"step do_analyze")
                         html = data.get('html', data.get('text', ''))
                         job = enqueue_with_trace(
-                            queue, redis_connection, jobs.analyze, html,
-                            step_number=data.get('number'), step_url=data.get('url'),
-                            timeout=90, result_ttl=RQ_RESULT_TTL,
+                            queue,
+                            redis_connection,
+                            jobs.analyze,
+                            html,
+                            step_number=data.get('number'),
+                            step_url=data.get('url'),
+                            timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC,
+                            result_ttl=RQ_RESULT_TTL,
                         )
-                        _poll_job_and_emit(job, 'analyzed', timeout=90, step_key=step_key, silent=is_silent)
+                        _poll_job_and_emit(
+                            job,
+                            'analyzed',
+                            timeout=RQ_JOB_POLL_WAIT_SEC,
+                            step_key=step_key,
+                            silent=is_silent,
+                        )
                         pending_jobs.append(job)
 
                     # SCREENSHOT — fire-and-forget with background poll
@@ -2064,8 +2092,21 @@ def step():
                         step_text = (data.get('text') or '').strip()
                         if data.get('url') and len(step_text) > 128:
                             logger.info(f"step do_screenshot")
-                            job = enqueue_with_trace(queue, redis_connection, jobs.do_screenshot, data, timeout=120, result_ttl=RQ_RESULT_TTL)
-                            _poll_job_and_emit(job, 'screenshot', timeout=120, step_key=step_key, silent=is_silent)
+                            job = enqueue_with_trace(
+                                queue,
+                                redis_connection,
+                                jobs.do_screenshot,
+                                data,
+                                timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC,
+                                result_ttl=RQ_RESULT_TTL,
+                            )
+                            _poll_job_and_emit(
+                                job,
+                                'screenshot',
+                                timeout=RQ_JOB_POLL_WAIT_SEC,
+                                step_key=step_key,
+                                silent=is_silent,
+                            )
                             pending_jobs.append(job)
 
                     # STORAGE updates happen incrementally via _poll_job_and_emit → _patch_storage

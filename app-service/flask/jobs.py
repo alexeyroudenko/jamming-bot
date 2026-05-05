@@ -28,8 +28,25 @@ MOOD_SERVICE_URL = os.getenv("MOOD_SERVICE_URL", "http://mood_service:8020")
 IMAGE_ANALYZE_SERVICE_URL = os.getenv('IMAGE_ANALYZE_SERVICE_URL', 'http://image-analyze-service:8006')
 IP_SERVICE_URL = os.getenv('IP_SERVICE_URL', 'http://bots.arthew0.online:8004')
 RENDERER_SERVICE_URL = os.getenv('RENDERER_SERVICE_URL', 'http://html-renderer-service:3000')
-SCREENSHOT_RENDER_RETRIES = int(os.getenv('SCREENSHOT_RENDER_RETRIES', '3'))
-SCREENSHOT_RENDER_BACKOFF_SEC = float(os.getenv('SCREENSHOT_RENDER_BACKOFF_SEC', '3'))
+# Pipeline ceiling: RQ job timeout + HTTP budgets below (avoid multi-minute hangs).
+RQ_JOB_TIMEOUT_PIPELINE_SEC = int(os.getenv("RQ_JOB_TIMEOUT_PIPELINE_SEC", "15"))
+RQ_JOB_TIMEOUT_MAINT_SEC = int(os.getenv("RQ_JOB_TIMEOUT_MAINT_SEC", "900"))
+RQ_JOB_POLL_WAIT_SEC = int(
+    os.getenv("RQ_JOB_POLL_WAIT_SEC", str(max(22, RQ_JOB_TIMEOUT_PIPELINE_SEC + 7)))
+)
+SCREENSHOT_RENDER_RETRIES = int(os.getenv("SCREENSHOT_RENDER_RETRIES", "2"))
+SCREENSHOT_RENDER_BACKOFF_SEC = float(os.getenv("SCREENSHOT_RENDER_BACKOFF_SEC", "0.5"))
+HTTP_TAGS_BULK_TIMEOUT_SEC = int(os.getenv("HTTP_TAGS_BULK_TIMEOUT_SEC", "6"))
+HTTP_SEMANTIC_TAGS_TIMEOUT_SEC = int(os.getenv("HTTP_SEMANTIC_TAGS_TIMEOUT_SEC", "8"))
+HTTP_SEMANTIC_ANALYZE_ALL_TIMEOUT_SEC = int(os.getenv("HTTP_SEMANTIC_ANALYZE_ALL_TIMEOUT_SEC", "12"))
+HTTP_MOOD_SNAPSHOT_TIMEOUT_SEC = int(os.getenv("HTTP_MOOD_SNAPSHOT_TIMEOUT_SEC", "12"))
+# Two attempts × 5s + backoff keeps renderer path ≤ ~11s; leaves room for S3 under RQ 15s cap.
+HTTP_SCREENSHOT_RENDER_TIMEOUT_SEC = int(os.getenv("HTTP_SCREENSHOT_RENDER_TIMEOUT_SEC", "5"))
+HTTP_IMAGE_ANALYZE_TIMEOUT_SEC = int(os.getenv("HTTP_IMAGE_ANALYZE_TIMEOUT_SEC", "12"))
+HTTP_STORAGE_STORE_JOB_TIMEOUT_SEC = int(os.getenv("HTTP_STORAGE_STORE_JOB_TIMEOUT_SEC", "12"))
+HTTP_IP_GEO_TIMEOUT_SEC = int(os.getenv("HTTP_IP_GEO_TIMEOUT_SEC", "12"))
+S3_CONNECT_TIMEOUT_SEC = int(os.getenv("S3_CONNECT_TIMEOUT_SEC", "4"))
+S3_READ_TIMEOUT_SEC = int(os.getenv("S3_READ_TIMEOUT_SEC", "4"))
 SVC_NAME = os.getenv("SVC_NAME", "jobs service")
 
 # S3 configuration
@@ -160,7 +177,7 @@ def _otel_screenshot_renderer_spans(response, response_received_wall_ns, rq_pare
         pass
 
 
-def _tags_bulk_post(names, timeout=60):
+def _tags_bulk_post(names, timeout=HTTP_TAGS_BULK_TIMEOUT_SEC):
     """POST /api/v1/tags/bulk/ — пустой список не шлём."""
     if not names:
         return None
@@ -196,7 +213,7 @@ def remove_special_characters(text):
     return clean_text
 
 
-@job('default', connection=redis_connection, timeout=600, result_ttl=600)
+@job('default', connection=redis_connection, timeout=RQ_JOB_TIMEOUT_MAINT_SEC, result_ttl=600)
 @with_trace_context
 def clean_tags():
     self_job = get_current_job()
@@ -251,16 +268,16 @@ def clean_tags():
     return {'date_time': date_time, 'pod': POD_NAME}
 
 
-@job('default', connection=redis_connection, timeout=90, result_ttl=90)
+@job('default', connection=redis_connection, timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC, result_ttl=90)
 @with_trace_context
 def add_tags(tags):
     normalized = [str(word)[0:50] for word in tags]
-    bulk = _tags_bulk_post(normalized, timeout=60)
+    bulk = _tags_bulk_post(normalized)
     return {"bulk": bulk, "pod": POD_NAME}
 
 
 
-@job('default', connection=redis_connection, timeout=900, result_ttl=900)
+@job('default', connection=redis_connection, timeout=RQ_JOB_TIMEOUT_MAINT_SEC, result_ttl=900)
 @with_trace_context
 def add_tags_from_steps():
     MAX_STEPS = 80000
@@ -291,10 +308,15 @@ def add_tags_from_steps():
         with sentry_sdk.start_span(op="http.client", description=f"semantic+tags step {step}"):
             url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
             headers = {'content-type': 'application/json'}
-            rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
+            rr = requests.post(
+                url_semantic,
+                data=json.dumps({"text": text}),
+                headers=headers,
+                timeout=HTTP_SEMANTIC_TAGS_TIMEOUT_SEC,
+            )
             sem_data = rr.json()
             sim = sem_data.get('sim', []) or []
-            _tags_bulk_post(sim, timeout=60)
+            _tags_bulk_post(sim)
         
         if i % 50 == 0:
             self_job = get_current_job()
@@ -318,7 +340,7 @@ def add_tags_from_steps():
 #
 #  GEO
 #   
-@job('default', connection=redis_connection, timeout=90, result_ttl=270)
+@job('default', connection=redis_connection, timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC, result_ttl=270)
 @with_trace_context
 def do_geo(ip):
 
@@ -336,7 +358,7 @@ def do_geo(ip):
         try:
             url = f"{IP_SERVICE_URL}/api/v1/ip/{ip}/"
             headers = {'content-type': 'application/json'}
-            response = requests.get(url, headers=headers, timeout=15)
+            response = requests.get(url, headers=headers, timeout=HTTP_IP_GEO_TIMEOUT_SEC)
             response.raise_for_status()
             geo = response.json()
 
@@ -362,7 +384,7 @@ def do_geo(ip):
 #
 #   SAVE
 #   
-@job('default', connection=redis_connection, timeout=90, result_ttl=90)
+@job('default', connection=redis_connection, timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC, result_ttl=90)
 @with_trace_context
 def save(data):
 
@@ -405,7 +427,7 @@ def save(data):
 #
 #   ANALYZE
 #
-@job('default', connection=redis_connection, timeout=90, result_ttl=270)
+@job('default', connection=redis_connection, timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC, result_ttl=270)
 @with_trace_context
 def analyze(html, step_number=None, step_url=None):
     """Analyze HTML: NER + tags via semantic-service (no local spaCy)."""
@@ -430,7 +452,12 @@ def analyze(html, step_number=None, step_url=None):
             url_semantic = f"{SEMANTIC_SERVICE_URL}/api/v1/semantic/tags/"
             headers = {'content-type': 'application/json'}
             if len(text) > 128:
-                rr = requests.post(url_semantic, data=json.dumps({"text": text}), headers=headers, timeout=30)
+                rr = requests.post(
+                    url_semantic,
+                    data=json.dumps({"text": text}),
+                    headers=headers,
+                    timeout=HTTP_SEMANTIC_TAGS_TIMEOUT_SEC,
+                )
                 rr.raise_for_status()
                 sem_data = rr.json()
                 sentry_sdk.logger.info(f"semantic_service data: {sem_data}")
@@ -444,7 +471,7 @@ def analyze(html, step_number=None, step_url=None):
         if len(text) > 128 and tags:
             with sentry_sdk.start_span(op="http.client", description="tags_service bulk") as span:
                 span.set_data("tags_count", len(tags))
-                _tags_bulk_post(tags, timeout=60)
+                _tags_bulk_post(tags)
 
     self_job = get_current_job()
     self_job.meta['tags'] = tags
@@ -469,7 +496,7 @@ def analyze(html, step_number=None, step_url=None):
 MAX_SEMANTIC_SNIPPET_CHARS = 2500
 
 
-@job("default", connection=redis_connection, timeout=60, result_ttl=270)
+@job("default", connection=redis_connection, timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC, result_ttl=270)
 @with_trace_context
 def analyze_semantic(snippet, step_number=None, step_url=None):
     """Run semantic-service analyze_all on a short snippet; chained after analyze()."""
@@ -497,7 +524,7 @@ def analyze_semantic(snippet, step_number=None, step_url=None):
                 url,
                 data=json.dumps({"text": snippet}),
                 headers=headers,
-                timeout=45,
+                timeout=HTTP_SEMANTIC_ANALYZE_ALL_TIMEOUT_SEC,
             )
             resp.raise_for_status()
             sem = resp.json()
@@ -545,7 +572,7 @@ def analyze_semantic(snippet, step_number=None, step_url=None):
     return out
 
 
-@job("default", connection=redis_connection, timeout=120, result_ttl=300)
+@job("default", connection=redis_connection, timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC, result_ttl=300)
 @with_trace_context
 def mood_snapshot(snippet, semantic_json=None, step_number=None):
     """Call mood-service with page snippet + semantic JSON; result is emitted as mood_collect."""
@@ -570,7 +597,7 @@ def mood_snapshot(snippet, semantic_json=None, step_number=None):
                 url,
                 json={"text": snippet, "semantic": sem},
                 headers={"content-type": "application/json"},
-                timeout=90,
+                timeout=HTTP_MOOD_SNAPSHOT_TIMEOUT_SEC,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -608,16 +635,24 @@ def _filenamify(url):
 def _get_s3_client():
     """Create a boto3 S3 client for the configured endpoint."""
     import boto3
+    from botocore.config import Config
+
     endpoint_url = f"https://{S3_HOST}:{S3_PORT}" if S3_PORT != '443' else f"https://{S3_HOST}"
+    cfg = Config(
+        connect_timeout=S3_CONNECT_TIMEOUT_SEC,
+        read_timeout=S3_READ_TIMEOUT_SEC,
+        retries={"max_attempts": 1, "mode": "standard"},
+    )
     return boto3.client(
         's3',
         endpoint_url=endpoint_url,
         aws_access_key_id=S3_ACCESS_KEY,
         aws_secret_access_key=S3_SECRET_KEY,
+        config=cfg,
     )
 
 
-@job('default', connection=redis_connection, timeout=120, result_ttl=270)
+@job('default', connection=redis_connection, timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC, result_ttl=270)
 @with_trace_context
 def do_screenshot(data):
     """
@@ -660,7 +695,9 @@ def do_screenshot(data):
                 rq_otel_parent_for_renderer = None
         for attempt in range(1, SCREENSHOT_RENDER_RETRIES + 1):
             try:
-                response = requests.get(render_url, params=params, timeout=60)
+                response = requests.get(
+                    render_url, params=params, timeout=HTTP_SCREENSHOT_RENDER_TIMEOUT_SEC
+                )
                 response_received_wall_ns = time.time_ns()
                 break
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
@@ -733,7 +770,7 @@ def do_screenshot(data):
     }
 
 
-@job('default', connection=redis_connection, timeout=120, result_ttl=270)
+@job('default', connection=redis_connection, timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC, result_ttl=270)
 @with_trace_context
 def image_analyze(data):
     logger.info("job image_analyze start")
@@ -762,7 +799,7 @@ def image_analyze(data):
         response = requests.post(
             f"{IMAGE_ANALYZE_SERVICE_URL}/api/v1/image-analyze/analyze/",
             json={"image_url": screenshot_url, "n_colors": 7},
-            timeout=60,
+            timeout=HTTP_IMAGE_ANALYZE_TIMEOUT_SEC,
         )
         response.raise_for_status()
         payload = response.json()
@@ -811,7 +848,7 @@ def step_payload_for_store(data):
     return _ordered_step(data)
 
 
-@job('default', connection=redis_connection, timeout=120, result_ttl=270)
+@job('default', connection=redis_connection, timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC, result_ttl=270)
 @with_trace_context
 def do_storage(data):
     """
@@ -831,7 +868,7 @@ def do_storage(data):
 
     try:
         with sentry_sdk.start_span(op="http.client", description="storage_service /store"):
-            response = storage_http.storage_post_store(payload, timeout=30)
+            response = storage_http.storage_post_store(payload, timeout=HTTP_STORAGE_STORE_JOB_TIMEOUT_SEC)
             response.raise_for_status()
         r = response.json() if response.content else {}
     except Exception as e:
@@ -857,11 +894,11 @@ def do_storage(data):
 # successful jobs and their results are kept.
 # for more detail: https://python-rq.org/docs/jobs/
 # 7*24*60*60
-@job('default', connection=redis_connection, timeout=90, result_ttl=90)
+@job('default', connection=redis_connection, timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC, result_ttl=90)
 @with_trace_context
 def wait(num_iterations):
     """
-    wait for num_iterations seconds
+    Sleep num_iterations seconds (capped by RQ_JOB_TIMEOUT_PIPELINE_SEC).
     """
     # get a reference to the job we are currently in
     # to send back status reports
@@ -891,7 +928,7 @@ def wait(num_iterations):
     return {'date_time': date_time, 'pod': POD_NAME}
 
 
-@job('default', connection=redis_connection, timeout=900, result_ttl=900)
+@job('default', connection=redis_connection, timeout=RQ_JOB_TIMEOUT_MAINT_SEC, result_ttl=900)
 @with_trace_context
 def clean_tsv_data():
     """
@@ -976,13 +1013,13 @@ def clean_tsv_data():
         }
 
 
-@job('default', connection=redis_connection, timeout=1)
+@job('default', connection=redis_connection, timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC)
 @with_trace_context
 def add(x, y):
     return {'result': x + y, 'pod': POD_NAME}
 
 
-@job('default', connection=redis_connection, timeout=1)
+@job('default', connection=redis_connection, timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC)
 @with_trace_context
 def pulse():
     print("job pulse")
