@@ -990,6 +990,19 @@ spec:
               key: SHHH_SENTRY_URL
         - name: S3_BUCKET_NAME
           value: "steps"
+        # RQ + screenshot: keep renderer retries inside job timeout (avoid ~21s failed hangs).
+        - name: RQ_JOB_TIMEOUT_PIPELINE_SEC
+          value: "15"
+        - name: RQ_JOB_POLL_WAIT_SEC
+          value: "22"
+        - name: HTTP_SCREENSHOT_RENDER_TIMEOUT_SEC
+          value: "5"
+        - name: SCREENSHOT_RENDER_RETRIES
+          value: "2"
+        - name: SCREENSHOT_RENDER_BACKOFF_SEC
+          value: "0.5"
+        - name: SCREENSHOT_PIPELINE_S3_SLACK_SEC
+          value: "4"
         - name: OTEL_TRACING_ENABLED
           value: "1"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -1458,6 +1471,18 @@ spec:
           value: "/app/bot_config/bot.yaml"
         - name: RQ_RESULT_TTL_SECONDS
           value: "1800"
+        - name: RQ_JOB_TIMEOUT_PIPELINE_SEC
+          value: "15"
+        - name: RQ_JOB_POLL_WAIT_SEC
+          value: "22"
+        - name: HTTP_SCREENSHOT_RENDER_TIMEOUT_SEC
+          value: "5"
+        - name: SCREENSHOT_RENDER_RETRIES
+          value: "2"
+        - name: SCREENSHOT_RENDER_BACKOFF_SEC
+          value: "0.5"
+        - name: SCREENSHOT_PIPELINE_S3_SLACK_SEC
+          value: "4"
         volumeMounts:
         - name: bot-config
           mountPath: /app/bot_config/bot.yaml
