@@ -1710,7 +1710,9 @@ def queue_page():
     try:
         jobs_raw, total_jobs = get_all_jobs_paginated(limit=limit, offset=offset)
         jobs_fetched_per_request.observe(len(jobs_raw))
-        joblist = reversed(jobs_raw)
+        # rq_helpers.get_all_job_ids уже отдаёт newest-first; повторный reverse
+        # ставил свежее в конец страницы и прятал screenshots/image_analyze.
+        joblist = list(jobs_raw)
     except Exception as e:
         logger.exception("Redis/queue error in queue_page")
         return render_template(
