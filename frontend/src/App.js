@@ -203,7 +203,7 @@ export function AppContent() {
     <>
       <Navbar />
       <Routes className="Nav">
-        <Route path="/" element={<Tags />} />
+        <Route path="/" element={<Navigate to="/tags" replace />} />
         <Route path="/semantic" element={<Semantic />} />
         <Route path="/steps" element={<Steps />} />
         <Route path="/atlas" element={<AtlasPage />} />
