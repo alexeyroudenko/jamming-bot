@@ -115,6 +115,30 @@ function writeTagEmbedAutoswitchToStorage(enabled) {
   }
 }
 
+const SCENES_PWA_TITLE = 'Jamming Bot Scenes'
+
+/** PWA manifest + document title for `/static-app/tags` only (restore on unmount). */
+function PwaScenesManifest({ children }) {
+  useEffect(() => {
+    const link = document.querySelector('link[rel="manifest"]')
+    if (!link) return undefined
+
+    const prevHref = link.getAttribute('href')
+    const base = (process.env.PUBLIC_URL || '').replace(/\/$/, '')
+    link.setAttribute('href', `${base}/manifest-scenes.json`)
+
+    const prevTitle = document.title
+    document.title = SCENES_PWA_TITLE
+
+    return () => {
+      if (prevHref != null) link.setAttribute('href', prevHref)
+      document.title = prevTitle
+    }
+  }, [])
+
+  return children
+}
+
 /** Routes + nav; wrapped by `Router` in `App` (and by `MemoryRouter` in tests). */
 export function AppContent() {
   const navigate = useNavigate()
@@ -187,7 +211,11 @@ export function AppContent() {
         <Route path="/graph" element={<Blank />} />
         <Route
           path="/tags"
-          element={<TagEmbedPage title="Tags" path="/tags/" />}
+          element={
+            <PwaScenesManifest>
+              <TagEmbedPage title="Tags" path="/tags/" />
+            </PwaScenesManifest>
+          }
         />
         <Route
           path="/tags3d"
