@@ -8,6 +8,7 @@ import random
 import logging
 import threading
 import tempfile
+import ipaddress
 import requests
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -88,6 +89,21 @@ RQ_RESULT_TTL = max(60, int(os.getenv("RQ_RESULT_TTL_SECONDS", "1800")))
 VIEWER_STALE_TTL_SECONDS = max(15, int(os.getenv("VIEWER_STALE_TTL_SECONDS", "60")))
 VIEWER_SWEEP_INTERVAL_SECONDS = max(5, int(os.getenv("VIEWER_SWEEP_INTERVAL_SECONDS", "15")))
 _viewer_last_sweep_monotonic = 0.0
+TRUST_ALL_PROXIES = os.getenv("TRUST_ALL_PROXIES", "0").strip().lower() in ("1", "true", "yes", "on")
+_trusted_proxy_cidrs_raw = os.getenv(
+    "TRUSTED_PROXY_CIDRS",
+    "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10",
+)
+TRUSTED_PROXY_NETWORKS = []
+for _raw_cidr in _trusted_proxy_cidrs_raw.split(","):
+    _cidr = _raw_cidr.strip()
+    if not _cidr:
+        continue
+    try:
+        TRUSTED_PROXY_NETWORKS.append(ipaddress.ip_network(_cidr, strict=False))
+    except ValueError:
+        logger = logging.getLogger(__name__)
+        logger.warning("Invalid TRUSTED_PROXY_CIDRS entry ignored: %s", _cidr)
 
 # ---------------------------------------------------------------------------
 # Sentry
@@ -929,6 +945,40 @@ def _short_user_agent(user_agent: str, limit: int = 72):
     return value[: max(0, limit - 1)].rstrip() + "…"
 
 
+def _ip_in_trusted_proxies(ip_text: str) -> bool:
+    if not ip_text:
+        return False
+    if TRUST_ALL_PROXIES:
+        return True
+    try:
+        ip_obj = ipaddress.ip_address(ip_text)
+    except ValueError:
+        return False
+    for network in TRUSTED_PROXY_NETWORKS:
+        if ip_obj in network:
+            return True
+    return False
+
+
+def _client_ip_from_request():
+    """Best-effort client IP behind reverse proxies with trust checks."""
+    remote_addr = (request.remote_addr or "").strip()
+    trusted_hop = _ip_in_trusted_proxies(remote_addr)
+    xff = (request.headers.get("X-Forwarded-For") or "").strip()
+    if trusted_hop and xff:
+        # RFC 7239 style chain: client, proxy1, proxy2...
+        for candidate in [part.strip() for part in xff.split(",") if part.strip()]:
+            try:
+                ipaddress.ip_address(candidate)
+                return candidate
+            except ValueError:
+                continue
+    x_real_ip = (request.headers.get("X-Real-IP") or "").strip()
+    if trusted_hop and x_real_ip:
+        return x_real_ip
+    return remote_addr or "—"
+
+
 def _capture_viewer_snapshot():
     connected_at = datetime.now(timezone.utc)
     role = "admin" if session.get("logged_in") else "guest"
@@ -947,7 +997,7 @@ def _capture_viewer_snapshot():
         "role": role,
         "connected_at": connected_at,
         "last_seen": connected_at,
-        "ip": request.remote_addr or "—",
+        "ip": _client_ip_from_request(),
         "origin": headers.get("Origin") or "—",
         "transport": transport,
         "user_agent": headers.get("User-Agent") or "",

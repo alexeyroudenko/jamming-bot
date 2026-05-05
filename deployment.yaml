@@ -2118,6 +2118,164 @@ spec:
     interval: 15s
     path: /
 ---
+# ===================== n8n =====================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: n8n-data-pvc
+  namespace: jamming-bot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n
+  namespace: jamming-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: n8n
+  template:
+    metadata:
+      labels:
+        app: n8n
+    spec:
+      containers:
+      - name: n8n
+        image: n8nio/n8n:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5678
+        env:
+        - name: N8N_HOST
+          value: "n8n.arthew0.online"
+        - name: N8N_PROTOCOL
+          value: "https"
+        - name: N8N_PORT
+          value: "5678"
+        - name: WEBHOOK_URL
+          value: "https://n8n.arthew0.online/"
+        - name: GENERIC_TIMEZONE
+          value: "Europe/Moscow"
+        volumeMounts:
+        - name: n8n-data
+          mountPath: /home/node/.n8n
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 5678
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 5678
+          initialDelaySeconds: 40
+          periodSeconds: 20
+      volumes:
+      - name: n8n-data
+        persistentVolumeClaim:
+          claimName: n8n-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n
+  namespace: jamming-bot
+spec:
+  type: ClusterIP
+  selector:
+    app: n8n
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5678
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: n8n-redirect
+  namespace: jamming-bot
+spec:
+  redirectRegex:
+    regex: ^https?://n8n\.jamming-bot\.arthew0\.online/(.*)
+    replacement: https://n8n.arthew0.online/$1
+    permanent: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: n8n-root-to-login
+  namespace: jamming-bot
+spec:
+  redirectRegex:
+    regex: ^https?://n8n\.arthew0\.online/$
+    replacement: https://n8n.arthew0.online/login
+    permanent: true
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: n8n-ingress
+  namespace: jamming-bot
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-n8n-root-to-login@kubernetescrd
+spec:
+  tls:
+  - hosts:
+    - n8n.arthew0.online
+    secretName: n8n-tls
+  rules:
+  - host: n8n.arthew0.online
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: n8n
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: n8n-legacy-redirect-ingress
+  namespace: jamming-bot
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-n8n-redirect@kubernetescrd
+spec:
+  tls:
+  - hosts:
+    - n8n.jamming-bot.arthew0.online
+    secretName: n8n-legacy-tls
+  rules:
+  - host: n8n.jamming-bot.arthew0.online
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: n8n
+            port:
+              number: 80
+---
 # ===================== backfill-worker (one-shot Job) =====================
 # Run: make k3s-backfill-worker
 # Monitor: kubectl logs -n jamming-bot job/backfill-worker -f
