@@ -95,6 +95,17 @@ make k3s-traefik-stabilize
 
 Метрики состояния объектов API: `make k3s-kube-state-metrics` (namespace `kube-state-metrics`). Для индикатора KSM во **встроенном** Prometheus Coroot нужен доп. scrape, см. `make k3s-coroot-prometheus-ksm-scrape` и [`docs/monitoring/coroot-runbook.md`](../docs/monitoring/coroot-runbook.md) (раздел про UI).
 
+### RQ: очередь скриншотов (`screenshots`)
+
+- Джобы **`do_screenshot`** ставятся в очередь **`screenshots`**, забирает их Deployment **`worker-screenshots`** (тот же образ, что и **`worker-service`**, переменная **`RQ_QUEUE_NAMES=screenshots`**).
+- Очередь **`default`** обрабатывают поды **`worker-service`** (**`RQ_QUEUE_NAMES=default`**, минимум 2 реплики через KEDA).
+- После апдейта со старой схемой (скрины жили в `default`) можно разово перенести висящие задачи:
+  ```bash
+  kubectl -n jamming-bot exec deploy/app-service -- python migrate_screenshot_jobs.py --dry-run
+  kubectl -n jamming-bot exec deploy/app-service -- python migrate_screenshot_jobs.py
+  ```
+  (скрипт в образе: каталог `/app`, файл `migrate_screenshot_jobs.py`.)
+
 ### mood-service (K3s)
 
 - Образ **`mood-service:latest`** собирается из каталога **`mood-service/`** (см. `build_and_import` в [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)).

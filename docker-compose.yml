@@ -370,7 +370,7 @@ services:
   worker:
     build: ./app-service
     image: worker-image
-    command: rq worker --name worker --disable-job-desc-logging --url redis://redis:6379/0
+    command: python worker.py
     restart: unless-stopped
     environment:
       - S3_ACCESS_KEY=${S3_ACCESS_KEY}
@@ -415,7 +415,7 @@ services:
 
   worker2:
     image: worker-image
-    command: rq worker --name worker2 --disable-job-desc-logging --url redis://redis:6379/0
+    command: python worker.py
     restart: unless-stopped
     environment:
       - S3_ACCESS_KEY=${S3_ACCESS_KEY}
@@ -461,7 +461,7 @@ services:
 
   worker3:
     image: worker-image
-    command: rq worker --name worker3 --disable-job-desc-logging --url redis://redis:6379/0
+    command: python worker.py
     restart: unless-stopped
     environment:
       - S3_ACCESS_KEY=${S3_ACCESS_KEY}
@@ -495,6 +495,53 @@ services:
       - redis
       - jaeger
       - otel-collector
+      - image_analyze_service
+      - mood_service
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+
+  worker_screenshots:
+    image: worker-image
+    command: python worker.py
+    restart: unless-stopped
+    environment:
+      - RQ_QUEUE_NAMES=screenshots
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - S3_HOST=${S3_HOST}
+      - S3_PORT=${S3_PORT}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - SENTRY_DSN=${SHHH_SENTRY_URL}
+      - TAGS_SERVICE_URL=http://tags_service:8000
+      - SEMANTIC_SERVICE_URL=http://semantic_service:8005
+      - MOOD_SERVICE_URL=http://mood_service:8020
+      - STORAGE_SERVICE_URL=http://storage_service:7781
+      - IP_SERVICE_URL=http://ip_service:8004
+      - DATA_SERVICE_URL=http://data_service:8010
+      - RENDERER_SERVICE_URL=http://html-renderer-service:3000
+      - IMAGE_ANALYZE_SERVICE_URL=http://image_analyze_service:8006
+      - REMOTE_DATA_URL=${REMOTE_DATA_URL:-https://data.jamming-bot.arthew0.online}
+      - REMOTE_STORAGE_URL=${REMOTE_STORAGE_URL:-https://storage.jamming-bot.arthew0.online}
+      - REMOTE_TAGS_URL=${REMOTE_TAGS_URL:-https://tags.jamming-bot.arthew0.online}
+      - OTEL_TRACING_ENABLED=${OTEL_TRACING_ENABLED:-0}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=app-service-worker-screenshots
+    volumes:
+      - type: bind
+        source: ./app-service/flask
+        target: /app
+      - type: bind
+        source: ./data
+        target: /app/data
+    depends_on:
+      - redis
+      - jaeger
+      - otel-collector
+      - html-renderer-service
       - image_analyze_service
       - mood_service
     networks:

@@ -31,5 +31,9 @@ from rq import Worker
 from rq_helpers import redis_connection
 
 if __name__ == "__main__":
-    w = Worker(["default"], connection=redis_connection)
+    raw = (os.getenv("RQ_QUEUE_NAMES") or "default").strip()
+    queue_names = [q.strip() for q in raw.split(",") if q.strip()]
+    if not queue_names:
+        queue_names = ["default"]
+    w = Worker(queue_names, connection=redis_connection)
     w.work(logging_level=logging.INFO)

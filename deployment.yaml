@@ -33,10 +33,10 @@ spec:
         resources:
           requests:
             cpu: "250m"
-            memory: "512Mi"
+            memory: "768Mi"
           limits:
             cpu: "1000m"
-            memory: "768Mi"
+            memory: "1536Mi"
         readinessProbe:
           httpGet:
             path: /
@@ -928,7 +928,7 @@ metadata:
   name: worker-service
   namespace: jamming-bot
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: worker-service
@@ -996,6 +996,8 @@ spec:
           value: "http://otel-collector:4318"
         - name: OTEL_SERVICE_NAME
           value: "app-service-worker"
+        - name: RQ_QUEUE_NAMES
+          value: "default"
         resources:
           requests:
             cpu: "125m"
@@ -1003,6 +1005,91 @@ spec:
           limits:
             cpu: "1000m"
             memory: "512Mi"
+---
+# ===================== worker-screenshots (RQ queue screenshots only) =====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-screenshots
+  namespace: jamming-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker-screenshots
+  template:
+    metadata:
+      labels:
+        app: worker-screenshots
+    spec:
+      tolerations:
+      - key: node.kubernetes.io/disk-pressure
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: worker
+        image: app-service:latest
+        imagePullPolicy: Never
+        command: ["python", "worker.py"]
+        env:
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_URL
+          value: "redis://redis:6379/0"
+        - name: TAGS_SERVICE_URL
+          value: "http://tags-service"
+        - name: SEMANTIC_SERVICE_URL
+          value: "http://semantic-service"
+        - name: MOOD_SERVICE_URL
+          value: "http://mood-service"
+        - name: STORAGE_SERVICE_URL
+          value: "http://storage-service"
+        - name: DATA_SERVICE_URL
+          value: "http://data-service"
+        - name: IP_SERVICE_URL
+          value: "http://ip-service"
+        - name: RENDERER_SERVICE_URL
+          value: "http://html-renderer-service"
+        - name: IMAGE_ANALYZE_SERVICE_URL
+          value: "http://image-analyze-service"
+        - name: S3_HOST
+          value: "s3.firstvds.ru"
+        - name: S3_PORT
+          value: "443"
+        - name: S3_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: S3_ACCESS_KEY
+        - name: S3_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: S3_SECRET_KEY
+        - name: SENTRY_DSN
+          valueFrom:
+            secretKeyRef:
+              name: jamming-bot-secrets
+              key: SHHH_SENTRY_URL
+        - name: S3_BUCKET_NAME
+          value: "steps"
+        - name: OTEL_TRACING_ENABLED
+          value: "1"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://otel-collector:4318"
+        - name: OTEL_SERVICE_NAME
+          value: "app-service-worker-screenshots"
+        - name: RQ_QUEUE_NAMES
+          value: "screenshots"
+        resources:
+          requests:
+            cpu: "125m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "768Mi"
 ---
 # ===================== rq-dashboard =====================
 apiVersion: apps/v1
@@ -1982,8 +2069,8 @@ metadata:
 spec:
   scaleTargetRef:
     name: worker-service
-  minReplicaCount: 1
-  maxReplicaCount: 4
+  minReplicaCount: 2
+  maxReplicaCount: 6
   cooldownPeriod: 60
   pollingInterval: 10
   triggers:
@@ -1992,6 +2079,27 @@ spec:
       address: redis.jamming-bot.svc.cluster.local:6379
       listName: rq:queue:default
       listLength: "4"
+      databaseIndex: "0"
+---
+# ===================== KEDA: worker-screenshots autoscaler =====================
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: worker-screenshots-scaler
+  namespace: jamming-bot
+spec:
+  scaleTargetRef:
+    name: worker-screenshots
+  minReplicaCount: 1
+  maxReplicaCount: 4
+  cooldownPeriod: 60
+  pollingInterval: 10
+  triggers:
+  - type: redis
+    metadata:
+      address: redis.jamming-bot.svc.cluster.local:6379
+      listName: rq:queue:screenshots
+      listLength: "3"
       databaseIndex: "0"
 ---
 # ===================== KEDA: html-renderer autoscaler =====================
@@ -2015,6 +2123,12 @@ spec:
       address: redis.jamming-bot.svc.cluster.local:6379
       listName: rq:queue:default
       listLength: "4"
+      databaseIndex: "0"
+  - type: redis
+    metadata:
+      address: redis.jamming-bot.svc.cluster.local:6379
+      listName: rq:queue:screenshots
+      listLength: "2"
       databaseIndex: "0"
 ---
 # ===================== rq-exporter (Prometheus metrics) =====================

@@ -71,25 +71,43 @@ def inject_trace_context_into_job(job):
         logger.warning("Could not inject trace context into job %s: %s", getattr(job, "id", None), e)
 
 
-def enqueue_with_trace(queue, connection, func, *args, timeout=90, result_ttl=270, **kwargs):
+def enqueue_with_trace(queue, connection, func, *args, timeout=90, result_ttl=270, rq_job_meta=None, **kwargs):
     """Enqueue an RQ job with trace context in meta *before* pushing to the queue,
     so the worker always sees the carrier (avoids race with save_meta() after delay()).
+    rq_job_meta: optional dict merged into job.meta at creation (survives worker save_meta races).
     Returns the Job. Falls back to func.delay(*args, **kwargs) when tracing is disabled."""
     carrier = get_trace_context_for_rq()
     return enqueue_with_trace_carrier(
-        queue, connection, func, carrier, *args, timeout=timeout, result_ttl=result_ttl, **kwargs
+        queue,
+        connection,
+        func,
+        carrier,
+        *args,
+        timeout=timeout,
+        result_ttl=result_ttl,
+        rq_job_meta=rq_job_meta,
+        **kwargs,
     )
 
 
 def enqueue_with_trace_carrier(
-    queue, connection, func, carrier, *args, timeout=90, result_ttl=270, **kwargs
+    queue, connection, func, carrier, *args, timeout=90, result_ttl=270, rq_job_meta=None, **kwargs
 ):
     """Like enqueue_with_trace but uses an explicit W3C carrier dict (e.g. from Redis step hash).
-    Falls back to get_trace_context_for_rq() when carrier is empty; then to delay() without meta."""
+    Merges trace_carrier and rq_job_meta into meta at Job.create (single Redis meta write).
+    Uses Job.create when meta is non-empty or queue is not ``default`` (delay() ignores caller queue)."""
     eff = carrier if isinstance(carrier, dict) else {}
     if not eff:
         eff = get_trace_context_for_rq()
-    if not eff:
+
+    meta_parts = {}
+    if rq_job_meta:
+        meta_parts.update(rq_job_meta)
+    if eff:
+        meta_parts["trace_carrier"] = json.dumps({k: str(v) for k, v in eff.items() if v is not None})
+
+    # delay() always uses the function's @job default queue — wrong for screenshot_queue etc.
+    if not meta_parts and getattr(queue, "name", None) == "default":
         return func.delay(*args, **kwargs)
     try:
         from rq.job import Job
@@ -101,13 +119,15 @@ def enqueue_with_trace_carrier(
             connection=connection,
             timeout=timeout,
             result_ttl=result_ttl,
-            meta={"trace_carrier": json.dumps({k: str(v) for k, v in eff.items() if v is not None})},
+            meta=meta_parts,
             origin=queue.name,
         )
         queue.enqueue_job(job)
         return job
     except Exception as e:
         logger.warning("enqueue_with_trace_carrier failed, falling back to delay: %s", e)
+        if getattr(queue, "name", None) != "default":
+            raise
         return func.delay(*args, **kwargs)
 
 

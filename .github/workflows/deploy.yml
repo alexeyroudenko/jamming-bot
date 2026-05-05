@@ -129,6 +129,7 @@ jobs:
             restart_if_built ip-service             ip-service         && WAIT="$WAIT ip-service"
             restart_if_built app-service            app-service        && WAIT="$WAIT app-service"
             restart_if_built app-service            worker-service     && WAIT="$WAIT worker-service"
+            restart_if_built app-service            worker-screenshots && WAIT="$WAIT worker-screenshots"
             restart_if_built data-service           data-service       && WAIT="$WAIT data-service"
             restart_if_built frontend               frontend-static-app && WAIT="$WAIT frontend-static-app"
 
@@ -138,8 +139,8 @@ jobs:
 
             if echo "$BUILT" | grep -q "mood-service"; then
               echo ">>> mood-service rebuilt — restarting app-service and worker-service (MOOD_SERVICE_URL)..."
-              kubectl -n $NS rollout restart deployment app-service worker-service
-              WAIT="$WAIT app-service worker-service"
+              kubectl -n $NS rollout restart deployment app-service worker-service worker-screenshots
+              WAIT="$WAIT app-service worker-service worker-screenshots"
             fi
 
             FAILED=0

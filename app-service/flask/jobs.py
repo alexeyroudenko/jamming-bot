@@ -376,8 +376,10 @@ def do_geo(ip, step_number=None):
 
     logger.info(f"job do_geo ip {ip} step_number={step_number}")
     
-    self_job = get_current_job()    
-    self_job.meta['type'] = "geo"        
+    self_job = get_current_job()
+    if step_number is None or step_number == "":
+        step_number = self_job.meta.get("step") or self_job.meta.get("number")
+    self_job.meta['type'] = "geo"
     self_job.meta['ip'] = ip
     if step_number is not None and step_number != "":
         self_job.meta['step'] = step_number
@@ -686,7 +688,7 @@ def _get_s3_client():
     )
 
 
-@job('default', connection=redis_connection, timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC, result_ttl=270)
+@job('screenshots', connection=redis_connection, timeout=RQ_JOB_TIMEOUT_PIPELINE_SEC, result_ttl=270)
 @with_trace_context
 def do_screenshot(data):
     """

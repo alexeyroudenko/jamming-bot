@@ -70,7 +70,7 @@ k3s-mood-service:
 	docker build -t mood-service:latest ./mood-service
 	docker save mood-service:latest | k3s ctr images import -
 	kubectl rollout restart deployment mood-service -n jamming-bot
-	kubectl rollout restart deployment app-service worker-service -n jamming-bot
+	kubectl rollout restart deployment app-service worker-service worker-screenshots -n jamming-bot
 
 .PHONY: k3s-image-analyze-service
 k3s-image-analyze-service:
@@ -107,7 +107,7 @@ k3s-app-service:
 	docker build -t app-service:latest ./app-service
 	docker save app-service:latest | k3s ctr images import -
 	kubectl rollout restart deployment app-service -n jamming-bot
-	kubectl rollout restart deployment worker-service -n jamming-bot
+	kubectl rollout restart deployment worker-service worker-screenshots -n jamming-bot
 
 .PHONY: k3s-data-service
 k3s-data-service:

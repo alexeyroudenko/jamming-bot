@@ -39,7 +39,14 @@ import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.rq import RqIntegration
 
-from rq_helpers import queue, get_all_jobs, get_all_jobs_paginated, redis_connection
+from rq_helpers import (
+    queue,
+    screenshot_queue,
+    fetch_job_by_id,
+    get_all_jobs,
+    get_all_jobs_paginated,
+    redis_connection,
+)
 from config import Config, getConfig, getRedis
 from telemetry import (
     init_telemetry,
@@ -1608,14 +1615,16 @@ def _infer_queue_step_number(job):
 
 @app.route('/delete_job/<job_id>', methods=["GET"])
 def deletejob(job_id):
-    job = queue.fetch_job(job_id)
+    job = fetch_job_by_id(job_id)
+    if not job:
+        return redirect('/queue/')
     job.delete()
     return redirect('/queue/')
 
 
 @app.route("/jobs/<job_id>", methods=["GET"])
 def get_job_status(job_id):
-    job = queue.fetch_job(job_id)
+    job = fetch_job_by_id(job_id)
     if job:
         return jsonify({
             "status": "success",
@@ -1706,7 +1715,7 @@ def queue_job_detail(job_id):
             return dt.replace(tzinfo=timezone.utc)
         return dt
 
-    job = queue.fetch_job(job_id)
+    job = fetch_job_by_id(job_id)
     if not job:
         return render_template("queue_job.html", job=None, not_found=True), 404
 
@@ -2044,23 +2053,20 @@ def step():
                         if "ip" in data.keys():
                             ip = data['ip']
                             if ip != "0":
+                                _gn = data.get("number")
+                                _geo_meta = None
+                                if _gn is not None and str(_gn).strip() != "":
+                                    _geo_meta = {"step": _gn, "number": _gn}
                                 job = enqueue_with_trace(
                                     queue,
                                     redis_connection,
                                     jobs.do_geo,
                                     ip,
-                                    data.get("number"),
                                     timeout=90,
                                     result_ttl=RQ_RESULT_TTL,
+                                    rq_job_meta=_geo_meta,
+                                    step_number=_gn,
                                 )
-                                try:
-                                    if job is not None:
-                                        n = data.get("number")
-                                        if n is not None and str(n).strip() != "":
-                                            job.meta["step"] = n
-                                            job.save_meta()
-                                except Exception as e:
-                                    logger.debug("geo job meta step: %s", e)
                                 _poll_job_and_emit(job, 'location', timeout=90, step_key=step_key, silent=is_silent)
                                 pending_jobs.append(job)
 
@@ -2081,7 +2087,14 @@ def step():
                         step_text = (data.get('text') or '').strip()
                         if data.get('url') and len(step_text) > 128:
                             logger.info(f"step do_screenshot")
-                            job = enqueue_with_trace(queue, redis_connection, jobs.do_screenshot, data, timeout=120, result_ttl=RQ_RESULT_TTL)
+                            job = enqueue_with_trace(
+                                screenshot_queue,
+                                redis_connection,
+                                jobs.do_screenshot,
+                                data,
+                                timeout=120,
+                                result_ttl=RQ_RESULT_TTL,
+                            )
                             _poll_job_and_emit(job, 'screenshot', timeout=120, step_key=step_key, silent=is_silent)
                             pending_jobs.append(job)
 
