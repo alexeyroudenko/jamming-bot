@@ -22,6 +22,7 @@ tags:
 - [[refs/_index|refs]]
 - [[journal/_index|journal]]
 - [[exhibitions/_index|exhibitions]]
+- [[jamming-bot/анализ/_index|анализ]]
 - [[arthew0]]
 
 ## Журнал
@@ -34,6 +35,7 @@ tags:
 
 - Карточка проекта: [[jamming-bot/Jamming Bot]]
 - Карта содержания: [[Jamming Bot MOC]]
+- Аналитика: [[jamming-bot/анализ/_index|Анализ — индекс]]
 - Краулер: [[jamming-bot/dev/bot-service|Bot service]]
 - Web surface: [[Jamming bot web|Jamming Bot Web]]
 - Разработка: [[jamming-bot/dev/_index|Jamming Bot Dev Index]]
