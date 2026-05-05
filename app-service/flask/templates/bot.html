@@ -599,13 +599,7 @@ button {
 
     .bot-viewers-row,
     .bot-viewers-empty {
-        grid-template-columns: minmax(84px, 1fr) minmax(48px, 0.6fr) minmax(48px, 0.6fr) minmax(48px, 0.6fr) minmax(78px, 0.9fr);
-    }
-
-    .bot-viewers-transport,
-    .bot-viewers-origin,
-    .bot-viewers-ua {
-        display: none;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.65fr) minmax(0, 0.55fr) minmax(0, 0.55fr) minmax(0, 1fr);
     }
 
     .bot-logs-row,
@@ -991,7 +985,19 @@ button {
 // Login handling
 var admin = false;
 
+function isLocalhostRuntime() {
+    const host = window.location.hostname;
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+}
+
 function showLoginForm() {
+    if (isLocalhostRuntime()) {
+        admin = true;
+        sessionStorage.setItem('authenticated', 'true');
+        sessionStorage.setItem('admin', 'true');
+        updateAdminUI();
+        return;
+    }
     document.getElementById('login-overlay').style.display = 'flex';
     // Clear previous inputs
     document.getElementById('username').value = '';
@@ -1064,8 +1070,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Check if already authenticated
-    if (sessionStorage.getItem('authenticated') === 'true') {
+    // Localhost is always treated as authenticated admin.
+    if (isLocalhostRuntime()) {
+        admin = true;
+        sessionStorage.setItem('authenticated', 'true');
+        sessionStorage.setItem('admin', 'true');
+        updateAdminUI();
+    } else if (sessionStorage.getItem('authenticated') === 'true') {
         admin = sessionStorage.getItem('admin') === 'true';
         updateAdminUI();
     } else {
@@ -1577,6 +1588,37 @@ function renderWorkers(payload) {
     }).join('');
 }
 
+function formatViewerTooltip(viewer) {
+    if (!viewer || typeof viewer !== 'object') return '';
+    var lines = [];
+    var shown = {};
+    function add(key, label) {
+        label = label || key;
+        shown[key] = true;
+        var v = viewer[key];
+        var text = v === undefined || v === null || v === '' ? '—' : String(v);
+        lines.push(label + ': ' + text);
+    }
+    add('sid');
+    add('role');
+    add('connected_at');
+    add('connected_age');
+    add('last_seen');
+    add('last_seen_age');
+    add('ip');
+    add('origin');
+    add('transport');
+    add('user_agent');
+    add('is_admin');
+    add('is_stale');
+    Object.keys(viewer).sort().forEach(function (k) {
+        if (shown[k] || k === 'user_agent_short') return;
+        var v = viewer[k];
+        lines.push(k + ': ' + (v === undefined || v === null ? '—' : String(v)));
+    });
+    return escapeHtml(lines.join('\n'));
+}
+
 function renderViewers(payload) {
     const listEl = document.getElementById('viewers-list');
     const metaEl = document.getElementById('viewers-meta');
@@ -1611,9 +1653,6 @@ function renderViewers(payload) {
         '<span>live</span>',
         '<span>seen</span>',
         '<span>ip</span>',
-        '<span class="bot-viewers-transport">transport</span>',
-        '<span class="bot-viewers-origin">origin</span>',
-        '<span class="bot-viewers-ua">user-agent</span>',
         '</div>'
     ].join('');
 
@@ -1623,22 +1662,16 @@ function renderViewers(payload) {
         const connected = escapeHtml(viewer.connected_age || '—');
         const seen = escapeHtml(viewer.last_seen_age || '—');
         const ip = escapeHtml(viewer.ip || '—');
-        const transport = escapeHtml(viewer.transport || 'unknown');
-        const origin = escapeHtml(viewer.origin || '—');
-        const userAgent = escapeHtml(viewer.user_agent || '');
-        const userAgentShort = escapeHtml(viewer.user_agent_short || '—');
         const roleClass = role === 'admin' ? 'is-admin' : 'is-guest';
         const seenClass = viewer.is_stale ? ' is-stale' : '';
+        const tip = formatViewerTooltip(viewer);
         return [
-            '<div class="bot-viewers-row">',
-            '<span class="bot-viewers-sid" title="' + sid + '">' + sid + '</span>',
+            '<div class="bot-viewers-row" title="' + tip + '">',
+            '<span class="bot-viewers-sid">' + sid + '</span>',
             '<span class="bot-viewers-role ' + roleClass + '">' + role + '</span>',
             '<span>' + connected + '</span>',
             '<span class="bot-viewers-seen' + seenClass + '">' + seen + '</span>',
-            '<span class="bot-viewers-ip" title="' + ip + '">' + ip + '</span>',
-            '<span class="bot-viewers-transport">' + transport + '</span>',
-            '<span class="bot-viewers-origin" title="' + origin + '">' + origin + '</span>',
-            '<span class="bot-viewers-ua" title="' + userAgent + '">' + userAgentShort + '</span>',
+            '<span class="bot-viewers-ip">' + ip + '</span>',
             '</div>'
         ].join('');
     }).join('');

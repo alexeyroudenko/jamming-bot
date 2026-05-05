@@ -19,6 +19,8 @@ body.jb-dashboard {
     --bot-accent-strong: #ff0000;
     --bot-danger: #ff0000;
     --bot-shadow: 0 18px 44px rgba(0, 0, 0, 0.38);
+    /* Единая ширина нижнего стека панелей — левый край таблиц совпадает между блоками */
+    --bot-stack-panel-width: min(1240px, calc(100vw - 120px));
 }
 
 #debug,
@@ -210,9 +212,13 @@ body.jb-dashboard {
 
 .bot-visibility-head {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 8px;
+}
+
+.bot-visibility-head .bot-section-label {
+    padding-top: 0;
 }
 
 .bot-visibility-actions {
@@ -369,7 +375,7 @@ body.is-move-mode .bot-move-target.is-move-selected {
     bottom: 120px;
     transform: translateX(-50%);
     z-index: 205;
-    width: min(640px, calc(100vw - 320px));
+    width: var(--bot-stack-panel-width);
     max-height: 180px;
     padding: 10px 12px;
     background: rgba(5, 7, 10, 0.76);
@@ -385,7 +391,7 @@ body.is-move-mode .bot-move-target.is-move-selected {
     bottom: 212px;
     transform: translateX(-50%);
     z-index: 204;
-    width: min(960px, calc(100vw - 240px));
+    width: var(--bot-stack-panel-width);
     padding: 10px 12px;
     background: rgba(5, 7, 10, 0.76);
     border: 1px solid var(--bot-border);
@@ -400,7 +406,7 @@ body.is-move-mode .bot-move-target.is-move-selected {
     bottom: 316px;
     transform: translateX(-50%);
     z-index: 203;
-    width: min(1120px, calc(100vw - 160px));
+    width: var(--bot-stack-panel-width);
     max-height: 190px;
     padding: 10px 12px;
     background: rgba(5, 7, 10, 0.76);
@@ -416,7 +422,7 @@ body.is-move-mode .bot-move-target.is-move-selected {
     bottom: 612px;
     transform: translateX(-50%);
     z-index: 202;
-    width: min(1120px, calc(100vw - 160px));
+    width: var(--bot-stack-panel-width);
     max-height: 230px;
     padding: 10px 12px;
     background: rgba(5, 7, 10, 0.76);
@@ -511,7 +517,7 @@ body.is-move-mode .bot-move-target.is-move-selected {
     bottom: 518px;
     transform: translateX(-50%);
     z-index: 202;
-    width: min(1120px, calc(100vw - 160px));
+    width: var(--bot-stack-panel-width);
     padding: 10px 12px;
     background: rgba(5, 7, 10, 0.76);
     border: 1px solid var(--bot-border);
@@ -522,16 +528,32 @@ body.is-move-mode .bot-move-target.is-move-selected {
 
 .bot-workers-head {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
     margin-bottom: 8px;
+    /* Одинаковый горизонтальный inset с таблицами ниже */
+    padding: 0 4px;
+}
+
+.bot-workers-head .bot-section-label {
+    padding-top: 0;
+    padding-right: 0;
+    align-self: flex-start;
+}
+
+.bot-workers-head .bot-workers-meta {
+    align-self: flex-end;
 }
 
 .bot-workers-meta {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 11px;
     color: var(--bot-muted);
+    margin-left: 0;
+    text-align: right;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .bot-backfill-grid {
@@ -539,6 +561,7 @@ body.is-move-mode .bot-move-target.is-move-selected {
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 6px 10px;
     margin-bottom: 8px;
+    padding: 0 4px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 12px;
 }
@@ -576,6 +599,8 @@ body.is-move-mode .bot-move-target.is-move-selected {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 11px;
     color: var(--bot-muted);
+    margin-top: 2px;
+    padding: 0 4px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -587,6 +612,7 @@ body.is-move-mode .bot-move-target.is-move-selected {
     gap: 6px;
     max-height: 126px;
     overflow-y: auto;
+    padding: 0 2px 2px;
 }
 
 .bot-workers-row,
@@ -595,7 +621,7 @@ body.is-move-mode .bot-move-target.is-move-selected {
     grid-template-columns: minmax(130px, 1.4fr) minmax(64px, 0.7fr) minmax(130px, 1.2fr) minmax(110px, 1fr) minmax(56px, 0.5fr);
     gap: 8px;
     align-items: center;
-    padding: 4px 0;
+    padding: 5px 4px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 12px;
     line-height: 1.25;
@@ -651,18 +677,23 @@ body.is-move-mode .bot-move-target.is-move-selected {
     gap: 4px;
     max-height: 136px;
     overflow: auto;
+    padding: 0 4px 2px;
 }
 
 .bot-viewers-row,
 .bot-viewers-empty {
     display: grid;
-    grid-template-columns: minmax(120px, 1.1fr) minmax(56px, 0.55fr) minmax(56px, 0.55fr) minmax(56px, 0.55fr) minmax(120px, 0.9fr) minmax(72px, 0.6fr) minmax(120px, 1fr) minmax(220px, 1.6fr);
-    gap: 8px;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.6fr) minmax(0, 0.55fr) minmax(0, 0.55fr) minmax(0, 1.05fr);
+    gap: 10px;
     align-items: center;
-    padding: 4px 0;
+    padding: 5px 4px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 11px;
-    line-height: 1.25;
+    line-height: 1.3;
+}
+
+.bot-viewers-row:not(.is-head) {
+    cursor: help;
 }
 
 .bot-viewers-row.is-head {
@@ -681,9 +712,7 @@ body.is-move-mode .bot-move-target.is-move-selected {
 }
 
 .bot-viewers-sid,
-.bot-viewers-ip,
-.bot-viewers-origin,
-.bot-viewers-ua {
+.bot-viewers-ip {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -711,6 +740,7 @@ body.is-move-mode .bot-move-target.is-move-selected {
     gap: 4px;
     max-height: 176px;
     overflow: auto;
+    padding: 0 4px 2px;
 }
 
 .bot-logs-row,
@@ -1006,13 +1036,7 @@ body.is-admin .guest-only {
 
     .bot-viewers-row,
     .bot-viewers-empty {
-        grid-template-columns: minmax(84px, 1fr) minmax(48px, 0.6fr) minmax(48px, 0.6fr) minmax(48px, 0.6fr) minmax(78px, 0.9fr);
-    }
-
-    .bot-viewers-transport,
-    .bot-viewers-origin,
-    .bot-viewers-ua {
-        display: none;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.65fr) minmax(0, 0.55fr) minmax(0, 0.55fr) minmax(0, 1fr);
     }
 
     .bot-logs-row,
