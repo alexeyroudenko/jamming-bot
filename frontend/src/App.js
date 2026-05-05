@@ -203,7 +203,14 @@ export function AppContent() {
     <>
       <Navbar />
       <Routes className="Nav">
-        <Route path="/" element={<Navigate to="/tags" replace />} />
+        <Route
+          path="/"
+          element={
+            <PwaScenesManifest>
+              <TagEmbedPage title="Tags" path="/tags/" />
+            </PwaScenesManifest>
+          }
+        />
         <Route path="/semantic" element={<Semantic />} />
         <Route path="/steps" element={<Steps />} />
         <Route path="/atlas" element={<AtlasPage />} />
