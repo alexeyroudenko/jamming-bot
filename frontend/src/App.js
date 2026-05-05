@@ -117,6 +117,33 @@ function writeTagEmbedAutoswitchToStorage(enabled) {
 
 const SCENES_PWA_TITLE = 'Jamming Bot Scenes'
 
+/** Bottom 1px progress bar; grows from 0 to 100vw over `duration` ms. */
+function AutoswitchProgressBar({ duration }) {
+  const [width, setWidth] = useState(0)
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => setWidth(100))
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [])
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: 'fixed',
+        left: 0,
+        bottom: 0,
+        height: 1,
+        width: `${width}vw`,
+        background: 'rgba(255, 255, 255, 0.85)',
+        transition: `width ${duration}ms linear`,
+        pointerEvents: 'none',
+        zIndex: 2147483647,
+      }}
+    />
+  )
+}
+
 /** PWA manifest + document title for `/static-app/tags` only (restore on unmount). */
 function PwaScenesManifest({ children }) {
   useEffect(() => {
@@ -199,11 +226,29 @@ export function AppContent() {
     return clearAutoswitchInterval
   }, [tagEmbedAutoswitch, navigate, clearAutoswitchInterval])
 
+  const showAutoswitchProgress =
+    tagEmbedAutoswitch &&
+    (location.pathname === '/' ||
+      TAG_EMBED_AUTOSWITCH_ROUTES.includes(location.pathname))
+
   return (
     <>
       <Navbar />
+      {showAutoswitchProgress && (
+        <AutoswitchProgressBar
+          key={location.pathname}
+          duration={TAG_EMBED_AUTOSWITCH_MS}
+        />
+      )}
       <Routes className="Nav">
-        <Route path="/" element={<Tags />} />
+        <Route
+          path="/"
+          element={
+            <PwaScenesManifest>
+              <TagEmbedPage title="Tags" path="/tags/" />
+            </PwaScenesManifest>
+          }
+        />
         <Route path="/semantic" element={<Semantic />} />
         <Route path="/steps" element={<Steps />} />
         <Route path="/atlas" element={<AtlasPage />} />
