@@ -101,6 +101,8 @@ services:
       - REMOTE_STORAGE_URL=${REMOTE_STORAGE_URL:-https://storage.jamming-bot.arthew0.online}
       - REMOTE_TAGS_URL=${REMOTE_TAGS_URL:-https://tags.jamming-bot.arthew0.online}
       - MOOD_SERVICE_URL=http://mood_service:8020
+      # ENVIRONMENT_DATA=prod → /tags/* шаблоны фетчат /api/tags/* с прод-домена даже на localhost:5000.
+      - ENVIRONMENT_DATA=${ENVIRONMENT_DATA:-}
     volumes:
       - type: bind
         source: ./app-service/flask
@@ -599,6 +601,8 @@ services:
     environment:
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
+      # ENVIRONMENT_DATA=prod → embed-iframes идут на прод-домен вместо localhost:5000.
+      - REACT_APP_ENVIRONMENT_DATA=${ENVIRONMENT_DATA:-}
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules

@@ -75,6 +75,8 @@ services:
     environment:
       # Optional: tag pages at http://localhost:5000/tags/* fetch /api/tags/* from production instead of local Flask.
       TAGS_BROWSER_API_ORIGIN: "https://jamming-bot.arthew0.online"
+      # ENVIRONMENT_DATA=prod перебивает localhost-guard и форсит прод-origin для /api/tags/*.
+      ENVIRONMENT_DATA: ${ENVIRONMENT_DATA:-}
       SENTRY_DSN: ${SHHH_SENTRY_URL:-}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}

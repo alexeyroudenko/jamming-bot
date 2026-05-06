@@ -79,6 +79,14 @@ REMOTE_TAGS_URL = os.getenv('REMOTE_TAGS_URL', 'https://tags.jamming-bot.arthew0
 # Browser fetch() base for /api/tags/* on tag visualization pages (empty = same origin as the page).
 # Example: TAGS_BROWSER_API_ORIGIN=https://jamming-bot.arthew0.online — production must allow CORS from your dev origin.
 TAGS_BROWSER_API_ORIGIN = (os.getenv("TAGS_BROWSER_API_ORIGIN") or "").strip().rstrip("/")
+# ENVIRONMENT_DATA=prod → теговые страницы (`/tags`, `/tags/3d`, `/tags/sentiment-vortex`,
+# `/tags/vectorfield-3d` и т.д.) форсят прод-origin для /api/tags/* даже когда сам Flask
+# крутится на localhost:5000. Удобно для проверки прод-данных в локальном dev.
+ENVIRONMENT_DATA = (os.getenv("ENVIRONMENT_DATA") or "").strip().lower()
+ENVIRONMENT_DATA_PROD_TAGS_ORIGIN = (
+    os.getenv("ENVIRONMENT_DATA_PROD_TAGS_ORIGIN")
+    or "https://jamming-bot.arthew0.online"
+).strip().rstrip("/")
 
 cfg = getConfig()
 redis = getRedis()
@@ -149,6 +157,11 @@ if TAGS_BROWSER_API_ORIGIN:
     logger.info(
         "TAGS_BROWSER_API_ORIGIN=%s — tag visualization pages call /api/tags/* on that host",
         TAGS_BROWSER_API_ORIGIN,
+    )
+if ENVIRONMENT_DATA == "prod":
+    logger.info(
+        "ENVIRONMENT_DATA=prod — tag visualization pages call /api/tags/* on %s (overrides localhost guard)",
+        ENVIRONMENT_DATA_PROD_TAGS_ORIGIN,
     )
 
 DEFAULT_COMBINE_MAX_PHRASES = 512
@@ -240,7 +253,12 @@ app.config.from_object('config.Config')
 @app.context_processor
 def _inject_tags_api_base():
     """Пустой base → fetch на тот же origin, что и страница. На localhost игнорируем TAGS_BROWSER_API_ORIGIN,
-    иначе iframe с :5000 ходит на прод и ловит CORS / пустое облако при embed с CRA :3000."""
+    иначе iframe с :5000 ходит на прод и ловит CORS / пустое облако при embed с CRA :3000.
+
+    ENVIRONMENT_DATA=prod перебивает localhost-guard и принудительно использует прод-origin —
+    даёт смотреть прод-данные на `localhost:5000/tags/...` без поднятия локального стека."""
+    if ENVIRONMENT_DATA == "prod":
+        return {"tags_api_base": ENVIRONMENT_DATA_PROD_TAGS_ORIGIN}
     base = TAGS_BROWSER_API_ORIGIN
     if has_request_context():
         host = (request.host or "").split(":")[0].lower()
@@ -411,6 +429,7 @@ AUTH_PASS = os.getenv("AUTH_PASS", "x")
 
 PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
                    "/events",
+                   "/static-app",
                    "/rytm", "/socket.io", "/tags/", "/geo/", "/screenshots/", "/semantic", "/api/semantic/",
                    "/api/tags/get/", "/api/tags/combine/",
                    "/api/tags/sentiment-vortex/", "/api/tags/embeddings/", "/api/tags/add/",
@@ -1228,6 +1247,28 @@ def logout():
 @cross_origin()
 def bot():
     return render_template('bot.html')
+
+
+@app.route('/static-app', methods=["GET"])
+@app.route('/static-app/', methods=["GET"])
+@app.route('/static-app/<path:rest>', methods=["GET"])
+def static_app_local_dev_redirect(rest=""):
+    """Local dev convenience: forward http://<flask>/static-app/... to CRA dev server on :3000.
+
+    In production /static-app/* is handled by Traefik (StripPrefix middleware -> frontend-static-app
+    nginx Service) and never reaches Flask, so this redirect only ever fires for local requests.
+    Guarded by host check so any non-local hit (should not happen) returns 404 instead of leaking
+    a localhost URL.
+    """
+    host = (request.host or "").split(":")[0].lower()
+    if host not in ("localhost", "127.0.0.1"):
+        return Response("Not Found", status=404)
+    suffix = rest if rest else ""
+    target = f"http://localhost:3000/static-app/{suffix}"
+    qs = request.query_string.decode("utf-8") if request.query_string else ""
+    if qs:
+        target = f"{target}?{qs}"
+    return redirect(target, code=302)
 
 
 @app.route('/events/')

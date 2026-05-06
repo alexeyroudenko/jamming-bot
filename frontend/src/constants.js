@@ -15,6 +15,13 @@ function getTagsUiOrigin() {
   if (env && String(env).trim()) {
     return String(env).replace(/\/+$/, '')
   }
+  // ENVIRONMENT_DATA=prod форсит прод-домен даже из dev-фронта (localhost:3000):
+  // iframe пойдёт на https://jamming-bot.arthew0.online/tags/..., внутренние fetch
+  // вроде /api/tags/get/ автоматически уйдут туда же.
+  const envData = String(process.env.REACT_APP_ENVIRONMENT_DATA || '').trim().toLowerCase()
+  if (envData === 'prod') {
+    return Url.replace(/\/+$/, '')
+  }
   if (typeof window !== 'undefined') {
     const { hostname, port, protocol } = window.location
     if (hostname === 'localhost' && port === '3000') {
