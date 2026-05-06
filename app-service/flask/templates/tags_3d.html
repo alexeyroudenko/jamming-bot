@@ -65,14 +65,6 @@
       display: none;
     }
     .banner.visible { display: block; }
-    #hint {
-      position: fixed;
-      bottom: 12px;
-      left: 12px;
-      font-size: 10px;
-      color: #444;
-      z-index: 10;
-    }
   </style>
 </head>
 <body>
@@ -88,7 +80,6 @@
 <div id="webgl-error" class="banner" role="alert"></div>
 <div id="info" aria-live="polite"></div>
 <canvas id="viewport"></canvas>
-<div id="hint">drag to orbit · wheel to zoom · idle 10s focuses last tag</div>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js" crossorigin="anonymous"></script>
@@ -103,6 +94,8 @@
   var RADIUS_SPREAD = 0.42;
   var POSITION_JITTER = 3.2;
   var IDLE_MS = 10000;
+  /** Каждые N мс — фокус на случайный тег из показанных. */
+  var RANDOM_FOCUS_INTERVAL_MS = 7000;
   var FOCUS_DURATION_MS = 1600;
   var FLASH_MS = 520;
   var FOCUS_CAM_OFFSET = 10;
@@ -429,6 +422,17 @@
     }
   }
 
+  function tryRandomTagFocus() {
+    if (focusAnimating || !sprites.length) return;
+    var visible = [];
+    for (var v = 0; v < sprites.length; v++) {
+      if (sprites[v].visible) visible.push(sprites[v]);
+    }
+    if (!visible.length) return;
+    var i = Math.floor(Math.random() * visible.length);
+    runFocusOnSprite(visible[i]);
+  }
+
   function setLastTagFromList(arr) {
     if (!arr || !arr.length) return;
     var last = arr[arr.length - 1];
@@ -620,6 +624,7 @@
   }
 
   tick();
+  setInterval(tryRandomTagFocus, RANDOM_FOCUS_INTERVAL_MS);
 
   var socket = io({ transports: ['websocket', 'polling'] });
   socket.on('analyzed', function (data) {

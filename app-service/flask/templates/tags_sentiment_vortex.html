@@ -23,7 +23,7 @@
       text-overflow: ellipsis;
       text-shadow: 0 1px 1px rgba(0, 0, 0, 0.9);
       pointer-events: none;
-      margin-top: -10px;
+      text-align: left;
     }
     body.tags-sentiment-vortex:not(.sv-panel-visible) .tags-vis-toolbar {
       display: none !important;
@@ -86,6 +86,8 @@
   /** First load: one particle / label each this many ms. */
   var SV_FIRST_REVEAL_MS = 40;
   var svFirstRevealTimer = null;
+  /** Смещение подписи вдоль экранной оси «вправо» (мировые единицы). */
+  var SV_LABEL_SCREEN_RIGHT_OFFSET = 5;
 
   var warm = new THREE.Vector3(1.0, 0.0, 0.0);
   var cool = new THREE.Vector3(1.0, 1.0, 1.0);
@@ -105,6 +107,8 @@
   var autoSphere = new THREE.Spherical();
   var autoCamPos = new THREE.Vector3();
   var autoLookTarget = new THREE.Vector3();
+  var _svScreenRight = new THREE.Vector3();
+  var _svLabelPos = new THREE.Vector3();
   var nActive = 0;
   var lastMeanPolarity = null;
   var glitchUntil = 0;
@@ -214,10 +218,14 @@
 
   function syncLabelPositions() {
     if (nActive === 0) return;
+    camera.updateMatrixWorld();
+    _svScreenRight.set(1, 0, 0).applyQuaternion(camera.quaternion);
     var pos = geom.attributes.position.array;
     for (var i = 0; i < nActive; i++) {
       var ix = i * 3;
-      labelObjs[i].position.set(pos[ix], pos[ix + 1], pos[ix + 2]);
+      _svLabelPos.set(pos[ix], pos[ix + 1], pos[ix + 2]);
+      _svLabelPos.addScaledVector(_svScreenRight, SV_LABEL_SCREEN_RIGHT_OFFSET);
+      labelObjs[i].position.copy(_svLabelPos);
     }
   }
 
