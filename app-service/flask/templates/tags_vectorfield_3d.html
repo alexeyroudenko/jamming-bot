@@ -159,6 +159,11 @@
   var _projDir = new THREE.Vector3();
   var lastTagRows = null;
   var lastEmb = null;
+  /** Первое появление подписей якорей: одна за 40 ms. */
+  var VF3_ANCHOR_LABEL_REVEAL_MS = 40;
+  var vf3AnchorLabelsRevealEverCompleted = false;
+  var vf3AnchorRevealToken = 0;
+
   var _vf3OrbitOff = new THREE.Vector3();
   var _vf3OrbitSph = new THREE.Spherical();
   var _vf3OrbitQuat = new THREE.Quaternion();
@@ -462,8 +467,57 @@
     }
   }
 
+  function vf3CancelAnchorLabelRevealChain() {
+    vf3AnchorRevealToken++;
+  }
+
+  function vf3StartAnchorLabelReveal() {
+    if (!anchorLayer) return;
+    try {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        vf3AnchorLabelsRevealEverCompleted = true;
+        return;
+      }
+    } catch (e) {}
+    var items = anchorLayer.querySelectorAll('.vf-anchor-item');
+    if (items.length === 0) {
+      vf3AnchorLabelsRevealEverCompleted = true;
+      return;
+    }
+    vf3AnchorRevealToken++;
+    var tok = vf3AnchorRevealToken;
+    for (var r = 0; r < items.length; r++) {
+      var lab0 = items[r].querySelector('.vf-anchor-label');
+      if (lab0) {
+        lab0.style.opacity = '0';
+        lab0.style.visibility = 'hidden';
+      }
+    }
+    var ix = 0;
+    function step() {
+      if (tok !== vf3AnchorRevealToken) return;
+      if (ix >= items.length) {
+        vf3AnchorLabelsRevealEverCompleted = true;
+        return;
+      }
+      var lab = items[ix].querySelector('.vf-anchor-label');
+      if (lab) {
+        lab.style.opacity = '';
+        lab.style.visibility = '';
+      }
+      ix++;
+      if (ix < items.length) {
+        setTimeout(step, VF3_ANCHOR_LABEL_REVEAL_MS);
+      } else {
+        vf3AnchorLabelsRevealEverCompleted = true;
+      }
+    }
+    step();
+  }
+
   function rebuildAnchorLabels() {
     if (!anchorLayer) return;
+    vf3CancelAnchorLabelRevealChain();
     anchorLayer.innerHTML = '';
     if (!showAnchorLabels) return;
     for (var i = 0; i < anchors.length; i++) {
@@ -482,6 +536,9 @@
       anchorLayer.appendChild(item);
     }
     syncAnchorLabelPositions();
+    if (!vf3AnchorLabelsRevealEverCompleted && anchors.length > 0) {
+      vf3StartAnchorLabelReveal();
+    }
   }
 
   function setAnchorLabelsVisible(on) {
