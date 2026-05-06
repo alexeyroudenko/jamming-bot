@@ -1065,7 +1065,7 @@ spec:
         - name: HTTP_SCREENSHOT_RENDER_TIMEOUT_SEC
           value: "5"
         - name: SCREENSHOT_RENDER_RETRIES
-          value: "2"
+          value: "1"
         - name: SCREENSHOT_RENDER_BACKOFF_SEC
           value: "0.5"
         - name: SCREENSHOT_PIPELINE_S3_SLACK_SEC
@@ -1173,7 +1173,7 @@ spec:
         - name: HTTP_SCREENSHOT_RENDER_TIMEOUT_SEC
           value: "5"
         - name: SCREENSHOT_RENDER_RETRIES
-          value: "2"
+          value: "1"
         - name: SCREENSHOT_RENDER_BACKOFF_SEC
           value: "0.5"
         - name: SCREENSHOT_PIPELINE_S3_SLACK_SEC
@@ -1561,7 +1561,7 @@ spec:
         - name: HTTP_SCREENSHOT_RENDER_TIMEOUT_SEC
           value: "5"
         - name: SCREENSHOT_RENDER_RETRIES
-          value: "2"
+          value: "1"
         - name: SCREENSHOT_RENDER_BACKOFF_SEC
           value: "0.5"
         - name: SCREENSHOT_PIPELINE_S3_SLACK_SEC
@@ -2214,7 +2214,7 @@ spec:
 ---
 # ===================== KEDA: html-renderer autoscaler =====================
 # Screenshot jobs (do_screenshot) call html-renderer; scale up earlier under queue load.
-# Caps tuned for single-node (~8 CPU): fewer Chromium replicas = less RAM/CPU thrash.
+# maxReplicaCount 4 × семафор 4 параллельных рендера — запас при burst; узкий single-node — следить за RAM.
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -2224,7 +2224,7 @@ spec:
   scaleTargetRef:
     name: html-renderer
   minReplicaCount: 1
-  maxReplicaCount: 2
+  maxReplicaCount: 4
   cooldownPeriod: 90
   pollingInterval: 10
   triggers:
@@ -2238,7 +2238,7 @@ spec:
     metadata:
       address: redis.jamming-bot.svc.cluster.local:6379
       listName: rq:queue:screenshots
-      listLength: "2"
+      listLength: "1"
       databaseIndex: "0"
 ---
 # ===================== rq-exporter (Prometheus metrics) =====================

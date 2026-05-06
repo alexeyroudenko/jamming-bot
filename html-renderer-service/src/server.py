@@ -25,7 +25,14 @@ PORT = 3000
 # Глобальные объекты браузера (инициализируются при старте)
 _playwright = None
 _browser = None
-_render_semaphore = asyncio.Semaphore(2)  # до 2 параллельных рендеров — меньше пик памяти, избегаем OOMKilled
+# До 4 параллельных рендеров на реплику — клиентский HTTP timeout 5s и семафор(2)
+# давали очередь при burst из screenshot/analyze; OOM лимитируем requests 512Mi/lim 1Gi pod.
+_render_semaphore = asyncio.Semaphore(4)
+
+# Навигация короче клиентского read-timeout (5s у worker): успеть вернуть JSON/ответ до abort,
+# плюс запас на screenshot (~1–2s типично).
+_PAGE_GOTO_TIMEOUT_MS = 3200
+_POST_NAV_IDLE_MS = 150
 
 
 @app.on_event("startup")
@@ -112,8 +119,12 @@ async def render_screenshot(
 
                 load_phase_start = time.perf_counter()
                 # Переходим на страницу (domcontentloaded — меньше нагрузка на тяжёлых сайтах)
-                await page.goto(url, wait_until="domcontentloaded", timeout=5000)
-                await page.wait_for_timeout(400)
+                await page.goto(
+                    url,
+                    wait_until="domcontentloaded",
+                    timeout=_PAGE_GOTO_TIMEOUT_MS,
+                )
+                await page.wait_for_timeout(_POST_NAV_IDLE_MS)
 
                 if fullPage.lower() == 'true':
                     await page.evaluate("""
