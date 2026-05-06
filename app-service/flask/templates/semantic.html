@@ -52,8 +52,14 @@
   </section>
 </div>
 
-<div id="semantic-force-panel" class="semantic-force-panel" aria-label="Параметры силового графа">
-  <div class="semantic-force-head">Сила / расстояния</div>
+<div id="semantic-force-panel" class="semantic-force-panel is-collapsed" aria-label="Параметры силового графа">
+  <div class="semantic-force-toolbar">
+    <button type="button" class="semantic-force-toggle" id="semantic-force-toggle" aria-expanded="false" aria-controls="semantic-force-body" title="Показать параметры силы">
+      <span class="semantic-force-toggle-icon" aria-hidden="true">▸</span>
+    </button>
+    <span class="semantic-force-head">Сила / расстояния</span>
+  </div>
+  <div id="semantic-force-body" class="semantic-force-body" hidden>
   <div class="semantic-force-row">
     <label>Длина ребра <span class="semantic-force-val" data-force-display="v1"></span>
       <input type="range" data-force-key="v1" id="semantic-f-v1" min="5" max="100" step="1" value="25"/>
@@ -91,6 +97,7 @@
   </div>
   <div class="semantic-force-actions">
     <button type="button" class="bot-action" id="semantic-force-reset">сброс по умолчанию</button>
+  </div>
   </div>
 </div>
 

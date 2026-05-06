@@ -306,13 +306,66 @@ button {
     backdrop-filter: blur(10px);
 }
 
+.semantic-force-panel.is-collapsed {
+    max-height: none;
+    overflow-y: visible;
+}
+
+.semantic-force-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.semantic-force-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    margin: 0;
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 1;
+    color: var(--bot-text);
+    background: rgba(12, 14, 18, 0.95);
+    border: 1px solid var(--bot-border);
+    border-radius: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.semantic-force-toggle:hover {
+    border-color: var(--bot-border-strong);
+}
+
+.semantic-force-toggle-icon {
+    display: inline-block;
+    transition: transform 0.15s ease;
+}
+
+.semantic-force-panel:not(.is-collapsed) .semantic-force-toggle-icon {
+    transform: rotate(90deg);
+}
+
+.semantic-force-body[hidden] {
+    display: none !important;
+}
+
 .semantic-force-head {
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--bot-muted);
-    margin-bottom: 8px;
+    margin-bottom: 0;
     font-size: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.semantic-force-panel:not(.is-collapsed) .semantic-force-toolbar {
+    margin-bottom: 8px;
 }
 
 .semantic-force-row {

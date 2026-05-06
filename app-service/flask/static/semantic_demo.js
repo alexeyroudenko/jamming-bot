@@ -2,6 +2,59 @@
 /* Jamming Bot D3 force graph (same behavior as bot.html myGraph) + semantic.txt replay */
 
 var SEMANTIC_FORCE_LS = "jammingSemanticForceParams";
+var SEMANTIC_FORCE_PANEL_COLLAPSED_LS = "jammingSemanticForcePanelCollapsed";
+
+function loadForcePanelCollapsedDefaultTrue() {
+    try {
+        var v = localStorage.getItem(SEMANTIC_FORCE_PANEL_COLLAPSED_LS);
+        if (v === null || v === undefined) {
+            return true;
+        }
+        return v === "1" || v === "true";
+    } catch (e) {
+        return true;
+    }
+}
+
+function saveForcePanelCollapsed(collapsed) {
+    try {
+        localStorage.setItem(SEMANTIC_FORCE_PANEL_COLLAPSED_LS, collapsed ? "1" : "0");
+    } catch (e) {
+        /* ignore quota */
+    }
+}
+
+function applyForcePanelCollapsedUi(panel, toggle, body, collapsed) {
+    if (!panel || !toggle || !body) {
+        return;
+    }
+    if (collapsed) {
+        panel.classList.add("is-collapsed");
+        body.setAttribute("hidden", "");
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.setAttribute("title", "Показать параметры силы");
+    } else {
+        panel.classList.remove("is-collapsed");
+        body.removeAttribute("hidden");
+        toggle.setAttribute("aria-expanded", "true");
+        toggle.setAttribute("title", "Скрыть параметры силы");
+    }
+}
+
+function wireForcePanelCollapse() {
+    var panel = document.getElementById("semantic-force-panel");
+    var toggle = document.getElementById("semantic-force-toggle");
+    var body = document.getElementById("semantic-force-body");
+    if (!panel || !toggle || !body) {
+        return;
+    }
+    applyForcePanelCollapsedUi(panel, toggle, body, loadForcePanelCollapsedDefaultTrue());
+    toggle.addEventListener("click", function () {
+        var collapsed = panel.classList.contains("is-collapsed");
+        applyForcePanelCollapsedUi(panel, toggle, body, !collapsed);
+        saveForcePanelCollapsed(!collapsed);
+    });
+}
 
 var DEFAULT_FORCE_VALUES = {
     v1: 0.25,
@@ -1000,6 +1053,7 @@ function loadDemoPayload() {
 setTimeout(function () {
     initGraph();
     wireDemoControls();
+    wireForcePanelCollapse();
     wireForceSliders();
     initSemanticSocket();
     if (graph && typeof graph.setValues === "function") {
