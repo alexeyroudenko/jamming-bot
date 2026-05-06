@@ -97,6 +97,10 @@
     document.title = 'Jamming bot — Tag Cloud (7 days)';
   }
   var REFRESH_INTERVAL = 60000;
+  /** Second screen: не чаще одного запроса данных за этот интервал (сокет + таймер). */
+  var SECOND_SCREEN_MIN_FETCH_MS = 14000;
+  var lastTagFetchAt = 0;
+  var tagFetchWaitTimer = null;
   /** Совпадает с дефолтом count у /api/tags/get/. */
   var MAX_CLOUD_TAGS = 200;
   var REPEL_RADIUS = 150;
@@ -540,6 +544,21 @@
   }
 
   function fetchAndDraw() {
+    var now = Date.now();
+    if (lastTagFetchAt > 0 && now - lastTagFetchAt < SECOND_SCREEN_MIN_FETCH_MS) {
+      if (!tagFetchWaitTimer) {
+        tagFetchWaitTimer = setTimeout(function () {
+          tagFetchWaitTimer = null;
+          fetchAndDraw();
+        }, SECOND_SCREEN_MIN_FETCH_MS - (now - lastTagFetchAt));
+      }
+      return;
+    }
+    if (tagFetchWaitTimer) {
+      clearTimeout(tagFetchWaitTimer);
+      tagFetchWaitTimer = null;
+    }
+    lastTagFetchAt = Date.now();
     statusEl.textContent = 'updating…';
     fetch(API + DAYS_QUERY_SUFFIX)
       .then(function (r) { return r.json(); })

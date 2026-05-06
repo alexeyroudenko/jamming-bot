@@ -19,6 +19,10 @@ tags:
 - [[web/API|Jamming Bot API Index]]
 - [[web/Ops|Jamming Bot Ops Index]]
 
+## Концепции
+
+- [[jamming-bot/web/Second screen|Second screen]]
+
 ## Быстрые ссылки
 
 - [[01 - Home]]

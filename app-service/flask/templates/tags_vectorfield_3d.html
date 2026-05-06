@@ -77,6 +77,10 @@
   var FLOW_SPEED = 0.05;
   var RELOAD_DEBOUNCE_MS = 550;
   var POLL_MS = 120000;
+  /** Second screen: не чаще одного цикла tags+embeddings за этот интервал. */
+  var SECOND_SCREEN_MIN_FETCH_MS = 14000;
+  var lastDataFetchAt = 0;
+  var dataFetchWaitTimer = null;
   /** Half-extent of simulation cube (world units). */
   var WORLD_HALF = 250;
 
@@ -89,6 +93,12 @@
   var ANCHORS_BASE = 1.0;
   var animSlow = 1;
   var reduceMotionPreferred = false;
+  /** Periodic orbit nudge (≈30–60° total), mouse-like via damping + smooth burst. */
+  var ORBIT_AUTO_KICK_MS = 7000;
+  /** Меньше — тот же суммарный угол kick размазывается на больше кадров (ниже угловая скорость). ×1/2.5 к базовому 0.17. */
+  var ORBIT_KICK_SMOOTH = 0.17 / 2.5;
+  var orbitKickBurstAz = 0;
+  var orbitKickBurstPol = 0;
 
   var statusEl = document.getElementById('tags-vis-status');
   var banner = document.getElementById('api-error');
@@ -127,6 +137,34 @@
   var _projDir = new THREE.Vector3();
   var lastTagRows = null;
   var lastEmb = null;
+  var _vf3OrbitOff = new THREE.Vector3();
+  var _vf3OrbitSph = new THREE.Spherical();
+  var _vf3OrbitQuat = new THREE.Quaternion();
+  var _vf3OrbitQuatInv = new THREE.Quaternion();
+
+  /**
+   * Three.js r128 legacy OrbitControls has rotateLeft/rotateUp only as closures, not on `this`.
+   * Applies the same spherical deltas as the internal rotateLeft(angle) / rotateUp(angle).
+   */
+  function vf3ApplyOrbitDelta(dTheta, dPhi) {
+    if (!camera || !controls) return;
+    _vf3OrbitQuat.setFromUnitVectors(camera.up, new THREE.Vector3(0, 1, 0));
+    _vf3OrbitQuatInv.copy(_vf3OrbitQuat).invert();
+    _vf3OrbitOff.copy(camera.position).sub(controls.target);
+    _vf3OrbitOff.applyQuaternion(_vf3OrbitQuat);
+    _vf3OrbitSph.setFromVector3(_vf3OrbitOff);
+    _vf3OrbitSph.theta -= dTheta;
+    _vf3OrbitSph.phi -= dPhi;
+    _vf3OrbitSph.phi = Math.max(controls.minPolarAngle, Math.min(controls.maxPolarAngle, _vf3OrbitSph.phi));
+    _vf3OrbitSph.makeSafe();
+    if (isFinite(controls.minDistance) || isFinite(controls.maxDistance)) {
+      _vf3OrbitSph.radius = Math.max(controls.minDistance, Math.min(controls.maxDistance, _vf3OrbitSph.radius));
+    }
+    _vf3OrbitOff.setFromSpherical(_vf3OrbitSph);
+    _vf3OrbitOff.applyQuaternion(_vf3OrbitQuatInv);
+    camera.position.copy(controls.target).add(_vf3OrbitOff);
+    camera.lookAt(controls.target);
+  }
 
   function getDensityPref() {
     if (densitySel && densitySel.value) return densitySel.value;
@@ -830,6 +868,21 @@
   }
 
   function reloadData() {
+    var now = Date.now();
+    if (lastDataFetchAt > 0 && now - lastDataFetchAt < SECOND_SCREEN_MIN_FETCH_MS) {
+      if (!dataFetchWaitTimer) {
+        dataFetchWaitTimer = setTimeout(function () {
+          dataFetchWaitTimer = null;
+          reloadData();
+        }, SECOND_SCREEN_MIN_FETCH_MS - (now - lastDataFetchAt));
+      }
+      return;
+    }
+    if (dataFetchWaitTimer) {
+      clearTimeout(dataFetchWaitTimer);
+      dataFetchWaitTimer = null;
+    }
+    lastDataFetchAt = Date.now();
     statusEl.textContent = 'Loading tags…';
     return fetch(TAGS_API)
       .then(function (r) {
@@ -1020,6 +1073,15 @@
 
   function tick() {
     requestAnimationFrame(tick);
+    if (orbitKickBurstAz !== 0 || orbitKickBurstPol !== 0) {
+      var dAz = orbitKickBurstAz * ORBIT_KICK_SMOOTH;
+      var dPo = orbitKickBurstPol * ORBIT_KICK_SMOOTH;
+      orbitKickBurstAz -= dAz;
+      orbitKickBurstPol -= dPo;
+      vf3ApplyOrbitDelta(dAz, dPo);
+      if (Math.abs(orbitKickBurstAz) < 1e-5) orbitKickBurstAz = 0;
+      if (Math.abs(orbitKickBurstPol) < 1e-5) orbitKickBurstPol = 0;
+    }
     controls.update();
     if (document.visibilityState === 'hidden') {
       renderer.render(scene, camera);
@@ -1066,6 +1128,15 @@
   tick();
   reloadData();
   setInterval(reloadData, POLL_MS);
+
+  setInterval(function () {
+    if (reduceMotionPreferred) return;
+    if (TagsVisControls.frozen) return;
+    var turn = (30 + Math.random() * 30) * (Math.PI / 180);
+    var w = Math.random() * Math.PI * 2;
+    orbitKickBurstAz += Math.cos(w) * turn;
+    orbitKickBurstPol += Math.sin(w) * turn * 0.52;
+  }, ORBIT_AUTO_KICK_MS);
 
   function vf3IsTypingTarget(el) {
     if (!el || !el.tagName) return false;

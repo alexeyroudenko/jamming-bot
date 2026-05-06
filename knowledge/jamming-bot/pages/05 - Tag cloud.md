@@ -10,6 +10,7 @@ tags:
   - page
   - tags
   - jamming-bot
+updated: 2026-05-06
 ---
 
 # Tag cloud
@@ -17,6 +18,10 @@ tags:
 ## URL
 
 https://jamming-bot.arthew0.online/tags/
+
+## Second screen
+
+Страница входит в группу [[jamming-bot/web/Second screen|Second screen]].
 
 ## Описание
 

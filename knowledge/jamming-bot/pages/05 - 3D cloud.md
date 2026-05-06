@@ -11,6 +11,7 @@ tags:
   - tags
   - 3d
   - jamming-bot
+updated: 2026-05-06
 ---
 
 # 3D cloud
@@ -18,6 +19,10 @@ tags:
 ## URL
 
 https://jamming-bot.arthew0.online/tags/3d/
+
+## Second screen
+
+Страница входит в группу [[jamming-bot/web/Second screen|Second screen]].
 
 ## Описание
 

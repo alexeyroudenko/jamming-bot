@@ -111,6 +111,13 @@
   var TEXT_SCALE_MULT = 3;
   var IDLE_ROTATE_DELAY_MS = 1400;
   var IDLE_ROTATE_Y_RAD_PER_SEC = 0.1;
+  /** Stagger first paint: one sprite each interval, order rare → popular (see loadTags sort). */
+  var TAG_REVEAL_MS = 40;
+  var tagRevealToken = 0;
+  /** Second screen: не чаще одного запроса данных за этот интервал (сокет). */
+  var SECOND_SCREEN_MIN_FETCH_MS = 14000;
+  var lastTagFetchAt = 0;
+  var tagFetchWaitTimer = null;
 
   var statusEl = document.getElementById('status');
   var apiErr = document.getElementById('api-error');
@@ -441,6 +448,7 @@
   }
 
   function clearAllTagSprites() {
+    tagRevealToken++;
     for (var i = 0; i < sprites.length; i++) {
       disposeTagSprite(sprites[i]);
     }
@@ -448,6 +456,22 @@
     spriteByName = {};
     tagsSceneInitialized = false;
     lastMaxCountForSprites = -1;
+  }
+
+  function revealSpritesStaggered(arr) {
+    tagRevealToken++;
+    var myTok = tagRevealToken;
+    var ix = 0;
+    function step() {
+      if (myTok !== tagRevealToken) return;
+      if (ix >= arr.length) return;
+      arr[ix].visible = true;
+      ix++;
+      if (ix < arr.length) {
+        setTimeout(step, TAG_REVEAL_MS);
+      }
+    }
+    step();
   }
 
   function loadTags(data) {
@@ -484,13 +508,16 @@
     if (!tagsSceneInitialized) {
       tagsSceneInitialized = true;
       lastMaxCountForSprites = maxCount;
-      for (var j0 = 0; j0 < tags.length; j0++) {
-        var sp0 = makeSprite(tags[j0].name, tags[j0].count, maxCount);
-        sp0.position.copy(chaoticPosition(j0, tags.length, SPHERE_RADIUS));
+      var revealOrder = tags.slice().sort(function (a, b) { return a.count - b.count; });
+      for (var j0 = 0; j0 < revealOrder.length; j0++) {
+        var sp0 = makeSprite(revealOrder[j0].name, revealOrder[j0].count, maxCount);
+        sp0.visible = false;
+        sp0.position.copy(chaoticPosition(j0, revealOrder.length, SPHERE_RADIUS));
         scene.add(sp0);
         sprites.push(sp0);
-        spriteByName[tags[j0].name] = sp0;
+        spriteByName[revealOrder[j0].name] = sp0;
       }
+      revealSpritesStaggered(sprites);
       statusEl.textContent = tags.length + ' tags (max ' + MAX_TAGS + ')';
       return;
     }
@@ -538,6 +565,21 @@
   }
 
   function fetchTags() {
+    var now = Date.now();
+    if (lastTagFetchAt > 0 && now - lastTagFetchAt < SECOND_SCREEN_MIN_FETCH_MS) {
+      if (!tagFetchWaitTimer) {
+        tagFetchWaitTimer = setTimeout(function () {
+          tagFetchWaitTimer = null;
+          fetchTags();
+        }, SECOND_SCREEN_MIN_FETCH_MS - (now - lastTagFetchAt));
+      }
+      return;
+    }
+    if (tagFetchWaitTimer) {
+      clearTimeout(tagFetchWaitTimer);
+      tagFetchWaitTimer = null;
+    }
+    lastTagFetchAt = Date.now();
     return fetch(API)
       .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
       .then(function (res) {
