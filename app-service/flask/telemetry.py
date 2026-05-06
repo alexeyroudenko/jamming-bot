@@ -71,7 +71,7 @@ def inject_trace_context_into_job(job):
         logger.warning("Could not inject trace context into job %s: %s", getattr(job, "id", None), e)
 
 
-def enqueue_with_trace(queue, connection, func, *args, timeout=90, result_ttl=270, rq_job_meta=None, **kwargs):
+def enqueue_with_trace(queue, connection, func, *args, timeout=10, result_ttl=270, rq_job_meta=None, **kwargs):
     """Enqueue an RQ job with trace context in meta *before* pushing to the queue,
     so the worker always sees the carrier (avoids race with save_meta() after delay()).
     rq_job_meta: optional dict merged into job.meta at creation (survives worker save_meta races).
@@ -91,7 +91,7 @@ def enqueue_with_trace(queue, connection, func, *args, timeout=90, result_ttl=27
 
 
 def enqueue_with_trace_carrier(
-    queue, connection, func, carrier, *args, timeout=90, result_ttl=270, rq_job_meta=None, **kwargs
+    queue, connection, func, carrier, *args, timeout=10, result_ttl=270, rq_job_meta=None, **kwargs
 ):
     """Like enqueue_with_trace but uses an explicit W3C carrier dict (e.g. from Redis step hash).
     Merges trace_carrier and rq_job_meta into meta at Job.create (single Redis meta write).

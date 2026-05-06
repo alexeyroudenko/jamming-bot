@@ -4,6 +4,7 @@ import redis
 from rq import Queue
 from rq.exceptions import NoSuchJobError
 from rq.job import Job
+from rq.utils import as_text
 
 import config
 from datetime import datetime, timedelta
@@ -37,15 +38,42 @@ def fetch_job_by_id(job_id):
 def get_job_ids(job_registry):
     return job_registry.get_job_ids()
 
+
+def _ids_newest_first(registry):
+    """Return job ids from a sorted-set RQ registry in newest-first order (ZREVRANGE)."""
+    return [as_text(j) for j in registry.connection.zrevrange(registry.key, 0, -1)]
+
+
+def _finished_with_scores(registry):
+    """Return [(job_id, completion_ts)] from FinishedJobRegistry, newest-first."""
+    raw = registry.connection.zrevrange(registry.key, 0, -1, withscores=True)
+    return [(as_text(j), float(s)) for j, s in raw]
+
+
 def get_all_job_ids():
-    chunks = []
+    """Return job ids across all RQ queues in newest-first order.
+
+    - Active registries (started/queued/failed/deferred/scheduled) come first
+      so live work is always visible on page 0.
+    - Finished jobs from default + screenshots are merged by completion timestamp
+      (FinishedJobRegistry score = unix ts), so screenshot-queue jobs are not
+      hidden behind a long tail of older default-queue finishes.
+    """
+    active = []
     for q in ALL_QUEUES:
-        chunks.extend(get_job_ids(q.started_job_registry))
-        chunks.extend(q.job_ids)
-        chunks.extend(get_job_ids(q.failed_job_registry))
-        chunks.extend(get_job_ids(q.deferred_job_registry))
-        chunks.extend(get_job_ids(q.finished_job_registry))
-        chunks.extend(get_job_ids(q.scheduled_job_registry))
+        active.extend(_ids_newest_first(q.started_job_registry))
+        # queued is a Redis LIST (FIFO) — reverse to put newest enqueues first
+        active.extend(list(reversed(q.job_ids)))
+        active.extend(_ids_newest_first(q.failed_job_registry))
+        active.extend(_ids_newest_first(q.deferred_job_registry))
+        active.extend(_ids_newest_first(q.scheduled_job_registry))
+
+    finished = []
+    for q in ALL_QUEUES:
+        finished.extend(_finished_with_scores(q.finished_job_registry))
+    finished.sort(key=lambda x: x[1], reverse=True)
+
+    chunks = active + [jid for jid, _ in finished]
     seen = set()
     ordered = []
     for jid in chunks:

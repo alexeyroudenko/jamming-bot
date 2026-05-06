@@ -25,7 +25,14 @@ PORT = 3000
 # Глобальные объекты браузера (инициализируются при старте)
 _playwright = None
 _browser = None
-_render_semaphore = asyncio.Semaphore(2)  # до 2 параллельных рендеров — меньше пик памяти, избегаем OOMKilled
+# До 4 параллельных рендеров на реплику — клиентский HTTP timeout 5s и семафор(2)
+# давали очередь при burst из screenshot/analyze; OOM лимитируем requests 512Mi/lim 1Gi pod.
+_render_semaphore = asyncio.Semaphore(4)
+
+# Навигация короче клиентского read-timeout (5s у worker): успеть вернуть JSON/ответ до abort,
+# плюс запас на screenshot (~1–2s типично).
+_PAGE_GOTO_TIMEOUT_MS = 3200
+_POST_NAV_IDLE_MS = 150
 
 
 @app.on_event("startup")
@@ -91,107 +98,98 @@ async def render_screenshot(
     async with _render_semaphore:
         render_start = time.perf_counter()
         try:
-            last_error = None
-            for attempt in range(2):
-                try:
-                    logger.info(f"Начинаем рендеринг для: {url}" + (f" (повтор {attempt + 1})" if attempt > 0 else ""))
+            logger.info(f"Начинаем рендеринг для: {url}")
 
-                    device_scale_factor = int(dsf) if dsf.isdigit() else 1
+            device_scale_factor = int(dsf) if dsf.isdigit() else 1
 
-                    # Создаём новую страницу для каждого запроса — изолирует падения и утечки памяти
-                    context_to_close = None
-                    if device_scale_factor != 1:
-                        context_to_close = await _browser.new_context(
-                            viewport={"width": width, "height": height},
-                            device_scale_factor=device_scale_factor
-                        )
-                        page = await context_to_close.new_page()
-                    else:
-                        page = await _browser.new_page()
-                        await page.set_viewport_size({"width": width, "height": height})
+            # Создаём новую страницу для каждого запроса — изолирует падения и утечки памяти
+            context_to_close = None
+            if device_scale_factor != 1:
+                context_to_close = await _browser.new_context(
+                    viewport={"width": width, "height": height},
+                    device_scale_factor=device_scale_factor
+                )
+                page = await context_to_close.new_page()
+            else:
+                page = await _browser.new_page()
+                await page.set_viewport_size({"width": width, "height": height})
 
-                    try:
-                        logger.info(f"Viewport: {width}x{height}, DeviceScaleFactor: {device_scale_factor}")
+            try:
+                logger.info(f"Viewport: {width}x{height}, DeviceScaleFactor: {device_scale_factor}")
 
-                        load_phase_start = time.perf_counter()
-                        # Переходим на страницу (domcontentloaded — меньше нагрузка на тяжёлых сайтах)
-                        await page.goto(url, wait_until="domcontentloaded", timeout=5000)
-                        await page.wait_for_timeout(400)
+                load_phase_start = time.perf_counter()
+                # Переходим на страницу (domcontentloaded — меньше нагрузка на тяжёлых сайтах)
+                await page.goto(
+                    url,
+                    wait_until="domcontentloaded",
+                    timeout=_PAGE_GOTO_TIMEOUT_MS,
+                )
+                await page.wait_for_timeout(_POST_NAV_IDLE_MS)
 
-                        if fullPage.lower() == 'true':
-                            await page.evaluate("""
-                                async () => {
-                                    await new Promise((resolve) => {
-                                        let totalHeight = 0;
-                                        const distance = 100;
-                                        const timer = setInterval(() => {
-                                            const scrollHeight = document.body.scrollHeight;
-                                            window.scrollBy(0, distance);
-                                            totalHeight += distance;
+                if fullPage.lower() == 'true':
+                    await page.evaluate("""
+                        async () => {
+                            await new Promise((resolve) => {
+                                let totalHeight = 0;
+                                const distance = 100;
+                                const timer = setInterval(() => {
+                                    const scrollHeight = document.body.scrollHeight;
+                                    window.scrollBy(0, distance);
+                                    totalHeight += distance;
 
-                                            if (totalHeight >= scrollHeight) {
-                                                clearInterval(timer);
-                                                resolve();
-                                            }
-                                        }, 100);
-                                    });
-                                }
-                            """)
-
-                        page_load_s = time.perf_counter() - load_phase_start
-                        logger.info(
-                            f"Загрузка страницы успешно завершена для: {url} (время: {page_load_s:.2f}s)"
-                        )
-
-                        screenshot_options = {
-                            "full_page": fullPage.lower() == 'true',
-                            "type": format if format in ['png', 'jpeg', 'webp'] else 'png'
+                                    if (totalHeight >= scrollHeight) {
+                                        clearInterval(timer);
+                                        resolve();
+                                    }
+                                }, 100);
+                            });
                         }
+                    """)
 
-                        if screenshot_options["type"] in ['jpeg', 'webp']:
-                            if quality is not None:
-                                screenshot_options["quality"] = max(0, min(100, quality))
-                            elif screenshot_options["type"] == 'jpeg':
-                                screenshot_options["quality"] = 90
+                page_load_s = time.perf_counter() - load_phase_start
+                logger.info(
+                    f"Загрузка страницы успешно завершена для: {url} (время: {page_load_s:.2f}s)"
+                )
 
-                        screenshot_phase_start = time.perf_counter()
-                        image_bytes = await page.screenshot(**screenshot_options)
-                        screenshot_s = time.perf_counter() - screenshot_phase_start
+                screenshot_options = {
+                    "full_page": fullPage.lower() == 'true',
+                    "type": format if format in ['png', 'jpeg', 'webp'] else 'png'
+                }
 
-                        total_s = page_load_s + screenshot_s
-                        logger.info(f"Скриншот успешно создан для: {url} (время: {total_s:.2f}s)")
+                if screenshot_options["type"] in ['jpeg', 'webp']:
+                    if quality is not None:
+                        screenshot_options["quality"] = max(0, min(100, quality))
+                    elif screenshot_options["type"] == 'jpeg':
+                        screenshot_options["quality"] = 90
 
-                        page_load_ms = int(round(page_load_s * 1000))
-                        screenshot_ms = int(round(screenshot_s * 1000))
-                        total_ms = int(round(total_s * 1000))
+                screenshot_phase_start = time.perf_counter()
+                image_bytes = await page.screenshot(**screenshot_options)
+                screenshot_s = time.perf_counter() - screenshot_phase_start
 
-                        content_type = f"image/{screenshot_options['type']}"
-                        return Response(
-                            content=image_bytes,
-                            media_type=content_type,
-                            headers={
-                                "X-Page-Load-Ms": str(page_load_ms),
-                                "X-Screenshot-Ms": str(screenshot_ms),
-                                "X-Total-Ms": str(total_ms),
-                                "X-Render-Time-Seconds": f"{total_s:.2f}",
-                            },
-                        )
+                total_s = page_load_s + screenshot_s
+                logger.info(f"Скриншот успешно создан для: {url} (время: {total_s:.2f}s)")
 
-                    finally:
-                        if context_to_close:
-                            await context_to_close.close()
-                        else:
-                            await page.close()
+                page_load_ms = int(round(page_load_s * 1000))
+                screenshot_ms = int(round(screenshot_s * 1000))
+                total_ms = int(round(total_s * 1000))
 
-                except Exception as error:
-                    last_error = error
-                    if "crashed" in str(error).lower() and attempt == 0:
-                        logger.warning(f"Page crashed для {url}, повторная попытка...")
-                        continue
-                    raise
+                content_type = f"image/{screenshot_options['type']}"
+                return Response(
+                    content=image_bytes,
+                    media_type=content_type,
+                    headers={
+                        "X-Page-Load-Ms": str(page_load_ms),
+                        "X-Screenshot-Ms": str(screenshot_ms),
+                        "X-Total-Ms": str(total_ms),
+                        "X-Render-Time-Seconds": f"{total_s:.2f}",
+                    },
+                )
 
-            if last_error:
-                raise last_error
+            finally:
+                if context_to_close:
+                    await context_to_close.close()
+                else:
+                    await page.close()
 
         except Exception as error:
             elapsed = time.perf_counter() - render_start

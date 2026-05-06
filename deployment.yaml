@@ -4,6 +4,24 @@ kind: Namespace
 metadata:
   name: jamming-bot
 ---
+# PriorityClass: critical infra (redis/app-service/html-renderer) survives node memory pressure
+# longer than chatty workers; kubelet prefers to evict lower priority first.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: jamming-bot-critical
+value: 1000000
+globalDefault: false
+description: "Critical jamming-bot pods (redis, app-service, html-renderer) — last to evict."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: jamming-bot-default
+value: 100
+globalDefault: false
+description: "Default priority for jamming-bot worker/processor pods."
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,6 +42,7 @@ spec:
       labels:
         app: html-renderer
     spec:
+      priorityClassName: jamming-bot-critical
       containers:
       - name: renderer
         image: 1325gy/my_dev:v5 # Python + Playwright версия
@@ -33,10 +52,10 @@ spec:
         resources:
           requests:
             cpu: "250m"
-            memory: "768Mi"
+            memory: "512Mi"
           limits:
             cpu: "1000m"
-            memory: "1536Mi"
+            memory: "1024Mi"
         readinessProbe:
           httpGet:
             path: /
@@ -146,6 +165,7 @@ spec:
       labels:
         app: semantic-service
     spec:
+      priorityClassName: jamming-bot-default
       containers:
       - name: semantic-service
         image: semantic-service:latest
@@ -162,10 +182,10 @@ spec:
         resources:
           requests:
             cpu: "250m"
-            memory: "1536Mi"
+            memory: "1024Mi"
           limits:
             cpu: "1"
-            memory: "2560Mi"
+            memory: "1536Mi"
         readinessProbe:
           httpGet:
             path: /health
@@ -218,6 +238,7 @@ spec:
       labels:
         app: mood-service
     spec:
+      priorityClassName: jamming-bot-default
       containers:
       - name: mood-service
         image: mood-service:latest
@@ -228,10 +249,10 @@ spec:
         resources:
           requests:
             cpu: "500m"
-            memory: "2Gi"
+            memory: "1Gi"
           limits:
             cpu: "2"
-            memory: "6Gi"
+            memory: "1536Mi"
         readinessProbe:
           httpGet:
             path: /health
@@ -279,6 +300,7 @@ spec:
       labels:
         app: image-analyze-service
     spec:
+      priorityClassName: jamming-bot-default
       tolerations:
       - key: node.kubernetes.io/disk-pressure
         operator: Exists
@@ -293,10 +315,10 @@ spec:
         resources:
           requests:
             cpu: "100m"
-            memory: "256Mi"
+            memory: "192Mi"
           limits:
             cpu: "500m"
-            memory: "768Mi"
+            memory: "384Mi"
         readinessProbe:
           httpGet:
             path: /healthz
@@ -340,6 +362,7 @@ spec:
       labels:
         app: storage-service
     spec:
+      priorityClassName: jamming-bot-critical
       tolerations:
       - key: node.kubernetes.io/disk-pressure
         operator: Exists
@@ -370,10 +393,10 @@ spec:
         resources:
           requests:
             cpu: "100m"
-            memory: "256Mi"
+            memory: "192Mi"
           limits:
             cpu: "1000m"
-            memory: "1024Mi"
+            memory: "512Mi"
         startupProbe:
           tcpSocket:
             port: 7781
@@ -418,6 +441,7 @@ spec:
       labels:
         app: steps-service
     spec:
+      priorityClassName: jamming-bot-default
       containers:
       - name: steps-service
         image: steps-service:latest
@@ -431,7 +455,7 @@ spec:
         - name: STEPS_LATEST_URL
           value: "http://app-service/api/storage_latest/"
         - name: STEPS_LATEST_LIMIT
-          value: "3000"
+          value: "1500"
         - name: STEPS_CSV_URL
           value: "http://storage-service/export/csv"
         - name: STEPS_REFRESH_SECONDS
@@ -444,7 +468,7 @@ spec:
             memory: "512Mi"
           limits:
             cpu: "750m"
-            memory: "2048Mi"
+            memory: "2Gi"
         readinessProbe:
           httpGet:
             path: /ready
@@ -665,6 +689,7 @@ spec:
       labels:
         app: redis
     spec:
+      priorityClassName: jamming-bot-critical
       containers:
       - name: redis
         image: redis:7-alpine
@@ -704,6 +729,18 @@ spec:
 ---
 # ===================== jaeger (tracing) =====================
 # UI: http://jamming-bot.arthew0.online:31686 or https://jaeger.jamming-bot.arthew0.online
+# Storage: Badger (диск+TTL) на PVC jaeger-data; раньше был дефолтный in-memory store без cap → утечка.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jaeger-data
+  namespace: jamming-bot
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -711,6 +748,9 @@ metadata:
   namespace: jamming-bot
 spec:
   replicas: 1
+  # Recreate: RWO PVC нельзя смонтировать в два пода во время RollingUpdate.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: jaeger
@@ -726,18 +766,32 @@ spec:
         env:
         - name: COLLECTOR_OTLP_ENABLED
           value: "true"
+        # Badger на диске вместо дефолтного in-memory: ограниченная память + TTL ретеншн.
+        - name: SPAN_STORAGE_TYPE
+          value: "badger"
+        - name: BADGER_EPHEMERAL
+          value: "false"
+        - name: BADGER_DIRECTORY_VALUE
+          value: "/badger/data"
+        - name: BADGER_DIRECTORY_KEY
+          value: "/badger/key"
+        - name: BADGER_SPAN_STORE_TTL
+          value: "48h"
         ports:
         - containerPort: 16686
           name: ui
         - containerPort: 4318
           name: otlp-http
+        volumeMounts:
+        - name: jaeger-data
+          mountPath: /badger
         resources:
           requests:
             cpu: "50m"
             memory: "64Mi"
           limits:
             cpu: "250m"
-            memory: "256Mi"
+            memory: "512Mi"
         readinessProbe:
           httpGet:
             path: /
@@ -750,6 +804,10 @@ spec:
             port: 16686
           initialDelaySeconds: 10
           periodSeconds: 20
+      volumes:
+      - name: jaeger-data
+        persistentVolumeClaim:
+          claimName: jaeger-data
 ---
 apiVersion: v1
 kind: Service
@@ -806,6 +864,12 @@ data:
           http:
             endpoint: 0.0.0.0:4318
     processors:
+      # memory_limiter ставим первым: при перегрузе вернёт RESOURCE_EXHAUSTED экспортёрам
+      # вместо OOMKill контейнера. Лимит — процент от cgroup memory limit пода.
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 80
+        spike_limit_percentage: 25
       batch: {}
     extensions:
       health_check:
@@ -829,7 +893,7 @@ data:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [batch]
+          processors: [memory_limiter, batch]
           exporters: [otlphttp/jaeger, otlp/coroot]
       telemetry:
         logs:
@@ -889,10 +953,10 @@ spec:
         resources:
           requests:
             cpu: "50m"
-            memory: "128Mi"
+            memory: "96Mi"
           limits:
             cpu: "500m"
-            memory: "512Mi"
+            memory: "256Mi"
       volumes:
       - name: config
         configMap:
@@ -937,6 +1001,7 @@ spec:
       labels:
         app: worker-service
     spec:
+      priorityClassName: jamming-bot-default
       tolerations:
       - key: node.kubernetes.io/disk-pressure
         operator: Exists
@@ -990,15 +1055,17 @@ spec:
               key: SHHH_SENTRY_URL
         - name: S3_BUCKET_NAME
           value: "steps"
-        # RQ + screenshot: keep renderer retries inside job timeout (avoid ~21s failed hangs).
+        # Уровень всего pipeline: RQ убивает job-horse через 10s — failed screenshots
+        # перестают зависать на 21s, аналогично остальные RQ-job (analyze/geo/storage)
+        # коротко падают, если служба отвечает дольше 10s.
         - name: RQ_JOB_TIMEOUT_PIPELINE_SEC
-          value: "15"
+          value: "10"
         - name: RQ_JOB_POLL_WAIT_SEC
-          value: "22"
+          value: "17"
         - name: HTTP_SCREENSHOT_RENDER_TIMEOUT_SEC
           value: "5"
         - name: SCREENSHOT_RENDER_RETRIES
-          value: "2"
+          value: "1"
         - name: SCREENSHOT_RENDER_BACKOFF_SEC
           value: "0.5"
         - name: SCREENSHOT_PIPELINE_S3_SLACK_SEC
@@ -1014,7 +1081,7 @@ spec:
         resources:
           requests:
             cpu: "125m"
-            memory: "128Mi"
+            memory: "192Mi"
           limits:
             cpu: "1000m"
             memory: "512Mi"
@@ -1035,6 +1102,7 @@ spec:
       labels:
         app: worker-screenshots
     spec:
+      priorityClassName: jamming-bot-default
       tolerations:
       - key: node.kubernetes.io/disk-pressure
         operator: Exists
@@ -1096,13 +1164,27 @@ spec:
           value: "app-service-worker-screenshots"
         - name: RQ_QUEUE_NAMES
           value: "screenshots"
+        # Screenshot-конкретный конвейер: 10s job-timeout — тот же бюджет, что в
+        # app-service/worker-service. Иначе worker-screenshots работал на дефолтах jobs.py.
+        - name: RQ_JOB_TIMEOUT_PIPELINE_SEC
+          value: "10"
+        - name: RQ_JOB_POLL_WAIT_SEC
+          value: "17"
+        - name: HTTP_SCREENSHOT_RENDER_TIMEOUT_SEC
+          value: "5"
+        - name: SCREENSHOT_RENDER_RETRIES
+          value: "1"
+        - name: SCREENSHOT_RENDER_BACKOFF_SEC
+          value: "0.5"
+        - name: SCREENSHOT_PIPELINE_S3_SLACK_SEC
+          value: "4"
         resources:
           requests:
             cpu: "125m"
-            memory: "256Mi"
+            memory: "192Mi"
           limits:
             cpu: "1000m"
-            memory: "768Mi"
+            memory: "384Mi"
 ---
 # ===================== rq-dashboard =====================
 apiVersion: apps/v1
@@ -1409,6 +1491,7 @@ spec:
       labels:
         app: app-service
     spec:
+      priorityClassName: jamming-bot-critical
       tolerations:
       - key: node.kubernetes.io/disk-pressure
         operator: Exists
@@ -1472,27 +1555,29 @@ spec:
         - name: RQ_RESULT_TTL_SECONDS
           value: "1800"
         - name: RQ_JOB_TIMEOUT_PIPELINE_SEC
-          value: "15"
+          value: "10"
         - name: RQ_JOB_POLL_WAIT_SEC
-          value: "22"
+          value: "17"
         - name: HTTP_SCREENSHOT_RENDER_TIMEOUT_SEC
           value: "5"
         - name: SCREENSHOT_RENDER_RETRIES
-          value: "2"
+          value: "1"
         - name: SCREENSHOT_RENDER_BACKOFF_SEC
           value: "0.5"
         - name: SCREENSHOT_PIPELINE_S3_SLACK_SEC
           value: "4"
+        - name: SLOW_REQUEST_LOG_MS
+          value: "1500"
         volumeMounts:
         - name: bot-config
           mountPath: /app/bot_config/bot.yaml
         resources:
           requests:
             cpu: "250m"
-            memory: "384Mi"
+            memory: "256Mi"
           limits:
             cpu: "1000m"
-            memory: "1Gi"
+            memory: "768Mi"
         startupProbe:
           httpGet:
             path: /status
@@ -2129,7 +2214,7 @@ spec:
 ---
 # ===================== KEDA: html-renderer autoscaler =====================
 # Screenshot jobs (do_screenshot) call html-renderer; scale up earlier under queue load.
-# Caps tuned for single-node (~8 CPU): fewer Chromium replicas = less RAM/CPU thrash.
+# maxReplicaCount 4 × семафор 4 параллельных рендера — запас при burst; узкий single-node — следить за RAM.
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -2139,7 +2224,7 @@ spec:
   scaleTargetRef:
     name: html-renderer
   minReplicaCount: 1
-  maxReplicaCount: 2
+  maxReplicaCount: 4
   cooldownPeriod: 90
   pollingInterval: 10
   triggers:
@@ -2153,7 +2238,7 @@ spec:
     metadata:
       address: redis.jamming-bot.svc.cluster.local:6379
       listName: rq:queue:screenshots
-      listLength: "2"
+      listLength: "1"
       databaseIndex: "0"
 ---
 # ===================== rq-exporter (Prometheus metrics) =====================
@@ -2308,10 +2393,10 @@ spec:
         resources:
           requests:
             cpu: "100m"
-            memory: "256Mi"
+            memory: "192Mi"
           limits:
             cpu: "500m"
-            memory: "1Gi"
+            memory: "512Mi"
         readinessProbe:
           httpGet:
             path: /healthz

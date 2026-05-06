@@ -9,6 +9,11 @@ from sentry_sdk.integrations.rq import RqIntegration
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 SENTRY_DSN = os.getenv("SENTRY_DSN", "")
 
+# Sentry transport drowns the worker log in SSL/connection retry warnings when
+# the ingest endpoint flaps. We only care about ERRORs from urllib3 retry layer.
+logging.getLogger("urllib3.connectionpool").setLevel(logging.ERROR)
+logging.getLogger("urllib3.util.retry").setLevel(logging.ERROR)
+
 def _traces_sampler(ctx):
     return 1.0
 

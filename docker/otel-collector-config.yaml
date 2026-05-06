@@ -8,6 +8,11 @@ receivers:
       http:
         endpoint: 0.0.0.0:4318
 processors:
+  # memory_limiter первым: при перегрузе вернёт RESOURCE_EXHAUSTED вместо OOM.
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 25
   batch: {}
 extensions:
   health_check:
@@ -29,7 +34,7 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [otlphttp/jaeger, otlp/coroot]
   telemetry:
     logs:
