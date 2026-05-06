@@ -12,6 +12,24 @@
     body.vf3-toolbar-visible .tags-vis-toolbar {
       display: flex !important;
     }
+    /* Снять после fade — не блокировать клики по canvas */
+    .vf3-intro-veil {
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      background: #09090b;
+      pointer-events: none;
+      opacity: 1;
+      transition: opacity 1s ease-out;
+    }
+    .vf3-intro-veil.vf3-intro-veil--out {
+      opacity: 0;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .vf3-intro-veil {
+        transition-duration: 0.01ms;
+      }
+    }
   </style>
 </head>
 <body class="tags-vis-body">
@@ -60,6 +78,7 @@
 <div class="tags-vis-scanlines" aria-hidden="true"></div>
 <div class="tags-vis-canvas-host">
   <canvas id="vf3"></canvas>
+  <div id="vf3-intro-veil" class="vf3-intro-veil" aria-hidden="true"></div>
   <div id="vf3-anchors-layer" class="vf-anchors-layer" aria-hidden="false"></div>
 </div>
 <p class="tags-vis-hint">Drag to orbit · wheel zoom · white particles in 3D · Field vectors: cyan segments · labels are projected (read-only) · <kbd>i</kbd> toolbar</p>
@@ -99,6 +118,9 @@
   var ORBIT_KICK_SMOOTH = 0.17 / 2.5;
   var orbitKickBurstAz = 0;
   var orbitKickBurstPol = 0;
+  /** Проявление сцены: затемнение 1 с (только первый кадр). */
+  var VF3_INTRO_VEIL_MS = 1000;
+  var vf3IntroArmed = true;
 
   var statusEl = document.getElementById('tags-vis-status');
   var banner = document.getElementById('api-error');
@@ -1073,6 +1095,33 @@
 
   function tick() {
     requestAnimationFrame(tick);
+    if (vf3IntroArmed) {
+      vf3IntroArmed = false;
+      requestAnimationFrame(function () {
+        var veil = document.getElementById('vf3-intro-veil');
+        if (!veil) return;
+        try {
+          if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            veil.classList.add('vf3-intro-veil--out');
+            setTimeout(function () {
+              if (veil.parentNode) veil.remove();
+            }, 40);
+            return;
+          }
+        } catch (e) {}
+        veil.classList.add('vf3-intro-veil--out');
+        var tId = setTimeout(function () {
+          if (veil.parentNode) veil.remove();
+        }, VF3_INTRO_VEIL_MS + 200);
+        function onEnd(ev) {
+          if (ev.propertyName !== 'opacity') return;
+          clearTimeout(tId);
+          veil.removeEventListener('transitionend', onEnd);
+          if (veil.parentNode) veil.remove();
+        }
+        veil.addEventListener('transitionend', onEnd);
+      });
+    }
     if (orbitKickBurstAz !== 0 || orbitKickBurstPol !== 0) {
       var dAz = orbitKickBurstAz * ORBIT_KICK_SMOOTH;
       var dPo = orbitKickBurstPol * ORBIT_KICK_SMOOTH;
