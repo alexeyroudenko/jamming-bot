@@ -1,4 +1,4 @@
-# Production static build for https://<host>/static-app/ (Traefik strips /static-app prefix).
+# Production static build for https://<host>/scenes/ (Traefik strips /scenes prefix).
 FROM node:22-alpine AS build
 WORKDIR /app
 ENV PATH=/app/node_modules/.bin:$PATH

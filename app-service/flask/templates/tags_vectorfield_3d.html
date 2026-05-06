@@ -92,7 +92,6 @@
   <div id="vf3-anchors-layer" class="vf-anchors-layer" aria-hidden="false"></div>
 </div>
 
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js" crossorigin="anonymous"></script>
 <script src="{{ url_for('static', filename='tags_vis_controls.js') }}"></script>
@@ -104,11 +103,6 @@
   var MAX_PARTICLES_CAPACITY = 28000;
   var FLOW_SPEED = 0.05;
   var RELOAD_DEBOUNCE_MS = 550;
-  var POLL_MS = 120000;
-  /** Second screen: не чаще одного цикла tags+embeddings за этот интервал. */
-  var SECOND_SCREEN_MIN_FETCH_MS = 14000;
-  var lastDataFetchAt = 0;
-  var dataFetchWaitTimer = null;
   /** Half-extent of simulation cube (world units). */
   var WORLD_HALF = 250;
 
@@ -966,21 +960,6 @@
   }
 
   function reloadData() {
-    var now = Date.now();
-    if (lastDataFetchAt > 0 && now - lastDataFetchAt < SECOND_SCREEN_MIN_FETCH_MS) {
-      if (!dataFetchWaitTimer) {
-        dataFetchWaitTimer = setTimeout(function () {
-          dataFetchWaitTimer = null;
-          reloadData();
-        }, SECOND_SCREEN_MIN_FETCH_MS - (now - lastDataFetchAt));
-      }
-      return;
-    }
-    if (dataFetchWaitTimer) {
-      clearTimeout(dataFetchWaitTimer);
-      dataFetchWaitTimer = null;
-    }
-    lastDataFetchAt = Date.now();
     statusEl.textContent = 'Loading tags…';
     return fetch(TAGS_API)
       .then(function (r) {
@@ -1246,13 +1225,8 @@
     renderer.render(scene, camera);
   }
 
-  var socket = io({ transports: ['websocket', 'polling'] });
-  socket.on('analyzed', scheduleReload);
-  socket.on('tags_updated', scheduleReload);
-
   tick();
   reloadData();
-  setInterval(reloadData, POLL_MS);
 
   setInterval(function () {
     if (reduceMotionPreferred) return;

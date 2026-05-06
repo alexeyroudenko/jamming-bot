@@ -63,7 +63,7 @@
 <div class="tags-vis-scanlines" aria-hidden="true"></div>
 <div class="tags-vis-grain" aria-hidden="true"></div>
 <div class="tags-vis-canvas-host"><canvas id="vortex"></canvas></div>
-<p class="tags-vis-hint">VADER compound → radial drift · neutral fraction → subjectivity noise · refresh on tags_updated · <kbd>i</kbd> panel</p>
+<p class="tags-vis-hint">VADER compound → radial drift · neutral fraction → subjectivity noise · данные при загрузке страницы · <kbd>i</kbd> panel</p>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js" crossorigin="anonymous"></script>
@@ -76,11 +76,6 @@
   var API = (API_BASE || '') + '/api/tags/sentiment-vortex/';
   var MAX_PARTICLES = 360;
   var MAX_DPR = 2;
-  var REFRESH_MS = 60000;
-  /** Second screen: не чаще одного запроса данных за этот интервал (сокет + таймер). */
-  var SECOND_SCREEN_MIN_FETCH_MS = 14000;
-  var lastDataFetchAt = 0;
-  var dataFetchWaitTimer = null;
   var DT = 0.016;
   var ROT_SCALE = 1 / 3;
   /** First load: one particle / label each this many ms. */
@@ -620,21 +615,6 @@
   }
 
   function reloadData() {
-    var now = Date.now();
-    if (lastDataFetchAt > 0 && now - lastDataFetchAt < SECOND_SCREEN_MIN_FETCH_MS) {
-      if (!dataFetchWaitTimer) {
-        dataFetchWaitTimer = setTimeout(function () {
-          dataFetchWaitTimer = null;
-          reloadData();
-        }, SECOND_SCREEN_MIN_FETCH_MS - (now - lastDataFetchAt));
-      }
-      return;
-    }
-    if (dataFetchWaitTimer) {
-      clearTimeout(dataFetchWaitTimer);
-      dataFetchWaitTimer = null;
-    }
-    lastDataFetchAt = Date.now();
     fetch(API)
       .then(function (r) {
         return r.json().then(function (b) {
@@ -734,14 +714,12 @@
   var socket = io({ transports: ['websocket', 'polling'] });
   function kick() {
     kickOmega = Math.min(2.8, kickOmega + 1.1 + Math.random() * 0.6);
-    reloadData();
   }
   socket.on('analyzed', kick);
   socket.on('tags_updated', kick);
 
   tick();
   reloadData();
-  setInterval(reloadData, REFRESH_MS);
 
   function isTypingTarget(el) {
     if (!el || !el.tagName) return false;
