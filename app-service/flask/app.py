@@ -1719,6 +1719,27 @@ def _infer_queue_step_number(job):
     return None
 
 
+def _infer_queue_type(job):
+    """Best-effort type for queue list before worker fills job.meta['type']."""
+    try:
+        meta = job.meta or {}
+        t = meta.get("type")
+        if t:
+            return t
+
+        # For queued jobs meta may be empty; fallback to function name.
+        func_name = getattr(job, "func_name", None) or ""
+        if func_name:
+            return func_name.rsplit(".", 1)[-1]
+
+        origin = getattr(job, "origin", None) or ""
+        if origin:
+            return origin
+    except Exception:
+        pass
+    return "queued_job"
+
+
 @app.route('/delete_job/<job_id>', methods=["GET"])
 def deletejob(job_id):
     job = fetch_job_by_id(job_id)
@@ -1787,9 +1808,10 @@ def queue_page():
             duration_sec = (now - started_at).total_seconds()
         l.append({
             'id': job.get_id(),
-            'state': job.get_status(),
+            # Refresh from Redis to avoid stale cached "queued" status.
+            'state': job.get_status(refresh=True),
             'step_number': _infer_queue_step_number(job),
-            'type': job.meta.get('type'),
+            'type': _infer_queue_type(job),
             'progress': job.meta.get('progress'),
             'created_at': created_at,
             'started_at': started_at,
@@ -1838,7 +1860,7 @@ def queue_job_detail(job_id):
 
     result_repr = None
     try:
-        if job.get_status() == "failed":
+        if job.get_status(refresh=True) == "failed":
             result_repr = "(job failed — see exception below)"
         else:
             result_repr = job.result
@@ -1856,7 +1878,7 @@ def queue_job_detail(job_id):
 
     job_data = {
         "id": job.get_id(),
-        "state": job.get_status(),
+        "state": job.get_status(refresh=True),
         "type": job.meta.get("type"),
         "func_name": getattr(job, "func_name", None) or getattr(job, "origin", ""),
         "args": _safe_repr(getattr(job, "args", ())),
