@@ -270,7 +270,14 @@
     return Math.max(minSize, Math.round(minSize + span * d));
   }
 
-  var WORD_COLOR = '#e8e8ed';
+  var WORD_COLOR = '#4d4d4d';
+  /** Цвет короткой случайной вспышки по случайному тегу (запускается после appear-анимации). */
+  var RANDOM_FLASH_COLOR = '#ffffff';
+  /** Шаг таймера случайных вспышек, мс. */
+  var RANDOM_FLASH_INTERVAL_MS = 50;
+  /** Длительность одной случайной вспышки (один кадр). */
+  var RANDOM_FLASH_HOLD_MS = 50;
+  var randomFlashTimer = null;
 
   /** Как на [Word Cloud](https://www.jasondavies.com/wordcloud/): в основном горизонтально, часть вертикально. */
   function cloudRotateDeg(text) {
@@ -447,6 +454,31 @@
     }
   }
 
+  function stopRandomFlash() {
+    if (randomFlashTimer !== null) {
+      clearInterval(randomFlashTimer);
+      randomFlashTimer = null;
+    }
+    for (var i = 0; i < particles.length; i++) {
+      particles[i].flashUntil = 0;
+    }
+  }
+
+  function startRandomFlash() {
+    stopRandomFlash();
+    if (!particles.length) return;
+    randomFlashTimer = setInterval(function () {
+      if (!particles.length) {
+        stopRandomFlash();
+        return;
+      }
+      var idx = Math.floor(Math.random() * particles.length);
+      var p = particles[idx];
+      if (p) p.flashUntil = performance.now() + RANDOM_FLASH_HOLD_MS;
+      redraw();
+    }, RANDOM_FLASH_INTERVAL_MS);
+  }
+
   function snapParticlesToHome() {
     for (var key in particleMap) {
       var p = particleMap[key];
@@ -459,6 +491,7 @@
   /** После новой d3-cloud укладки: по одному с шагом APPEAR_STAGGER_MS (от меньшего size к большему), только fade-in на месте — без разлёта от центра. */
   function startAppearAnimation() {
     cancelAppearAnimation();
+    stopRandomFlash();
     for (var key in particleMap) {
       var p = particleMap[key];
       if (p.targetSize != null) p.size = p.targetSize;
@@ -466,6 +499,7 @@
       p.x = p.homeX;
       p.y = p.homeY;
       p.opacity = 0;
+      p.flashUntil = 0;
     }
     var order = particles.slice().sort(function (a, b) {
       var sa = typeof a.targetSize === 'number' ? a.targetSize : a.size;
@@ -499,6 +533,7 @@
         snapParticlesToHome();
         redraw();
         appearRaf = null;
+        startRandomFlash();
       }
     }
     tick();
@@ -521,6 +556,7 @@
       if (particleMap[key]) {
         var p = particleMap[key];
         if (typeof p.highlightUntil !== 'number') p.highlightUntil = 0;
+        if (typeof p.flashUntil !== 'number') p.flashUntil = 0;
         p.targetSize = size;
         p.targetColor = color;
         p.count = t.count;
@@ -539,6 +575,7 @@
           x: W / 2, y: H / 2,
           opacity: 0,
           highlightUntil: 0,
+          flashUntil: 0,
           rotate: 0,
           _w: 0, _h: 0
         };
@@ -656,9 +693,13 @@
       var nowHl = performance.now();
       var ht =
         p.highlightUntil && nowHl < p.highlightUntil ? 1 : 0;
+      var fl =
+        p.flashUntil && nowHl < p.flashUntil ? 1 : 0;
       if (ht > 0) {
         drawLabel(HIGHLIGHT_COLOR, op * ht * 0.6, 20 * ht);
         drawLabel(lerpColor(p.color, HIGHLIGHT_COLOR, ht), op, 0);
+      } else if (fl > 0) {
+        drawLabel(RANDOM_FLASH_COLOR, op, 0);
       } else {
         drawLabel(p.color, op, 0);
       }

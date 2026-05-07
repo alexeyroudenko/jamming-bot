@@ -39,7 +39,7 @@
       --tags-vis-accent-hover: #fafafa;
     }
     body.vf3-page .vf-anchor-label {
-      color: #fff;
+      color: #ff3030;
     }
   </style>
 </head>
@@ -701,7 +701,7 @@
   function updateVectorFieldOverlay() {
     if (!showVectors || !vectorGeom || !vectorPosArr) return;
     var lim = WORLD_HALF * 0.48;
-    var arrowScale = WORLD_HALF * 0.055;
+    var arrowScale = WORLD_HALF * 0.11;
     var idx = 0;
     for (var gz = 0; gz < GRID3_Z; gz++) {
       for (var gy = 0; gy < GRID3_Y; gy++) {

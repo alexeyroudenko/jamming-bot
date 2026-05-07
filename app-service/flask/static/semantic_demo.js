@@ -441,6 +441,8 @@ var demoIndex = 0;
 var demoTimer = null;
 var demoLinkKeys = {};
 var demoPlaying = false;
+/** До завершения первого автозапуска демо (или явного reset) живые данные не применяются. */
+var demoCompleted = false;
 
 var liveCollectTimer = null;
 var liveCollectQueue = [];
@@ -538,6 +540,10 @@ function semanticPause() {
     }
     var playBtn = document.getElementById("semantic-play");
     if (playBtn) playBtn.textContent = "play";
+    if (!demoCompleted && demoEdges.length && demoIndex >= demoEdges.length) {
+        demoCompleted = true;
+        startSemanticLastCollectPoll();
+    }
 }
 
 function semanticPlay() {
@@ -747,6 +753,9 @@ function semanticCollectFingerprint(data) {
 }
 
 function applySemanticCollectPayload(data, sourceTag) {
+    if (!demoCompleted) {
+        return;
+    }
     if (!data || typeof data !== "object") {
         return;
     }
@@ -895,6 +904,9 @@ function normalizeHex(h) {
 }
 
 function applyMoodCollectPayload(data, sourceTag) {
+    if (!demoCompleted) {
+        return;
+    }
     if (!data || typeof data !== "object") {
         return;
     }
@@ -1040,8 +1052,11 @@ function loadDemoPayload() {
             if (!demoEdges.length) {
                 var el = document.getElementById("semantic-status");
                 if (el) el.textContent = "no data (semantic/semantic.txt)";
+                demoCompleted = true;
+                startSemanticLastCollectPoll();
+                return;
             }
-            startSemanticLastCollectPoll();
+            semanticPlay();
         })
         .catch(function (err) {
             console.error(err);

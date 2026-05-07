@@ -181,10 +181,10 @@ body.tags-vis-body {
   position: absolute;
   right: -1px;
   top: 50%;
-  width: 7px;
-  height: 7px;
-  border-top: 2px solid rgba(255, 72, 72, 0.95);
-  border-right: 2px solid rgba(255, 72, 72, 0.95);
+  width: 4px;
+  height: 4px;
+  border-top: 1px solid rgba(255, 72, 72, 0.95);
+  border-right: 1px solid rgba(255, 72, 72, 0.95);
   transform: translateY(-50%) rotate(45deg);
 }
 
