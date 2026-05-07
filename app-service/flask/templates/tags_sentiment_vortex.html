@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Jamming bot — Sentiment vortex</title>
+  <link rel="stylesheet" href="/flask_static/dashboard_panels.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='tags_vis_shared.css') }}">
   <style>
     body.tags-sentiment-vortex {
@@ -47,7 +48,7 @@
 <nav class="tags-vis-nav" aria-label="Subpages">
   <div>
     <span class="tags-vis-title">Sentiment vortex</span>
-    {% include "components/explorer_nav_plain.html" %}
+    {% include "components/bot_primary_header_plain.html" %}
   </div>
 </nav>
 
