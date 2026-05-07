@@ -209,6 +209,17 @@
         el.style.color = '';
         el.style.textShadow = '';
       }
+      /* Нейтральная полярность («центр» шкалы): подпись должна оставаться с красным pill — без этого на серой точке выглядит «без красного фона». */
+      if (i < nActive && typeof state.polarity[i] === 'number') {
+        var pol = state.polarity[i];
+        if (Math.abs(pol) <= 0.35) {
+          el.style.backgroundColor = '#ff0000';
+          el.style.background = '#ff0000';
+          if (!(now >= blinkFrom[i] && now < blinkUntil[i])) {
+            el.style.color = '#ffffff';
+          }
+        }
+      }
     }
   }
 
