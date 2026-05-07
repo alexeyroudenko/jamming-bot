@@ -26,7 +26,7 @@ jest.mock('./pages/atlas', () => ({
 
 test('renders main nav', () => {
   render(
-    <MemoryRouter basename="/static-app" initialEntries={['/static-app/']}>
+    <MemoryRouter basename="/scenes" initialEntries={['/scenes/']}>
       <AppContent />
     </MemoryRouter>
   );

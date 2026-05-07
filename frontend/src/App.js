@@ -144,7 +144,7 @@ function AutoswitchProgressBar({ duration }) {
   )
 }
 
-/** PWA manifest + document title for `/static-app/tags` only (restore on unmount). */
+/** PWA manifest + document title for `/scenes/tags` only (restore on unmount). */
 function PwaScenesManifest({ children }) {
   useEffect(() => {
     const link = document.querySelector('link[rel="manifest"]')
@@ -293,7 +293,7 @@ function App() {
     <div className="App">
       
       <Router
-          basename="/static-app"
+          basename="/scenes"
           future={{
             v7_startTransition: true,
             v7_relativeSplatPath: true,

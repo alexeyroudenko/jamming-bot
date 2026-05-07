@@ -30,9 +30,19 @@
         transition-duration: 0.01ms;
       }
     }
+    /* Только vectorfield-3d: светлая типографика и подписи якорей */
+    body.vf3-page {
+      --tags-vis-text: #ffffff;
+      --tags-vis-muted: #e4e4e7;
+      --tags-vis-accent: #ffffff;
+      --tags-vis-accent-hover: #fafafa;
+    }
+    body.vf3-page .vf-anchor-label {
+      color: #fff;
+    }
   </style>
 </head>
-<body class="tags-vis-body">
+<body class="tags-vis-body vf3-page">
 
 <nav class="tags-vis-nav" aria-label="Subpages">
   <div>
@@ -81,9 +91,7 @@
   <div id="vf3-intro-veil" class="vf3-intro-veil" aria-hidden="true"></div>
   <div id="vf3-anchors-layer" class="vf-anchors-layer" aria-hidden="false"></div>
 </div>
-<p class="tags-vis-hint">Drag to orbit · wheel zoom · white particles in 3D · Field vectors: cyan segments · labels are projected (read-only) · <kbd>i</kbd> toolbar</p>
 
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js" crossorigin="anonymous"></script>
 <script src="{{ url_for('static', filename='tags_vis_controls.js') }}"></script>
@@ -95,11 +103,6 @@
   var MAX_PARTICLES_CAPACITY = 28000;
   var FLOW_SPEED = 0.05;
   var RELOAD_DEBOUNCE_MS = 550;
-  var POLL_MS = 120000;
-  /** Second screen: не чаще одного цикла tags+embeddings за этот интервал. */
-  var SECOND_SCREEN_MIN_FETCH_MS = 14000;
-  var lastDataFetchAt = 0;
-  var dataFetchWaitTimer = null;
   /** Half-extent of simulation cube (world units). */
   var WORLD_HALF = 250;
 
@@ -121,6 +124,10 @@
   /** Проявление сцены: затемнение 1 с (только первый кадр). */
   var VF3_INTRO_VEIL_MS = 1000;
   var vf3IntroArmed = true;
+  /** После первого успешного ответа embeddings — якоря по одному с этим интервалом (только до завершения первой серии). */
+  var VF3_EMB_STAGGER_MS = 200;
+  var vf3EmbStaggerDone = false;
+  var anchorsRevealTimer = null;
 
   var statusEl = document.getElementById('tags-vis-status');
   var banner = document.getElementById('api-error');
@@ -378,6 +385,75 @@
     layoutParticles();
   }
 
+  function clearAnchorsReveal() {
+    if (anchorsRevealTimer !== null) {
+      clearTimeout(anchorsRevealTimer);
+      anchorsRevealTimer = null;
+    }
+  }
+
+  function anchorStatusLine(anchorLen, has3) {
+    var src = has3 ? 'API vectors3d' : '2D+z fallback';
+    return (
+      effectiveParticles +
+      ' pts · ' +
+      anchorLen +
+      ' anchors · ' +
+      src +
+      ' · mode ' +
+      anchorMode
+    );
+  }
+
+  /**
+   * Первый успешный набор якорей после загрузки страницы появляется по одному
+   * каждые VF3_EMB_STAGGER_MS; дальнейшие перезагрузки — сразу целиком.
+   */
+  function applyAnchorsWithOptionalStagger(built, has3) {
+    clearAnchorsReveal();
+    var doStagger = !vf3EmbStaggerDone && !reduceMotionPreferred && built.length > 0;
+    if (!doStagger) {
+      anchors = built;
+      statusEl.textContent = anchorStatusLine(anchors.length, has3);
+      if (showAnchorLabels) rebuildAnchorLabels();
+      if (built.length > 0 && !vf3EmbStaggerDone) vf3EmbStaggerDone = true;
+      return;
+    }
+    anchors = [];
+    if (showAnchorLabels && anchorLayer) anchorLayer.innerHTML = '';
+    var total = built.length;
+    var i = 0;
+    function revealStep() {
+      if (i >= total) {
+        anchorsRevealTimer = null;
+        vf3EmbStaggerDone = true;
+        statusEl.textContent = anchorStatusLine(anchors.length, has3);
+        return;
+      }
+      anchors.push(built[i]);
+      i++;
+      statusEl.textContent =
+        effectiveParticles +
+        ' pts · ' +
+        anchors.length +
+        '/' +
+        total +
+        ' anchors · ' +
+        (has3 ? 'API vectors3d' : '2D+z fallback') +
+        ' · mode ' +
+        anchorMode;
+      if (showAnchorLabels) rebuildAnchorLabels();
+      if (i >= total) {
+        anchorsRevealTimer = null;
+        vf3EmbStaggerDone = true;
+        statusEl.textContent = anchorStatusLine(anchors.length, has3);
+        return;
+      }
+      anchorsRevealTimer = setTimeout(revealStep, VF3_EMB_STAGGER_MS);
+    }
+    revealStep();
+  }
+
   function fieldAt3(x, y, z, t) {
     var fx = noise3(y, z, x, t) * noiseStrength;
     var fy = noise3(z, x, y, t + 0.7) * noiseStrength;
@@ -608,9 +684,9 @@
     vectorLines = new THREE.LineSegments(
       vectorGeom,
       new THREE.LineBasicMaterial({
-        color: 0x22d3ee,
+        color: 0xffffff,
         transparent: true,
-        opacity: 0.45,
+        opacity: 0.52,
         depthTest: true,
         depthWrite: false,
       })
@@ -741,6 +817,8 @@
     sorted = sorted.slice(0, MAX_ANCHOR_CANDIDATES);
 
     if (!emb || !emb.ok || !emb.words || !emb.vectors2d) {
+      clearAnchorsReveal();
+      anchors = [];
       statusEl.textContent =
         effectiveParticles + ' pts · fallback field (no embeddings)';
       if (showAnchorLabels) rebuildAnchorLabels();
@@ -827,8 +905,9 @@
     var dirNrm = centeredDirs.length > 0 ? embeddingMinMaxNormalizer3D(centeredDirs) : null;
     var scale = WORLD_HALF * 0.48;
 
+    var built = [];
     var activeLimit = Math.max(0, Math.min(MAX_ANCHOR_CANDIDATES, anchorCount, sorted.length));
-    for (var i = 0; i < sorted.length && anchors.length < activeLimit; i++) {
+    for (var i = 0; i < sorted.length && built.length < activeLimit; i++) {
       var row = sorted[i];
       var nm = normTag(row.name);
       var vecs = getEmbVectors3D(emb, nm);
@@ -896,7 +975,7 @@
         dz = rawDz / lenL;
       }
       var countWeight = Math.sqrt(row.count + 1);
-      anchors.push({
+      built.push({
         name: row.name,
         labelText:
           row.name +
@@ -920,16 +999,7 @@
         countWeight: countWeight,
       });
     }
-    var src = has3 ? 'API vectors3d' : '2D+z fallback';
-    statusEl.textContent =
-      effectiveParticles +
-      ' pts · ' +
-      anchors.length +
-      ' anchors · ' +
-      src +
-      ' · mode ' +
-      anchorMode;
-    if (showAnchorLabels) rebuildAnchorLabels();
+    applyAnchorsWithOptionalStagger(built, has3);
   }
 
   function fetchEmb(names) {
@@ -947,21 +1017,6 @@
   }
 
   function reloadData() {
-    var now = Date.now();
-    if (lastDataFetchAt > 0 && now - lastDataFetchAt < SECOND_SCREEN_MIN_FETCH_MS) {
-      if (!dataFetchWaitTimer) {
-        dataFetchWaitTimer = setTimeout(function () {
-          dataFetchWaitTimer = null;
-          reloadData();
-        }, SECOND_SCREEN_MIN_FETCH_MS - (now - lastDataFetchAt));
-      }
-      return;
-    }
-    if (dataFetchWaitTimer) {
-      clearTimeout(dataFetchWaitTimer);
-      dataFetchWaitTimer = null;
-    }
-    lastDataFetchAt = Date.now();
     statusEl.textContent = 'Loading tags…';
     return fetch(TAGS_API)
       .then(function (r) {
@@ -1227,13 +1282,8 @@
     renderer.render(scene, camera);
   }
 
-  var socket = io({ transports: ['websocket', 'polling'] });
-  socket.on('analyzed', scheduleReload);
-  socket.on('tags_updated', scheduleReload);
-
   tick();
   reloadData();
-  setInterval(reloadData, POLL_MS);
 
   setInterval(function () {
     if (reduceMotionPreferred) return;

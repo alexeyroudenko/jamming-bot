@@ -1767,14 +1767,14 @@ spec:
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
-  name: strip-static-app
+  name: strip-scenes
   namespace: jamming-bot
 spec:
   stripPrefix:
     prefixes:
-      - /static-app
+      - /scenes
 ---
-# ===================== frontend-static-app (CRA build behind /static-app/) =====================
+# ===================== frontend-static-app (CRA build behind /scenes/) =====================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -1830,7 +1830,7 @@ spec:
     port: 80
     targetPort: 80
 ---
-# React SPA at /static-app/; strip prefix so nginx serves CRA build at document root.
+# React SPA at /scenes/; strip prefix so nginx serves CRA build at document root.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -1838,7 +1838,7 @@ metadata:
   namespace: jamming-bot
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
-    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-static-app@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-strip-scenes@kubernetescrd
 spec:
   tls:
   - hosts:
@@ -1848,7 +1848,7 @@ spec:
   - host: jamming-bot.arthew0.online
     http:
       paths:
-      - path: /static-app
+      - path: /scenes
         pathType: Prefix
         backend:
           service:

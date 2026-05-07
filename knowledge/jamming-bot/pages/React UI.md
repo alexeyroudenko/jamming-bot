@@ -4,7 +4,7 @@ note_type: web_entry
 web_type: page
 project: "[[jamming-bot/Jamming Bot]]"
 parent: "[[pages/_index|Jamming Bot Pages Index]]"
-url: https://jamming-bot.arthew0.online/static-app/
+url: https://jamming-bot.arthew0.online/scenes/
 tags:
   - web
   - page
@@ -16,7 +16,7 @@ tags:
 
 ## URL
 
-https://jamming-bot.arthew0.online/static-app/
+https://jamming-bot.arthew0.online/scenes/
 
 ## Описание
 

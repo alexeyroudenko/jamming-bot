@@ -96,11 +96,6 @@
   } else if (DAYS_QUERY_SUFFIX === '?days=7') {
     document.title = 'Jamming bot — Tag Cloud (7 days)';
   }
-  var REFRESH_INTERVAL = 60000;
-  /** Second screen: не чаще одного запроса данных за этот интервал (сокет + таймер). */
-  var SECOND_SCREEN_MIN_FETCH_MS = 14000;
-  var lastTagFetchAt = 0;
-  var tagFetchWaitTimer = null;
   /** Совпадает с дефолтом count у /api/tags/get/. */
   var MAX_CLOUD_TAGS = 200;
   var REPEL_RADIUS = 150;
@@ -111,7 +106,10 @@
   /** Меньше — плотнее укладка в d3-cloud (px между спрайтами). */
   var CLOUD_PADDING = 3;
   var HIGHLIGHT_COLOR = 'rgb(255,0,0)';
-  var HIGHLIGHT_FLASH_MS = 220;
+  /** Длительность красной подсветки одного тега после старта его «очереди». */
+  var HIGHLIGHT_HOLD_MS = 3000;
+  /** Задержка между стартом подсветки соседних тегов в одном событии analyzed. */
+  var HIGHLIGHT_STAGGER_MS = 500;
   var RESIZE_LAYOUT_MS = 220;
   var layoutGen = 0;
   var lastLayoutSignature = '';
@@ -124,26 +122,55 @@
   /** Пауза между стартом появления соседних тегов, мс (от меньшего размера к большему). */
   var APPEAR_STAGGER_MS = 10;
 
-  function scheduleHighlightFlashEnd() {
-    if (highlightFlashTimer) clearTimeout(highlightFlashTimer);
-    highlightFlashTimer = setTimeout(function () {
-      highlightFlashTimer = null;
-      for (var j = 0; j < particles.length; j++) {
-        particles[j].highlightT = 0;
-      }
-      redraw();
-    }, HIGHLIGHT_FLASH_MS);
+  var highlightPulseTimer = null;
+  var highlightGen = 0;
+
+  function stopHighlightPulse() {
+    if (highlightPulseTimer !== null) {
+      clearInterval(highlightPulseTimer);
+      highlightPulseTimer = null;
+    }
   }
 
   function highlightTags(names) {
-    for (var i = 0; i < names.length; i++) {
-      var p = particleMap[names[i]];
-      if (p) {
-        p.highlightT = 1.0;
-      }
+    var list = Array.isArray(names) ? names : [];
+    var gen = ++highlightGen;
+    stopHighlightPulse();
+    if (!list.length) return;
+    for (var i = 0; i < list.length; i++) {
+      (function (name, idx) {
+        setTimeout(function () {
+          if (gen !== highlightGen) return;
+          var p = particleMap[name];
+          if (p) p.highlightUntil = performance.now() + HIGHLIGHT_HOLD_MS;
+        }, idx * HIGHLIGHT_STAGGER_MS);
+      })(list[i], i);
     }
+    var seriesEnd =
+      Math.max(0, (list.length - 1) * HIGHLIGHT_STAGGER_MS) +
+      HIGHLIGHT_HOLD_MS +
+      100;
+    highlightPulseTimer = setInterval(function () {
+      if (gen !== highlightGen) {
+        stopHighlightPulse();
+        return;
+      }
+      var t = performance.now();
+      for (var j = 0; j < particles.length; j++) {
+        var p = particles[j];
+        if (p.highlightUntil && t >= p.highlightUntil) p.highlightUntil = 0;
+      }
+      redraw();
+    }, 33);
+    setTimeout(function () {
+      if (gen !== highlightGen) return;
+      stopHighlightPulse();
+      for (var k = 0; k < particles.length; k++) {
+        particles[k].highlightUntil = 0;
+      }
+      redraw();
+    }, seriesEnd);
     redraw();
-    scheduleHighlightFlashEnd();
   }
 
   var statusEl = document.getElementById('status');
@@ -175,8 +202,6 @@
   var particleMap = {};
   var particles = [];
   var lastTagRows = null;
-  var highlightFlashTimer = null;
-
   function syncContentMetrics() {
     contentTop = NAV_OFFSET;
     contentH = Math.max(120, H - contentTop - 16);
@@ -494,6 +519,7 @@
 
       if (particleMap[key]) {
         var p = particleMap[key];
+        if (typeof p.highlightUntil !== 'number') p.highlightUntil = 0;
         p.targetSize = size;
         p.targetColor = color;
         p.count = t.count;
@@ -511,7 +537,7 @@
           homeX: W / 2, homeY: H / 2,
           x: W / 2, y: H / 2,
           opacity: 0,
-          highlightT: 0,
+          highlightUntil: 0,
           rotate: 0,
           _w: 0, _h: 0
         };
@@ -544,21 +570,6 @@
   }
 
   function fetchAndDraw() {
-    var now = Date.now();
-    if (lastTagFetchAt > 0 && now - lastTagFetchAt < SECOND_SCREEN_MIN_FETCH_MS) {
-      if (!tagFetchWaitTimer) {
-        tagFetchWaitTimer = setTimeout(function () {
-          tagFetchWaitTimer = null;
-          fetchAndDraw();
-        }, SECOND_SCREEN_MIN_FETCH_MS - (now - lastTagFetchAt));
-      }
-      return;
-    }
-    if (tagFetchWaitTimer) {
-      clearTimeout(tagFetchWaitTimer);
-      tagFetchWaitTimer = null;
-    }
-    lastTagFetchAt = Date.now();
     statusEl.textContent = 'updating…';
     fetch(API + DAYS_QUERY_SUFFIX)
       .then(function (r) { return r.json(); })
@@ -641,8 +652,10 @@
       }
 
       var op = baseOp;
-      if (p.highlightT > 0) {
-        var ht = p.highlightT;
+      var nowHl = performance.now();
+      var ht =
+        p.highlightUntil && nowHl < p.highlightUntil ? 1 : 0;
+      if (ht > 0) {
         drawLabel(HIGHLIGHT_COLOR, op * ht * 0.6, 20 * ht);
         drawLabel(lerpColor(p.color, HIGHLIGHT_COLOR, ht), op, 0);
       } else {
@@ -653,7 +666,6 @@
   }
 
   fetchAndDraw();
-  setInterval(fetchAndDraw, REFRESH_INTERVAL);
 
   var socket = io({ transports: ['websocket', 'polling'] });
   socket.on('connect', function () {
@@ -662,7 +674,6 @@
   });
   socket.on('tags_updated', function (data) {
     wsLog('tags_updated' + (data ? ' ' + JSON.stringify(data) : ''));
-    fetchAndDraw();
   });
   socket.on('step', function (data) {
     wsLog('step ' + (data && data.url ? data.url : JSON.stringify(data)));
@@ -676,7 +687,6 @@
   socket.on('analyzed', function (data) {
     if (data && data.tags) {
       highlightTags(data.tags);
-      fetchAndDraw();
     }
     wsLog('analyzed ' + JSON.stringify(data));
   });

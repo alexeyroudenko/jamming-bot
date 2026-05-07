@@ -1,5 +1,5 @@
 {
-  "id": "/static-app/manifest-scenes",
+  "id": "/scenes/manifest-scenes",
   "short_name": "JB Scenes",
   "name": "Jamming Bot Scenes",
   "icons": [
@@ -20,7 +20,7 @@
     }
   ],
   "start_url": "./tags",
-  "scope": "/static-app/",
+  "scope": "/scenes/",
   "display": "standalone",
   "theme_color": "#000000",
   "background_color": "#ffffff",

@@ -447,7 +447,7 @@ AUTH_PASS = os.getenv("AUTH_PASS", "x")
 
 PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
                    "/events",
-                   "/static-app",
+                   "/scenes",
                    "/rytm", "/socket.io", "/tags/", "/geo/", "/screenshots/", "/semantic", "/api/semantic/",
                    "/api/tags/get/", "/api/tags/combine/",
                    "/api/tags/sentiment-vortex/", "/api/tags/embeddings/", "/api/tags/add/",
@@ -1314,13 +1314,13 @@ def bot():
     return render_template('bot.html')
 
 
-@app.route('/static-app', methods=["GET"])
-@app.route('/static-app/', methods=["GET"])
-@app.route('/static-app/<path:rest>', methods=["GET"])
-def static_app_local_dev_redirect(rest=""):
-    """Local dev convenience: forward http://<flask>/static-app/... to CRA dev server on :3000.
+@app.route('/scenes', methods=["GET"])
+@app.route('/scenes/', methods=["GET"])
+@app.route('/scenes/<path:rest>', methods=["GET"])
+def scenes_app_local_dev_redirect(rest=""):
+    """Local dev convenience: forward http://<flask>/scenes/... to CRA dev server on :3000.
 
-    In production /static-app/* is handled by Traefik (StripPrefix middleware -> frontend-static-app
+    In production /scenes/* is handled by Traefik (StripPrefix middleware -> frontend-static-app
     nginx Service) and never reaches Flask, so this redirect only ever fires for local requests.
     Guarded by host check so any non-local hit (should not happen) returns 404 instead of leaking
     a localhost URL.
@@ -1329,7 +1329,7 @@ def static_app_local_dev_redirect(rest=""):
     if host not in ("localhost", "127.0.0.1"):
         return Response("Not Found", status=404)
     suffix = rest if rest else ""
-    target = f"http://localhost:3000/static-app/{suffix}"
+    target = f"http://localhost:3000/scenes/{suffix}"
     qs = request.query_string.decode("utf-8") if request.query_string else ""
     if qs:
         target = f"{target}?{qs}"
