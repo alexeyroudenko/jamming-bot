@@ -381,7 +381,8 @@ body.is-move-mode .bot-move-target.is-move-selected {
     bottom: 120px;
     transform: translateX(-50%);
     z-index: 205;
-    width: var(--bot-stack-panel-width);
+    /* Workers / Backfill / Viewers: половина базовой ширины стека, по центру (см. задачу Buildin) */
+    width: calc(var(--bot-stack-panel-width) / 2);
     max-height: 180px;
     padding: 10px 12px;
     background: rgba(5, 7, 10, 0.76);
@@ -397,7 +398,7 @@ body.is-move-mode .bot-move-target.is-move-selected {
     bottom: 212px;
     transform: translateX(-50%);
     z-index: 204;
-    width: var(--bot-stack-panel-width);
+    width: calc(var(--bot-stack-panel-width) / 2);
     padding: 10px 12px;
     background: rgba(5, 7, 10, 0.76);
     border: 1px solid var(--bot-border);
@@ -412,7 +413,7 @@ body.is-move-mode .bot-move-target.is-move-selected {
     bottom: 316px;
     transform: translateX(-50%);
     z-index: 203;
-    width: var(--bot-stack-panel-width);
+    width: calc(var(--bot-stack-panel-width) / 2);
     max-height: 190px;
     padding: 10px 12px;
     background: rgba(5, 7, 10, 0.76);
@@ -982,28 +983,31 @@ body.is-admin .guest-only {
     }
 
     .bot-workers-panel {
-        left: 10px;
-        right: 10px;
+        left: 50%;
+        right: auto;
         bottom: 150px;
-        transform: none;
-        width: auto;
+        transform: translateX(-50%);
+        width: calc((100vw - 20px) / 2);
+        max-width: calc((100vw - 20px) / 2);
         max-height: 160px;
     }
 
     .bot-backfill-panel {
-        left: 10px;
-        right: 10px;
+        left: 50%;
+        right: auto;
         bottom: 244px;
-        transform: none;
-        width: auto;
+        transform: translateX(-50%);
+        width: calc((100vw - 20px) / 2);
+        max-width: calc((100vw - 20px) / 2);
     }
 
     .bot-viewers-panel {
-        left: 10px;
-        right: 10px;
+        left: 50%;
+        right: auto;
         bottom: 338px;
-        transform: none;
-        width: auto;
+        transform: translateX(-50%);
+        width: calc((100vw - 20px) / 2);
+        max-width: calc((100vw - 20px) / 2);
         max-height: 176px;
     }
 
