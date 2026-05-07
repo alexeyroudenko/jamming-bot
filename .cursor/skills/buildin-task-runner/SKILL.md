@@ -222,6 +222,9 @@ PR_URL=$(gh pr view --json url -q .url)
 
 - **Один прогон — одна задача.** Не забирать несколько из `To Do` за раз.
 - **Шумный фильтр:** `buildin_query_database` подмешивает страницы без нужного значения `Category` — всегда фильтровать ответ на клиенте по `properties.Category.select.name`.
+- **`Category` через MCP не применяется:** если после `buildin_update_page` повторный `buildin_get_page` всё ещё показывает старый `Category` (хотя `last_edited_time` мог обновиться), у токена интеграции Buildin, скорее всего, **нет права менять свойства строк базы** — только блоки (например `append_markdown`). Тогда колонку (`To Do` → `In Progress` → `Review`) нужно перенести **вручную в UI**. Формат запроса при рабочих правах (имя или UUID свойства `b32c8846-e56f-45da-b7bf-09e358024c10`): `"Category": { "select": { "name": "Review" } }` или с `"id"` опции из `buildin_get_database`.
+- **URL задачи:** страница одна и та же для `https://buildin.ai/docs/<page_id>` и короткого `https://buildin.ai/<page_id>` — проблема «не переехала колонка» не из-за формата ссылки, а из-за прав API / ручного переноса.
+- **GitHub CLI (`gh`):** при `HTTP 401` / `Bad credentials` выполни `gh auth status`. Если в окружении задан **невалидный `GITHUB_TOKEN`**, он перекрывает учётную запись из keyring — в PowerShell: `Remove-Item Env:GITHUB_TOKEN -ErrorAction SilentlyContinue`, затем снова `gh auth status`. Постоянно: убери битый токен из переменных среды пользователя / настроек Cursor. Интерактивное обновление: `gh auth login --web`.
 - **Не переводить в `Review` с красными проверками.** Оставить в `In Progress` и сообщить блокер.
 - **Не менять другие свойства** задачи кроме `Category`, если пользователь не попросил.
 - **Запрещено** `archived: true` для страницы.
