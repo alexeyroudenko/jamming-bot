@@ -306,6 +306,12 @@ body.is-move-mode .bot-move-target.is-move-selected {
     background: transparent;
 }
 
+.bot-link-chip.is-primary {
+    opacity: 1;
+    color: #ffffff;
+    background: #ff0000;
+}
+
 .bot-status-grid {
     display: flex;
     align-items: center;

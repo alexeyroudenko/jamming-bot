@@ -59,6 +59,21 @@
     #console .line { white-space: pre; margin: 0; }
     #console .ts { color: #333; }
     #console .ws { color: #ff0000; }
+
+    #selected-info {
+      position: fixed;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: monospace;
+      font-size: 14px;
+      color: #fff;
+      pointer-events: none;
+      z-index: 12;
+      display: none;
+      white-space: nowrap;
+    }
+    #selected-info.visible { display: block; }
   </style>
 </head>
 <body>
@@ -71,6 +86,7 @@
 </nav>
 
 <canvas id="cloud"></canvas>
+<div id="selected-info"></div>
 <div id="console"></div>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
@@ -706,6 +722,57 @@
     }
     ctx.globalAlpha = 1;
   }
+
+  var selectedInfoEl = document.getElementById('selected-info');
+
+  function findParticleAt(mx, my) {
+    /* Iterate в обратном порядке — получаем верхний (последний нарисованный) при перекрытии. */
+    for (var i = particles.length - 1; i >= 0; i--) {
+      var p = particles[i];
+      if (!p || (typeof p.opacity === 'number' && p.opacity <= 0)) continue;
+      var w = p._w || 0;
+      var h = p._h || 0;
+      if (w <= 0 || h <= 0) continue;
+      var dx = mx - p.x;
+      var dy = my - p.y;
+      var rad = (typeof p.rotate === 'number' ? p.rotate : 0) * Math.PI / 180;
+      var lx = dx * Math.cos(rad) + dy * Math.sin(rad);
+      var ly = -dx * Math.sin(rad) + dy * Math.cos(rad);
+      if (Math.abs(lx) <= w / 2 && Math.abs(ly) <= h / 2) {
+        return p;
+      }
+    }
+    return null;
+  }
+
+  function hideSelectedInfo() {
+    if (selectedInfoEl) {
+      selectedInfoEl.textContent = '';
+      selectedInfoEl.classList.remove('visible');
+    }
+  }
+
+  canvas.addEventListener('mousemove', function (ev) {
+    if (!selectedInfoEl) return;
+    var rect = canvas.getBoundingClientRect();
+    var mx = ev.clientX - rect.left;
+    var my = ev.clientY - rect.top;
+    var p = findParticleAt(mx, my);
+    if (p) {
+      var count = typeof p.count === 'number' ? p.count : (p.count || 0);
+      selectedInfoEl.textContent = p.text + ' — ' + count;
+      selectedInfoEl.classList.add('visible');
+      canvas.style.cursor = 'pointer';
+    } else {
+      hideSelectedInfo();
+      canvas.style.cursor = 'default';
+    }
+  });
+
+  canvas.addEventListener('mouseleave', function () {
+    hideSelectedInfo();
+    canvas.style.cursor = 'default';
+  });
 
   fetchAndDraw();
 

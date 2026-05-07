@@ -47,7 +47,6 @@
 
 <nav class="tags-vis-nav" aria-label="Subpages">
   <div>
-    <span class="tags-vis-title">Vector field 3D</span>
     {% include "components/bot_primary_header_plain.html" %}
   </div>
 </nav>
@@ -146,7 +145,7 @@
   var noiseStrength = NOISE_BASE;
   var anchorsStrength = ANCHORS_BASE;
   var compensationX = 0;
-  var anchorMode = 'current';
+  var anchorMode = 'random';
   var anchorCount = DEFAULT_ANCHOR_COUNT;
 
   var renderer, scene, camera, controls, points, geom, posAttr;
