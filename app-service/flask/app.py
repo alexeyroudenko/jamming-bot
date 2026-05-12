@@ -446,6 +446,7 @@ AUTH_USER = os.getenv("AUTH_USER", "x")
 AUTH_PASS = os.getenv("AUTH_PASS", "x")
 
 PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
+                   "/pages/",
                    "/events",
                    "/scenes",
                    "/rytm", "/socket.io", "/tags/", "/geo/", "/screenshots/", "/semantic", "/api/semantic/",
@@ -1403,6 +1404,17 @@ def backfill_status():
 @cross_origin()
 def screenshots():
     return render_template('screenshots.html')
+
+
+@app.route('/pages/empty/')
+@cross_origin()
+def pages_empty():
+    return render_template('pages_empty.html')
+
+
+@app.route('/pages/empty')
+def pages_empty_redirect():
+    return redirect('/pages/empty/', code=302)
 
 
 @app.route('/tags/')
