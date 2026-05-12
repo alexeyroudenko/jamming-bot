@@ -12,7 +12,7 @@
     box-sizing: border-box;
     background: transparent;
     color: #fff;
-    font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     min-height: calc(100dvh - 140px);
     display: flex;
     flex-direction: column;
@@ -20,13 +20,15 @@
   body.jb-pages-words .jb-pages-words-list {
     flex: 1;
     min-height: 0;
-    overflow: hidden;
+    overflow: auto;
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35em 0.5em;
+    gap: 8px 10px;
     align-content: flex-start;
     line-height: 1.35;
     word-break: break-word;
+    font-size: 24pt;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   body.jb-pages-words .jb-pages-words-word {
     opacity: 0;
@@ -46,6 +48,7 @@
   body.jb-pages-words .jb-pages-words-empty {
     color: #9a9a9a;
     font-size: 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 </style>
 {% endblock %}
@@ -57,7 +60,6 @@
 </main>
 {% endblock %}
 {% block extra_scripts %}
-<script src="/flask_static/pages_view_fit.js"></script>
 <script>
 function showLoginForm() { window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname); }
 function handleLogout() { window.location.href = '/logout'; }
@@ -68,16 +70,14 @@ document.body.classList.remove('is-admin');
   var list = document.getElementById('words-list');
   var MAX_WORDS = 600;
   var seen = new Set();
+  var wordQueue = [];
+  var wordTimer = null;
+  var WORD_GAP_MS = 600;
 
-  function appendWord(raw) {
-    var w = String(raw == null ? '' : raw).trim();
-    if (!w) return;
+  function appendWordToDom(w) {
     if (list.querySelector('.jb-pages-words-empty')) {
       list.innerHTML = '';
     }
-    var key = w.toLocaleLowerCase();
-    if (seen.has(key)) return;
-    seen.add(key);
     var el = document.createElement('span');
     el.className = 'jb-pages-words-word';
     el.textContent = w;
@@ -92,36 +92,52 @@ document.body.classList.remove('is-admin');
     }
   }
 
-  function scheduleListFit() {
-    if (!window.jbPageViewFit || !list) return;
-    if (!list.querySelector('.jb-pages-words-word')) {
-      list.style.fontSize = '';
-      return;
+  function pumpWords() {
+    wordTimer = null;
+    if (!wordQueue.length) return;
+    var w = wordQueue.shift();
+    appendWordToDom(w);
+    if (wordQueue.length) {
+      wordTimer = setTimeout(pumpWords, WORD_GAP_MS);
     }
-    window.jbPageViewFit.debounce(list, { minPx: 10, maxPx: 140 }, 70);
+  }
+
+  function enqueueWords(words) {
+    if (!Array.isArray(words)) return;
+    var added = false;
+    words.forEach(function (raw) {
+      var w = String(raw == null ? '' : raw).trim();
+      if (!w) return;
+      var key = w.toLocaleLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      wordQueue.push(w);
+      added = true;
+    });
+    if (added && !wordTimer) {
+      pumpWords();
+    }
   }
 
   function ingest(data) {
     if (!data) return;
     var words = [];
     if (Array.isArray(data.words)) {
-      words = data.words.slice();
-    } else if (typeof data.words_str === 'string') {
-      words = data.words_str.split(/\s+/);
+      words = words.concat(data.words);
+    }
+    if (typeof data.words_str === 'string') {
+      words = words.concat(data.words_str.split(/\s+/));
     }
     if (data.analyzed && Array.isArray(data.analyzed.words)) {
       words = words.concat(data.analyzed.words);
     }
-    words.forEach(appendWord);
-    scheduleListFit();
+    enqueueWords(words);
   }
 
   s.on('analyzed', ingest);
   s.on('step', function (data) {
     if (data && data.analyzed) ingest(data);
   });
-
-  window.addEventListener('resize', function () { scheduleListFit(); });
 })();
 </script>
 {% endblock %}
