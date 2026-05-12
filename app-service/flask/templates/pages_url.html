@@ -3,13 +3,17 @@
 {% block body_class %}jb-pages-url{% endblock %}
 {% block head_extra %}
 <style>
+  body.jb-pages-url {
+    overflow-x: hidden;
+  }
   body.jb-pages-url .jb-pages-url-main {
     margin: 0;
-    padding: 24px 24px 200px;
+    padding: 24px;
+    box-sizing: border-box;
     background: transparent;
     color: #fff;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    min-height: calc(100vh - 200px);
+    min-height: calc(100dvh - 140px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -25,6 +29,10 @@
   body.jb-pages-url #url a {
     color: inherit;
     text-decoration: none;
+  }
+  body.jb-pages-url #url code {
+    font-family: inherit;
+    font-size: inherit;
   }
   body.jb-pages-url #url.is-waiting {
     color: #9a9a9a;
@@ -55,26 +63,28 @@ document.body.classList.remove('is-admin');
       .replace(/'/g, '&#39;');
   }
 
-  function setUrl(url) {
-    var u = String(url == null ? '' : url).trim();
-    if (!u) {
+  function setStepUrl(data) {
+    var url = data && typeof data.url === 'string' ? data.url.trim() : '';
+    if (!url) {
       el.classList.add('is-waiting');
       el.textContent = 'Waiting for step…';
       return;
     }
+    var step = data && data.step != null ? data.step : null;
     el.classList.remove('is-waiting');
-    el.innerHTML = '<a href="' + escapeHtml(u) + '" target="_blank" rel="noreferrer noopener">' + escapeHtml(u) + '</a>';
+    if (step != null) {
+      el.innerHTML = '<a href="' + escapeHtml(url) + '" target="_blank" rel="noreferrer noopener"><code><nobr>' +
+        escapeHtml(String(step)) + ' : ' + escapeHtml(url) + '</nobr></code></a>';
+    } else {
+      el.innerHTML = '<a href="' + escapeHtml(url) + '" target="_blank" rel="noreferrer noopener">' + escapeHtml(url) + '</a>';
+    }
   }
 
   var s = window.socket;
   if (!s) return;
-  s.on('step', function (data) {
-    if (data && typeof data.url === 'string') setUrl(data.url);
-  });
-  s.on('sublink', function (data) {
-    if (data && typeof data.url === 'string') setUrl(data.url);
-  });
-  s.on('clear', function () { setUrl(''); });
+  s.on('step', function (data) { setStepUrl(data); });
+  s.on('sublink', function (data) { setStepUrl(data); });
+  s.on('clear', function () { setStepUrl(null); });
 })();
 </script>
 {% endblock %}
