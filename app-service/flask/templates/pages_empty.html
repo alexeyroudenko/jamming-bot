@@ -1,33 +1,40 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Jamming bot — empty</title>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      background: #000;
-      overflow: hidden;
-    }
-  </style>
-</head>
-<body>
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
+{% extends "base_dashboard.html" %}
+{% block title %}Jamming bot — empty{% endblock %}
+{% block body_class %}jb-pages-empty{% endblock %}
+{% block head_extra %}
+<style>
+  body.jb-pages-empty .bot-topbar {
+    padding: 12px 16px 0;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  body.jb-pages-empty .jb-pages-empty-main {
+    margin: 0;
+    padding: 0;
+    min-height: calc(100vh - 200px);
+    background: #000;
+    overflow: hidden;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<main class="jb-pages-empty-main" aria-label="Empty page"></main>
+{% endblock %}
+{% block extra_scripts %}
 <script>
+function showLoginForm() { window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname); }
+function handleLogout() { window.location.href = '/logout'; }
+document.body.classList.remove('is-admin');
 (function () {
-  var socket = io({ transports: ['websocket', 'polling'] });
-  socket.on('connect', function () { console.log('socket connect'); });
-  socket.on('disconnect', function () { console.log('socket disconnect'); });
-  socket.on('tags_updated', function (data) { console.log('tags_updated', data); });
-  socket.on('step', function (data) { console.log('step', data); });
-  socket.on('screenshot', function (data) { console.log('screenshot', data); });
-  socket.on('location', function (data) { console.log('location', data); });
-  socket.on('analyzed', function (data) { console.log('analyzed', data); });
+  var s = window.socket;
+  if (!s) return;
+  s.on('connect', function () { console.log('socket connect'); });
+  s.on('disconnect', function () { console.log('socket disconnect'); });
+  s.on('tags_updated', function (data) { console.log('tags_updated', data); });
+  s.on('step', function (data) { console.log('step', data); });
+  s.on('screenshot', function (data) { console.log('screenshot', data); });
+  s.on('location', function (data) { console.log('location', data); });
+  s.on('analyzed', function (data) { console.log('analyzed', data); });
 })();
 </script>
-</body>
-</html>
+{% endblock %}
