@@ -1,0 +1,150 @@
+{% extends "base_dashboard.html" %}
+{% block title %}Jamming bot — texts{% endblock %}
+{% block body_class %}jb-pages-texts{% endblock %}
+{% block head_extra %}
+<style>
+  body.jb-pages-texts .jb-pages-texts-main {
+    margin: 0;
+    padding: 24px 24px 200px;
+    background: transparent;
+    color: #fff;
+    font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
+    min-height: 100vh;
+  }
+  body.jb-pages-texts .jb-pages-texts-meta {
+    color: #9a9a9a;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  body.jb-pages-texts .jb-pages-texts-meta a {
+    color: inherit;
+  }
+  body.jb-pages-texts .jb-pages-texts-body {
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    font-size: clamp(14px, 2vw, 20px);
+    line-height: 1.5;
+  }
+  body.jb-pages-texts .jb-pages-texts-empty {
+    color: #9a9a9a;
+    font-size: 14px;
+  }
+  body.jb-pages-texts .jb-pages-texts-highlight {
+    background: rgba(220, 38, 38, 0.78);
+    color: #fff;
+    padding: 0 3px;
+    border-radius: 3px;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<main class="jb-pages-texts-main" aria-label="Current text">
+  <div id="texts-meta" class="jb-pages-texts-meta">—</div>
+  <div id="texts-body" class="jb-pages-texts-body"><span class="jb-pages-texts-empty">Waiting for step…</span></div>
+</main>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+function showLoginForm() { window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname); }
+function handleLogout() { window.location.href = '/logout'; }
+document.body.classList.remove('is-admin');
+(function () {
+  var s = window.socket;
+  if (!s) return;
+  var metaEl = document.getElementById('texts-meta');
+  var bodyEl = document.getElementById('texts-body');
+  var currentText = '';
+  var currentPhrases = [];
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function normalizePhrases(arr) {
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .map(function (p) { return String(p == null ? '' : p).trim(); })
+      .filter(Boolean)
+      .sort(function (a, b) { return b.length - a.length; });
+  }
+
+  function render() {
+    if (!currentText) {
+      bodyEl.innerHTML = '<span class="jb-pages-texts-empty">Waiting for step…</span>';
+      return;
+    }
+    if (!currentPhrases.length) {
+      bodyEl.textContent = currentText;
+      return;
+    }
+    var lower = currentText.toLocaleLowerCase();
+    var matches = [];
+    currentPhrases.forEach(function (phrase) {
+      var lp = phrase.toLocaleLowerCase();
+      var i = 0;
+      while (i < lower.length) {
+        var idx = lower.indexOf(lp, i);
+        if (idx === -1) break;
+        matches.push({ start: idx, end: idx + phrase.length });
+        i = idx + 1;
+      }
+    });
+    if (!matches.length) {
+      bodyEl.textContent = currentText;
+      return;
+    }
+    matches.sort(function (a, b) { return a.start - b.start; });
+    var merged = [matches[0]];
+    for (var k = 1; k < matches.length; k++) {
+      var prev = merged[merged.length - 1];
+      if (matches[k].start <= prev.end) {
+        prev.end = Math.max(prev.end, matches[k].end);
+      } else {
+        merged.push(matches[k]);
+      }
+    }
+    var html = '';
+    var cursor = 0;
+    merged.forEach(function (m) {
+      html += escapeHtml(currentText.slice(cursor, m.start));
+      html += '<span class="jb-pages-texts-highlight">' + escapeHtml(currentText.slice(m.start, m.end)) + '</span>';
+      cursor = m.end;
+    });
+    html += escapeHtml(currentText.slice(cursor));
+    bodyEl.innerHTML = html;
+  }
+
+  s.on('step', function (data) {
+    if (!data) return;
+    if (typeof data.text === 'string') {
+      currentText = data.text;
+    }
+    var step = data.step != null ? data.step : '—';
+    var url = data.url || '';
+    metaEl.innerHTML = 'step #' + escapeHtml(step) + (url ? ' · <a href="' + escapeHtml(url) + '" target="_blank" rel="noreferrer noopener">' + escapeHtml(url) + '</a>' : '');
+    render();
+  });
+
+  s.on('analyzed', function (data) {
+    if (!data) return;
+    currentPhrases = normalizePhrases(data.noun_phrases);
+    render();
+  });
+
+  s.on('clear', function () {
+    currentText = '';
+    currentPhrases = [];
+    metaEl.textContent = '—';
+    render();
+  });
+})();
+</script>
+{% endblock %}
