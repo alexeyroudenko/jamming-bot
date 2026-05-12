@@ -79,20 +79,27 @@ import {
 } from "react-router-dom";
 
 
-import Tags from "./pages/tags";
 import Blank from "./pages/graph";
 import Semantic from "./pages/semantic";
 import Steps from './components/Steps';
 import AtlasPage from './pages/atlas';
 import TagEmbedPage from './pages/tagEmbed';
 
-/** Tag embed routes cycled when autoswitch is on (key "a"). */
+/** Scenes cycled when autoswitch is on (key "a"); order: semantic → tag cloud → 3d → vortex → vector 3d. */
 const TAG_EMBED_AUTOSWITCH_ROUTES = [
+  '/semantic',
   '/tags',
-  '/tags3d',
-  '/sentiment-vortex',
-  '/vectorfield-3d',
+  '/tags/3d',
+  '/tags/sentiment-vortex',
+  '/tags/vectorfield-3d',
 ]
+
+function nextScenePath(currentPath) {
+  const i = TAG_EMBED_AUTOSWITCH_ROUTES.indexOf(currentPath)
+  const nextIdx = i === -1 ? 0 : (i + 1) % TAG_EMBED_AUTOSWITCH_ROUTES.length
+  return TAG_EMBED_AUTOSWITCH_ROUTES[nextIdx]
+}
+
 const TAG_EMBED_AUTOSWITCH_MS = 2 * 60 * 1000
 
 const TAG_EMBED_AUTOSWITCH_STORAGE_KEY = 'jamming-bot:tag-embed-autoswitch'
@@ -197,13 +204,19 @@ export function AppContent() {
         return
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return
-      if (e.key !== 'a' && e.key !== 'A') return
-      e.preventDefault()
-      setTagEmbedAutoswitch((v) => !v)
+      if (e.key === 'a' || e.key === 'A') {
+        e.preventDefault()
+        setTagEmbedAutoswitch((v) => !v)
+        return
+      }
+      if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault()
+        navigate(nextScenePath(pathnameRef.current))
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [navigate])
 
   useEffect(() => {
     writeTagEmbedAutoswitchToStorage(tagEmbedAutoswitch)
@@ -217,10 +230,7 @@ export function AppContent() {
       return
     }
     const tick = () => {
-      const path = pathnameRef.current
-      const i = TAG_EMBED_AUTOSWITCH_ROUTES.indexOf(path)
-      const nextIdx = i === -1 ? 0 : (i + 1) % TAG_EMBED_AUTOSWITCH_ROUTES.length
-      navigate(TAG_EMBED_AUTOSWITCH_ROUTES[nextIdx])
+      navigate(nextScenePath(pathnameRef.current))
     }
     intervalRef.current = window.setInterval(tick, TAG_EMBED_AUTOSWITCH_MS)
     return clearAutoswitchInterval
@@ -255,6 +265,30 @@ export function AppContent() {
         <Route path="/words" element={<Navigate to="/semantic" replace />} />
         <Route path="/graph" element={<Blank />} />
         <Route
+          path="/tags/3d"
+          element={
+            <PwaScenesManifest>
+              <TagEmbedPage title="Tags 3D" path="/tags/3d/" />
+            </PwaScenesManifest>
+          }
+        />
+        <Route
+          path="/tags/sentiment-vortex"
+          element={
+            <PwaScenesManifest>
+              <TagEmbedPage title="Sentiment vortex" path="/tags/sentiment-vortex/" />
+            </PwaScenesManifest>
+          }
+        />
+        <Route
+          path="/tags/vectorfield-3d"
+          element={
+            <PwaScenesManifest>
+              <TagEmbedPage title="Vectorfield 3D" path="/tags/vectorfield-3d/" />
+            </PwaScenesManifest>
+          }
+        />
+        <Route
           path="/tags"
           element={
             <PwaScenesManifest>
@@ -262,21 +296,14 @@ export function AppContent() {
             </PwaScenesManifest>
           }
         />
-        <Route
-          path="/tags3d"
-          element={<TagEmbedPage title="Tags 3D" path="/tags/3d/" />}
-        />
+        <Route path="/tags3d" element={<Navigate to="/tags/3d" replace />} />
         <Route
           path="/sentiment-vortex"
-          element={
-            <TagEmbedPage title="Sentiment vortex" path="/tags/sentiment-vortex/" />
-          }
+          element={<Navigate to="/tags/sentiment-vortex" replace />}
         />
         <Route
           path="/vectorfield-3d"
-          element={
-            <TagEmbedPage title="Vectorfield 3D" path="/tags/vectorfield-3d/" />
-          }
+          element={<Navigate to="/tags/vectorfield-3d" replace />}
         />
       </Routes>
     </>

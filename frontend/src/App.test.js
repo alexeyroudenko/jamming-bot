@@ -26,10 +26,10 @@ jest.mock('./pages/atlas', () => ({
 
 test('renders main nav', () => {
   render(
-    <MemoryRouter basename="/scenes" initialEntries={['/scenes/']}>
+    <MemoryRouter basename="/scenes" initialEntries={['/']}>
       <AppContent />
     </MemoryRouter>
   );
-  expect(screen.getByText(/Semantic cloud/i)).toBeInTheDocument();
-  expect(screen.getByText(/Data Atlas/i)).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Semantic' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Tags' })).toBeInTheDocument();
 });

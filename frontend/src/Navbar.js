@@ -7,16 +7,19 @@ const Navbar = () => {
     return (
             <Nav className="Nav">
                 <NavMenu>
+                    <NavLink to="/semantic">
+                    Semantic
+                    </NavLink>
                     <NavLink to="/tags">
                     Tags
                     </NavLink>
-                    <NavLink to="/tags3d">
+                    <NavLink to="/tags/3d">
                     Tags 3D
                     </NavLink>
-                    <NavLink to="/sentiment-vortex">
+                    <NavLink to="/tags/sentiment-vortex">
                     Sentiment vortex
                     </NavLink>
-                    <NavLink to="/vectorfield-3d">
+                    <NavLink to="/tags/vectorfield-3d">
                     Vectorfield 3D
                     </NavLink>
                 </NavMenu>
