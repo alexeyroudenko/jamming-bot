@@ -1417,6 +1417,17 @@ def pages_empty_redirect():
     return redirect('/pages/empty/', code=302)
 
 
+@app.route('/pages/url/')
+@cross_origin()
+def pages_url():
+    return render_template('pages_url.html')
+
+
+@app.route('/pages/url')
+def pages_url_redirect():
+    return redirect('/pages/url/', code=302)
+
+
 @app.route('/tags/')
 @cross_origin()
 def tags_cloud():
