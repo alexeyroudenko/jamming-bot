@@ -1428,6 +1428,39 @@ def pages_url_redirect():
     return redirect('/pages/url/', code=302)
 
 
+@app.route('/pages/words/')
+@cross_origin()
+def pages_words():
+    return render_template('pages_words.html')
+
+
+@app.route('/pages/words')
+def pages_words_redirect():
+    return redirect('/pages/words/', code=302)
+
+
+@app.route('/pages/phrases/')
+@cross_origin()
+def pages_phrases():
+    return render_template('pages_phrases.html')
+
+
+@app.route('/pages/phrases')
+def pages_phrases_redirect():
+    return redirect('/pages/phrases/', code=302)
+
+
+@app.route('/pages/texts/')
+@cross_origin()
+def pages_texts():
+    return render_template('pages_texts.html')
+
+
+@app.route('/pages/texts')
+def pages_texts_redirect():
+    return redirect('/pages/texts/', code=302)
+
+
 @app.route('/tags/')
 @cross_origin()
 def tags_cloud():
