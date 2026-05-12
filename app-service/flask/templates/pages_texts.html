@@ -14,6 +14,8 @@
     color: #fff;
     font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
     min-height: calc(100dvh - 140px);
+    display: flex;
+    flex-direction: column;
   }
   body.jb-pages-texts .jb-pages-texts-meta {
     color: #9a9a9a;
@@ -26,11 +28,13 @@
     color: inherit;
   }
   body.jb-pages-texts .jb-pages-texts-body {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
     white-space: pre-wrap;
     word-break: break-word;
     overflow-wrap: anywhere;
-    font-size: clamp(14px, 2vw, 20px);
-    line-height: 1.5;
+    line-height: 1.45;
   }
   body.jb-pages-texts .jb-pages-texts-empty {
     color: #9a9a9a;
@@ -51,6 +55,7 @@
 </main>
 {% endblock %}
 {% block extra_scripts %}
+<script src="/flask_static/pages_view_fit.js"></script>
 <script>
 function showLoginForm() { window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname); }
 function handleLogout() { window.location.href = '/logout'; }
@@ -126,6 +131,15 @@ document.body.classList.remove('is-admin');
     bodyEl.innerHTML = html;
   }
 
+  function scheduleBodyFit() {
+    if (!window.jbPageViewFit || !bodyEl) return;
+    if (!currentText) {
+      bodyEl.style.fontSize = '';
+      return;
+    }
+    window.jbPageViewFit.debounce(bodyEl, { minPx: 11, maxPx: 120 }, 60);
+  }
+
   s.on('step', function (data) {
     if (!data) return;
     if (typeof data.text === 'string') {
@@ -135,12 +149,14 @@ document.body.classList.remove('is-admin');
     var url = data.url || '';
     metaEl.innerHTML = 'step #' + escapeHtml(step) + (url ? ' · <a href="' + escapeHtml(url) + '" target="_blank" rel="noreferrer noopener">' + escapeHtml(url) + '</a>' : '');
     render();
+    scheduleBodyFit();
   });
 
   s.on('analyzed', function (data) {
     if (!data) return;
     currentPhrases = normalizePhrases(data.noun_phrases);
     render();
+    scheduleBodyFit();
   });
 
   s.on('clear', function () {
@@ -148,7 +164,10 @@ document.body.classList.remove('is-admin');
     currentPhrases = [];
     metaEl.textContent = '—';
     render();
+    scheduleBodyFit();
   });
+
+  window.addEventListener('resize', function () { scheduleBodyFit(); });
 })();
 </script>
 {% endblock %}
