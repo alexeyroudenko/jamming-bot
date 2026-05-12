@@ -1,51 +1,46 @@
-﻿<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>URL</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body {
-      width: 100%;
-      height: 100%;
-      min-height: 100vh;
-      background: #000;
-      color: #fff;
-      font-family: monospace;
-      overflow: auto;
-    }
-    #url {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 1rem;
-      font-size: clamp(16px, 4vw, 32px);
-      line-height: 1.35;
-      word-break: break-word;
-      overflow-wrap: anywhere;
-      text-align: center;
-    }
-  </style>
-</head>
-<body>
+﻿{% extends "base_dashboard.html" %}
+{% block title %}Jamming bot — url{% endblock %}
+{% block body_class %}jb-pages-url{% endblock %}
+{% block head_extra %}
+<style>
+  body.jb-pages-url .jb-pages-url-main {
+    margin: 0;
+    padding: 24px 24px 200px;
+    background: transparent;
+    color: #fff;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    min-height: calc(100vh - 200px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  body.jb-pages-url #url {
+    font-size: clamp(16px, 4vw, 32px);
+    line-height: 1.35;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    text-align: center;
+    color: #fff;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<main class="jb-pages-url-main" aria-label="Current URL">
   <div id="url"></div>
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
-  <script>
-  (function () {
-    var el = document.getElementById('url');
-    el.textContent = window.location.href;
-
-    var socket = io({ transports: ['websocket', 'polling'] });
-    socket.on('connect', function () {});
-    socket.on('tags_updated', function () {});
-    socket.on('step', function () {});
-    socket.on('screenshot', function () {});
-    socket.on('location', function () {});
-    socket.on('analyzed', function () {});
-    socket.on('disconnect', function () {});
-  })();
-  </script>
-</body>
-</html>
+</main>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+function showLoginForm() { window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname); }
+function handleLogout() { window.location.href = '/logout'; }
+document.body.classList.remove('is-admin');
+(function () {
+  var el = document.getElementById('url');
+  if (el) el.textContent = window.location.href;
+  var s = window.socket;
+  if (!s) return;
+  s.on('connect', function () { console.log('socket connect'); });
+  s.on('disconnect', function () { console.log('socket disconnect'); });
+})();
+</script>
+{% endblock %}

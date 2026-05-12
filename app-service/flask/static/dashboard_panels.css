@@ -158,7 +158,9 @@ body.jb-dashboard {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 12px;
     line-height: 1;
-    transition: background 0.15s ease, border-color 0.15s ease;
+    color: var(--bot-text);
+    text-decoration: none;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .bot-link-chip:hover,
@@ -166,6 +168,12 @@ body.jb-dashboard {
 .bot-login-link:hover {
     background: transparent;
     border-color: transparent;
+    color: var(--bot-text);
+    text-decoration: none;
+}
+
+.bot-link-chip:visited {
+    color: var(--bot-text);
 }
 
 .bot-move-toggle {
