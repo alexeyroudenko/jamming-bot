@@ -308,6 +308,11 @@
         if (cntEl) cntEl.textContent = counterStr;
     }
 
+    function setMetricStep(text) {
+        var el = document.getElementById('metric-step');
+        if (el) el.textContent = text;
+    }
+
     socket.on('connect', function () {
         console.log('on connect');
         pushSocketLog('connect', { sid: socket.id }, 'system');
@@ -362,12 +367,14 @@
     socket.on('clear', function (data) {
         pushSocketLog('clear', data, 'bot');
         clearStepTimeline();
+        setMetricStep('—');
     });
 
     socket.on('step', function (data) {
         pushSocketLog('step', data, 'bot');
         var step = data && data.step;
         resetStepTimeline(step, Date.now());
+        setMetricStep(step != null ? String(step) : '—');
     });
 
     socket.on('screenshot', function (data) {

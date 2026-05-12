@@ -3,13 +3,17 @@
 {% block body_class %}jb-pages-words{% endblock %}
 {% block head_extra %}
 <style>
+  body.jb-pages-words {
+    overflow-x: hidden;
+  }
   body.jb-pages-words .jb-pages-words-main {
     margin: 0;
-    padding: 24px 24px 200px;
+    padding: 24px;
+    box-sizing: border-box;
     background: transparent;
     color: #fff;
     font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
-    min-height: 100vh;
+    min-height: calc(100dvh - 140px);
   }
   body.jb-pages-words .jb-pages-words-list {
     display: flex;

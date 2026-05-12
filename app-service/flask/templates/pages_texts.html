@@ -3,13 +3,17 @@
 {% block body_class %}jb-pages-texts{% endblock %}
 {% block head_extra %}
 <style>
+  body.jb-pages-texts {
+    overflow-x: hidden;
+  }
   body.jb-pages-texts .jb-pages-texts-main {
     margin: 0;
-    padding: 24px 24px 200px;
+    padding: 24px;
+    box-sizing: border-box;
     background: transparent;
     color: #fff;
     font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
-    min-height: 100vh;
+    min-height: calc(100dvh - 140px);
   }
   body.jb-pages-texts .jb-pages-texts-meta {
     color: #9a9a9a;
@@ -33,7 +37,7 @@
     font-size: 14px;
   }
   body.jb-pages-texts .jb-pages-texts-highlight {
-    background: rgba(220, 38, 38, 0.78);
+    background: #ff0000;
     color: #fff;
     padding: 0 3px;
     border-radius: 3px;
