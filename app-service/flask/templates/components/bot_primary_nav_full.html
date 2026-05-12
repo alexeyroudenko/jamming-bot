@@ -1,11 +1,11 @@
 {% set p = request.path %}
+<a class="bot-link-chip{% if p.startswith('/pages/url') %} is-primary{% endif %}" href="/pages/url/">url</a>
+<a class="bot-link-chip{% if p.startswith('/pages/texts') %} is-primary{% endif %}" href="/pages/texts/">texts</a>
+<a class="bot-link-chip{% if p.startswith('/pages/words') %} is-primary{% endif %}" href="/pages/words/">words</a>
+<a class="bot-link-chip{% if p.startswith('/pages/phrases') %} is-primary{% endif %}" href="/pages/phrases/">phrases</a>
 <a class="bot-link-chip{% if p.startswith('/semantic') %} is-primary{% endif %}" href="/semantic/">semantic</a>
 <a class="bot-link-chip{% if p.rstrip('/') == '/tags' %} is-primary{% endif %}" href="/tags/">tag cloud</a>
-<a class="bot-link-chip{% if p.startswith('/pages/empty') %} is-primary{% endif %}" href="/pages/empty/">page empty</a>
-<a class="bot-link-chip{% if p.startswith('/pages/url') %} is-primary{% endif %}" href="/pages/url/">page url</a>
-<a class="bot-link-chip{% if p.startswith('/pages/words') %} is-primary{% endif %}" href="/pages/words/">page words</a>
-<a class="bot-link-chip{% if p.startswith('/pages/phrases') %} is-primary{% endif %}" href="/pages/phrases/">page phrases</a>
-<a class="bot-link-chip{% if p.startswith('/pages/texts') %} is-primary{% endif %}" href="/pages/texts/">page texts</a>
 <a class="bot-link-chip{% if p.startswith('/tags/3d') %} is-primary{% endif %}" href="/tags/3d/">3D cloud</a>
 <a class="bot-link-chip{% if p.startswith('/tags/sentiment-vortex') %} is-primary{% endif %}" href="/tags/sentiment-vortex/">sentiment vortex</a>
 <a class="bot-link-chip{% if p.startswith('/tags/vectorfield-3d') %} is-primary{% endif %}" href="/tags/vectorfield-3d/">vector 3D</a>
+<a class="bot-link-chip{% if p.startswith('/pages/empty') %} is-primary{% endif %}" href="/pages/empty/">empty</a>
