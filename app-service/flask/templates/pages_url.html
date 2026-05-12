@@ -22,11 +22,19 @@
     text-align: center;
     color: #fff;
   }
+  body.jb-pages-url #url a {
+    color: inherit;
+    text-decoration: none;
+  }
+  body.jb-pages-url #url.is-waiting {
+    color: #9a9a9a;
+    font-size: 14px;
+  }
 </style>
 {% endblock %}
 {% block content %}
-<main class="jb-pages-url-main" aria-label="Current URL">
-  <div id="url"></div>
+<main class="jb-pages-url-main" aria-label="Current step URL">
+  <div id="url" class="is-waiting">Waiting for step…</div>
 </main>
 {% endblock %}
 {% block extra_scripts %}
@@ -36,11 +44,37 @@ function handleLogout() { window.location.href = '/logout'; }
 document.body.classList.remove('is-admin');
 (function () {
   var el = document.getElementById('url');
-  if (el) el.textContent = window.location.href;
+  if (!el) return;
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function setUrl(url) {
+    var u = String(url == null ? '' : url).trim();
+    if (!u) {
+      el.classList.add('is-waiting');
+      el.textContent = 'Waiting for step…';
+      return;
+    }
+    el.classList.remove('is-waiting');
+    el.innerHTML = '<a href="' + escapeHtml(u) + '" target="_blank" rel="noreferrer noopener">' + escapeHtml(u) + '</a>';
+  }
+
   var s = window.socket;
   if (!s) return;
-  s.on('connect', function () { console.log('socket connect'); });
-  s.on('disconnect', function () { console.log('socket disconnect'); });
+  s.on('step', function (data) {
+    if (data && typeof data.url === 'string') setUrl(data.url);
+  });
+  s.on('sublink', function (data) {
+    if (data && typeof data.url === 'string') setUrl(data.url);
+  });
+  s.on('clear', function () { setUrl(''); });
 })();
 </script>
 {% endblock %}
