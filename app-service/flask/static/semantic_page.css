@@ -203,7 +203,8 @@ a:visited {
 .semantic-log-row {
     position: absolute;
     top: 120px;
-    right: 24px;
+    left: 24px;
+    right: auto;
     z-index: 115;
     width: min(260px, calc(100vw - 48px));
     display: flex;
@@ -225,7 +226,7 @@ a:visited {
     font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
     z-index: 110;
     width: 100%;
-    height: min(200px, calc(100vh - 320px));
+    height: min(600px, calc((100vh - 320px) * 3));
     padding: 12px;
     box-sizing: border-box;
     font-size: 10px;
@@ -265,13 +266,14 @@ a:visited {
 @media screen and (max-width: 844px) {
     .semantic-log-row {
         top: 100px;
-        right: 10px;
+        left: 10px;
+        right: auto;
         width: calc((100% - 20px) / 2);
         max-width: 200px;
     }
 
     .semantic-log-row #log_semantic {
-        height: min(160px, calc(100vh - 360px));
+        height: min(480px, calc((100vh - 360px) * 3));
         font-size: 9px;
         padding: 8px;
     }

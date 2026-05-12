@@ -39,7 +39,7 @@
       --tags-vis-accent-hover: #fafafa;
     }
     body.vf3-page .vf-anchor-label {
-      color: #ff3030;
+      color: #ffffff;
     }
   </style>
 </head>
@@ -531,7 +531,8 @@
       if (line) {
         var dxs = ((_projDir.x - _projV.x) * 0.5) * w;
         var dys = ((-_projDir.y + _projV.y) * 0.5) * h;
-        var len = Math.min(60, Math.max(16, Math.sqrt(dxs * dxs + dys * dys)));
+        var lenRaw = Math.min(60, Math.max(16, Math.sqrt(dxs * dxs + dys * dys)));
+        var len = lenRaw * 0.4;
         line.style.setProperty('--vf-anchor-line-length', len.toFixed(1) + 'px');
         line.style.setProperty(
           '--vf-anchor-line-angle',
@@ -715,7 +716,7 @@
           var my = f.y * inv;
           var mz = f.z * inv;
           var magNorm = Math.min(1, fl * 1.5);
-          var L = arrowScale * (0.35 + 0.65 * magNorm);
+          var L = arrowScale * (0.35 + 0.65 * magNorm) * 0.4;
           vectorPosArr[idx++] = x;
           vectorPosArr[idx++] = y;
           vectorPosArr[idx++] = z;
