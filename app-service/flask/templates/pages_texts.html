@@ -143,7 +143,10 @@ document.body.classList.remove('is-admin');
   s.on('step', function (data) {
     if (!data) return;
     if (typeof data.text === 'string') {
-      currentText = data.text;
+      var next = data.text.trim();
+      if (next.length) {
+        currentText = data.text;
+      }
     }
     var step = data.step != null ? data.step : '—';
     var url = data.url || '';

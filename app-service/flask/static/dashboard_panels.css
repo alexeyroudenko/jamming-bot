@@ -37,6 +37,33 @@ body.jb-dashboard {
     align-items: start;
 }
 
+/* /pages/* — отступы верхнего блока как у .tags-vis-nav на /tags/vectorfield-3d/ */
+body.jb-pages-texts .bot-topbar,
+body.jb-pages-words .bot-topbar,
+body.jb-pages-phrases .bot-topbar,
+body.jb-pages-url .bot-topbar,
+body.jb-pages-empty .bot-topbar {
+    padding: 10px 16px 8px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    gap: 10px;
+}
+
+body.jb-pages-texts .bot-primary-panel,
+body.jb-pages-texts .bot-status-panel,
+body.jb-pages-words .bot-primary-panel,
+body.jb-pages-words .bot-status-panel,
+body.jb-pages-phrases .bot-primary-panel,
+body.jb-pages-phrases .bot-status-panel,
+body.jb-pages-url .bot-primary-panel,
+body.jb-pages-url .bot-status-panel,
+body.jb-pages-empty .bot-primary-panel,
+body.jb-pages-empty .bot-status-panel {
+    padding-left: 0;
+    padding-right: 0;
+}
+
 .bot-panel {
     border: 0px solid var(--bot-border);
     background: transparent;
