@@ -14,12 +14,17 @@
     color: #fff;
     font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
     min-height: calc(100dvh - 140px);
+    display: flex;
+    flex-direction: column;
   }
   body.jb-pages-words .jb-pages-words-list {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
     display: flex;
     flex-wrap: wrap;
-    gap: 6px 12px;
-    font-size: clamp(14px, 2.2vw, 22px);
+    gap: 0.35em 0.5em;
+    align-content: flex-start;
     line-height: 1.35;
     word-break: break-word;
   }
@@ -27,6 +32,13 @@
     opacity: 0;
     transition: opacity 240ms ease-in;
     color: #fff;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25em 0.55em;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.42);
+    box-decoration-break: clone;
   }
   body.jb-pages-words .jb-pages-words-word.is-visible {
     opacity: 1;
@@ -45,6 +57,7 @@
 </main>
 {% endblock %}
 {% block extra_scripts %}
+<script src="/flask_static/pages_view_fit.js"></script>
 <script>
 function showLoginForm() { window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname); }
 function handleLogout() { window.location.href = '/logout'; }
@@ -79,6 +92,15 @@ document.body.classList.remove('is-admin');
     }
   }
 
+  function scheduleListFit() {
+    if (!window.jbPageViewFit || !list) return;
+    if (!list.querySelector('.jb-pages-words-word')) {
+      list.style.fontSize = '';
+      return;
+    }
+    window.jbPageViewFit.debounce(list, { minPx: 10, maxPx: 140 }, 70);
+  }
+
   function ingest(data) {
     if (!data) return;
     var words = [];
@@ -91,12 +113,15 @@ document.body.classList.remove('is-admin');
       words = words.concat(data.analyzed.words);
     }
     words.forEach(appendWord);
+    scheduleListFit();
   }
 
   s.on('analyzed', ingest);
   s.on('step', function (data) {
     if (data && data.analyzed) ingest(data);
   });
+
+  window.addEventListener('resize', function () { scheduleListFit(); });
 })();
 </script>
 {% endblock %}
