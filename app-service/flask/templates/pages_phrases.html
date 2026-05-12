@@ -1,0 +1,90 @@
+{% extends "base_dashboard.html" %}
+{% block title %}Jamming bot — phrases{% endblock %}
+{% block body_class %}jb-pages-phrases{% endblock %}
+{% block head_extra %}
+<style>
+  body.jb-pages-phrases .jb-pages-phrases-main {
+    margin: 0;
+    padding: 24px 24px 200px;
+    background: transparent;
+    color: #fff;
+    font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
+    min-height: 100vh;
+  }
+  body.jb-pages-phrases .jb-pages-phrases-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: clamp(14px, 2.4vw, 26px);
+    line-height: 1.3;
+  }
+  body.jb-pages-phrases .jb-pages-phrases-item {
+    opacity: 0;
+    transition: opacity 280ms ease-in;
+    color: #fff;
+    background: rgba(220, 38, 38, 0.78);
+    padding: 2px 8px;
+    border-radius: 3px;
+    align-self: flex-start;
+    max-width: 100%;
+    word-break: break-word;
+  }
+  body.jb-pages-phrases .jb-pages-phrases-item.is-visible {
+    opacity: 1;
+  }
+  body.jb-pages-phrases .jb-pages-phrases-empty {
+    color: #9a9a9a;
+    font-size: 14px;
+    background: transparent;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<main class="jb-pages-phrases-main" aria-label="Semantic phrases">
+  <div id="phrases-list" class="jb-pages-phrases-list">
+    <span class="jb-pages-phrases-item jb-pages-phrases-empty is-visible">Waiting for noun phrases…</span>
+  </div>
+</main>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+function showLoginForm() { window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname); }
+function handleLogout() { window.location.href = '/logout'; }
+document.body.classList.remove('is-admin');
+(function () {
+  var s = window.socket;
+  if (!s) return;
+  var list = document.getElementById('phrases-list');
+  var MAX_ITEMS = 200;
+  var seen = new Set();
+
+  function append(raw) {
+    var p = String(raw == null ? '' : raw).trim();
+    if (!p) return;
+    var key = p.toLocaleLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    var empty = list.querySelector('.jb-pages-phrases-empty');
+    if (empty) empty.remove();
+    var el = document.createElement('span');
+    el.className = 'jb-pages-phrases-item';
+    el.textContent = p;
+    list.appendChild(el);
+    requestAnimationFrame(function () { el.classList.add('is-visible'); });
+    while (list.childNodes.length > MAX_ITEMS) {
+      var first = list.firstChild;
+      if (first && first.textContent) {
+        seen.delete(first.textContent.toLocaleLowerCase());
+      }
+      list.removeChild(first);
+    }
+  }
+
+  s.on('analyzed', function (data) {
+    if (!data) return;
+    var phrases = Array.isArray(data.noun_phrases) ? data.noun_phrases : [];
+    phrases.forEach(append);
+  });
+})();
+</script>
+{% endblock %}
