@@ -383,27 +383,51 @@ function createSemanticGraph3D(containerEl) {
                 });
             }
         }
+        /* Отталкивание: many-body (charge); v3 — сила, theta — Barnes–Hut, chargeDist — дальность */
         var chargeF = fg.d3Force("charge");
         if (chargeF) {
             if (typeof chargeF.strength === "function") {
-                chargeF.strength(-140 * values.v3 * 90);
+                var repel = -(30 + values.v3 * 720);
+                chargeF.strength(repel);
             }
             if (typeof chargeF.theta === "function") {
                 chargeF.theta(values.theta);
             }
             if (typeof chargeF.distanceMax === "function") {
                 var cd = values.chargeDist;
-                /* Infinity ломает часть сборок d3-force / WebGL; «без лимита» = очень большое число */
                 chargeF.distanceMax(cd >= 8000 ? 1e9 : cd);
             }
         }
+        /* Гравитация к центру (0,0,0): v2 — сила притяжения */
         var centerF = fg.d3Force("center");
-        if (centerF && typeof centerF.strength === "function") {
-            centerF.strength(0.1 * values.v2 * 4);
+        if (centerF) {
+            if (typeof centerF.strength === "function") {
+                centerF.strength(0.04 + values.v2 * 0.48);
+            }
+            if (typeof centerF.x === "function") {
+                centerF.x(0);
+                centerF.y(0);
+            }
+            if (typeof centerF.z === "function") {
+                centerF.z(0);
+            }
         }
+        /* Трение: velocity decay; v5 — ползунок «трение» (чем выше, тем сильнее гашение скорости) */
         if (typeof fg.d3VelocityDecay === "function") {
-            var decay = Math.min(0.9, 0.28 + values.v5 * 2.2);
+            var decay = Math.min(0.92, 0.12 + values.v5 * 0.78);
             fg.d3VelocityDecay(decay);
+        }
+        /* Скорость затухания alpha: связь с длиной рёбер и силой связи (остальные параметры тоже влияют на «живость») */
+        if (typeof fg.d3AlphaDecay === "function") {
+            var ad = 0.01 + values.v1 * 0.022 + (1 - values.v4) * 0.018;
+            fg.d3AlphaDecay(Math.min(0.08, Math.max(0.006, ad)));
+        }
+        if (typeof fg.d3AlphaMin === "function") {
+            fg.d3AlphaMin(0.0008 + values.v2 * 0.004);
+        }
+        /* После смены сил обязательно разогреть, иначе при alpha≈0 ползунки почти не ощущаются */
+        if (typeof fg.d3ReheatSimulation === "function") {
+            fg.d3ReheatSimulation();
         }
     }
 
