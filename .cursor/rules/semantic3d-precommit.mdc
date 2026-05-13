@@ -1,0 +1,11 @@
+---
+description: Перед коммитом правок semantic3d / semantic_demo_3d / vendor графа
+globs: app-service/flask/templates/semantic3d.html,app-service/flask/static/semantic_demo_3d.js,app-service/flask/static/semantic3d_force_graph.iife.js,app-service/flask/static/semantic3d_vendor/**
+---
+
+# Semantic 3D перед коммитом
+
+- Локально поднять Flask (порт как у проекта, часто `http://localhost:5000/semantic3d/`).
+- Открыть страницу в браузере (встроенный браузер Cursor или свой), **жёсткое обновление** при смене статики (`?v=` или cache-bust).
+- В консоли: **не должно** быть `Uncaught` / `Failed to fetch` по скриптам страницы; предупреждения расширений (SES, CursorBrowser) не считаем блокером, если граф работает.
+- При изменении `semantic3d_vendor/entry.mjs` или зависимостей — `cd app-service/flask/static/semantic3d_vendor && npm run build` и закоммитить обновлённый `semantic3d_force_graph.iife.js`.
