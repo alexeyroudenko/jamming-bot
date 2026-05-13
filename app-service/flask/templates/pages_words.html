@@ -18,19 +18,17 @@
     flex-direction: column;
   }
   body.jb-pages-words .jb-pages-words-list {
+    position: relative;
     flex: 1;
     min-height: 0;
-    overflow: auto;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 10px;
-    align-content: flex-start;
+    overflow: hidden;
     line-height: 1.35;
     word-break: break-word;
     font-size: 24pt;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   body.jb-pages-words .jb-pages-words-word {
+    position: absolute;
     opacity: 0;
     transition: opacity 240ms ease-in;
     color: #fff;
@@ -41,6 +39,7 @@
     border-radius: 4px;
     background: rgba(0, 0, 0, 0.42);
     box-decoration-break: clone;
+    max-width: min(90vw, 480px);
   }
   body.jb-pages-words .jb-pages-words-word.is-visible {
     opacity: 1;
@@ -74,6 +73,18 @@ document.body.classList.remove('is-admin');
   var wordTimer = null;
   var WORD_GAP_MS = 200;
 
+  function placeWordRandom(el) {
+    var cw = list.clientWidth;
+    var ch = list.clientHeight;
+    if (cw < 8 || ch < 8) return;
+    var w = el.offsetWidth;
+    var h = el.offsetHeight;
+    var maxL = Math.max(0, cw - w);
+    var maxT = Math.max(0, ch - h);
+    el.style.left = Math.floor(Math.random() * (maxL + 1)) + 'px';
+    el.style.top = Math.floor(Math.random() * (maxT + 1)) + 'px';
+  }
+
   function appendWordToDom(w) {
     if (list.querySelector('.jb-pages-words-empty')) {
       list.innerHTML = '';
@@ -82,7 +93,10 @@ document.body.classList.remove('is-admin');
     el.className = 'jb-pages-words-word';
     el.textContent = w;
     list.appendChild(el);
-    requestAnimationFrame(function () { el.classList.add('is-visible'); });
+    requestAnimationFrame(function () {
+      placeWordRandom(el);
+      el.classList.add('is-visible');
+    });
     while (list.childNodes.length > MAX_WORDS) {
       var first = list.firstChild;
       if (first && first.textContent) {
