@@ -226,7 +226,8 @@ function createSemanticGraph3D(containerEl) {
     /* Вместо FOCUS: каждые 21 с — случайно ±45° по Y сцене или «орбита» камеры вокруг Y (тот же период, что был у random focus) */
     var RANDOM_MOTION_INTERVAL_MS = 21000;
     var ORBIT_ANGLE_RAD = Math.PI / 3;
-    var ORBIT_DURATION_MS = 2800;
+    /* Орбита камеры: в 2× быстрее прежних 2800 ms */
+    var ORBIT_DURATION_MS = 1400;
     var RAD45 = Math.PI / 4;
 
     var cameraMotionActive = false;
@@ -287,7 +288,8 @@ function createSemanticGraph3D(containerEl) {
 
     /* Как tags_3d.html: после паузы ввода — медленный поворот сцены вокруг Y */
     var IDLE_ROTATE_DELAY_MS = 1400;
-    var IDLE_ROTATE_Y_RAD_PER_SEC = 0.025;
+    /* Поворот сцены вокруг Y при простое: 2× быстрее */
+    var IDLE_ROTATE_Y_RAD_PER_SEC = 0.05;
     var lastGraphActivityMs = performance.now();
     var lastEngineTickMs = performance.now();
 
