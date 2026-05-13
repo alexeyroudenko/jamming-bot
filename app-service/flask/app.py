@@ -1382,6 +1382,15 @@ def scenes_app_local_dev_redirect(rest=""):
     host = (request.host or "").split(":")[0].lower()
     if host not in ("localhost", "127.0.0.1"):
         return Response("Not Found", status=404)
+    # Same as production Traefik: semantic demo is Flask at /semantic/, not CRA /scenes/semantic.
+    norm = (rest or "").strip("/")
+    if norm == "semantic" or norm.startswith("semantic/"):
+        tail = norm[len("semantic"):].lstrip("/")
+        target = f"/semantic/{tail}" if tail else "/semantic/"
+        qs = request.query_string.decode("utf-8") if request.query_string else ""
+        if qs:
+            target = f"{target}?{qs}"
+        return redirect(target, code=302)
     suffix = rest if rest else ""
     target = f"http://localhost:3000/scenes/{suffix}"
     qs = request.query_string.decode("utf-8") if request.query_string else ""
