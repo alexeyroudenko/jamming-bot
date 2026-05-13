@@ -56,6 +56,44 @@ function wireForcePanelCollapse() {
     });
 }
 
+function isTypingTargetForHotkey(el) {
+    if (!el || !el.tagName) {
+        return false;
+    }
+    var tag = el.tagName.toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select") {
+        return true;
+    }
+    return el.isContentEditable === true;
+}
+
+function wireForcePanelHotkey() {
+    document.addEventListener("keydown", function (ev) {
+        if (!ev || ev.defaultPrevented) {
+            return;
+        }
+        if (ev.ctrlKey || ev.metaKey || ev.altKey) {
+            return;
+        }
+        if (ev.key !== "s" && ev.key !== "S") {
+            return;
+        }
+        if (isTypingTargetForHotkey(ev.target)) {
+            return;
+        }
+        ev.preventDefault();
+        var panel = document.getElementById("semantic-force-panel");
+        var toggle = document.getElementById("semantic-force-toggle");
+        var body = document.getElementById("semantic-force-body");
+        if (!panel || !toggle || !body) {
+            return;
+        }
+        var collapsed = panel.classList.contains("is-collapsed");
+        applyForcePanelCollapsedUi(panel, toggle, body, !collapsed);
+        saveForcePanelCollapsed(!collapsed);
+    });
+}
+
 var DEFAULT_FORCE_VALUES = {
     v1: 0.25,
     v2: 0.25,
@@ -146,13 +184,19 @@ function createSemanticGraph3D(containerEl) {
         var canvas = document.createElement("canvas");
         var ctx = canvas.getContext("2d");
         var dpr = Math.min(2, window.devicePixelRatio || 1);
-        var fontPx = Math.round(34 * dpr);
-        ctx.font = "600 " + fontPx + "px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+        var fontPx = Math.round(34 * 0.7 * dpr);
+        ctx.font =
+            '400 ' +
+            fontPx +
+            'px ui-monospace, "SF Mono", Menlo, Consolas, monospace';
         var w = Math.ceil(ctx.measureText(label).width) + 18 * dpr;
         var h = Math.ceil(fontPx + 14 * dpr);
         canvas.width = w;
         canvas.height = h;
-        ctx.font = "600 " + fontPx + "px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+        ctx.font =
+            '400 ' +
+            fontPx +
+            'px ui-monospace, "SF Mono", Menlo, Consolas, monospace';
         ctx.textBaseline = "top";
         var tx = 8 * dpr;
         var ty = 6 * dpr;
@@ -178,7 +222,7 @@ function createSemanticGraph3D(containerEl) {
         var sprite = new THREE.Sprite(mat);
         sprite.renderOrder = 999;
         /* sizeAttenuation: false — k = canvas_px / world_scale; больше k → мельче подпись */
-        var k = 1800;
+        var k = 1800 / 0.7;
         sprite.scale.set(w / k, h / k, 1);
         return sprite;
     }
@@ -1219,6 +1263,7 @@ setTimeout(function () {
     initGraph();
     wireDemoControls();
     wireForcePanelCollapse();
+    wireForcePanelHotkey();
     wireForceSliders();
     initSemanticSocket();
     startWhenGraphReady(0);
