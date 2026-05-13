@@ -202,7 +202,7 @@ a:visited {
 
 .semantic-log-row {
     position: absolute;
-    top: 120px;
+    top: calc(120px + 7vh);
     left: 24px;
     right: auto;
     z-index: 115;
@@ -226,7 +226,7 @@ a:visited {
     font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
     z-index: 110;
     width: 100%;
-    height: min(600px, calc((100vh - 320px) * 3));
+    height: min(420px, calc((100vh - 320px) * 2.1));
     padding: 12px;
     box-sizing: border-box;
     font-size: 10px;
@@ -243,7 +243,7 @@ a:visited {
     position: relative;
     margin: 0;
     width: 100%;
-    max-height: 140px;
+    max-height: 98px;
     padding: 10px 12px;
     box-sizing: border-box;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -263,9 +263,14 @@ a:visited {
     visibility: visible;
 }
 
+body.semantic-page .semantic-demo-row,
+body.semantic3d-page .semantic-demo-row {
+    display: none !important;
+}
+
 @media screen and (max-width: 844px) {
     .semantic-log-row {
-        top: 100px;
+        top: calc(100px + 7vh);
         left: 10px;
         right: auto;
         width: calc((100% - 20px) / 2);
@@ -273,13 +278,13 @@ a:visited {
     }
 
     .semantic-log-row #log_semantic {
-        height: min(480px, calc((100vh - 360px) * 3));
+        height: min(336px, calc((100vh - 360px) * 2.1));
         font-size: 9px;
         padding: 8px;
     }
 
     .semantic-log-mood {
-        max-height: 100px;
+        max-height: 70px;
         font-size: 8px;
         padding: 8px;
     }

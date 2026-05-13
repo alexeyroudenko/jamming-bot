@@ -56,6 +56,44 @@ function wireForcePanelCollapse() {
     });
 }
 
+function isTypingTargetForHotkey(el) {
+    if (!el || !el.tagName) {
+        return false;
+    }
+    var tag = el.tagName.toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select") {
+        return true;
+    }
+    return el.isContentEditable === true;
+}
+
+function wireForcePanelHotkey() {
+    document.addEventListener("keydown", function (ev) {
+        if (!ev || ev.defaultPrevented) {
+            return;
+        }
+        if (ev.ctrlKey || ev.metaKey || ev.altKey) {
+            return;
+        }
+        if (ev.key !== "s" && ev.key !== "S") {
+            return;
+        }
+        if (isTypingTargetForHotkey(ev.target)) {
+            return;
+        }
+        ev.preventDefault();
+        var panel = document.getElementById("semantic-force-panel");
+        var toggle = document.getElementById("semantic-force-toggle");
+        var body = document.getElementById("semantic-force-body");
+        if (!panel || !toggle || !body) {
+            return;
+        }
+        var collapsed = panel.classList.contains("is-collapsed");
+        applyForcePanelCollapsedUi(panel, toggle, body, !collapsed);
+        saveForcePanelCollapsed(!collapsed);
+    });
+}
+
 var DEFAULT_FORCE_VALUES = {
     v1: 0.25,
     v2: 0.25,
@@ -1069,6 +1107,7 @@ setTimeout(function () {
     initGraph();
     wireDemoControls();
     wireForcePanelCollapse();
+    wireForcePanelHotkey();
     wireForceSliders();
     initSemanticSocket();
     if (graph && typeof graph.setValues === "function") {

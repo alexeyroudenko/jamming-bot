@@ -8,9 +8,9 @@
   <link rel="icon" href="/flask_static/favicon.ico" type="image/x-icon">
   <meta name="theme-color" content="#000000">
   <meta name="description" content="Semantic dependency graph demo (same D3 style as main dashboard)">
-  <link rel="stylesheet" href="/flask_static/semantic_page.css">
+  <link rel="stylesheet" href="/flask_static/semantic_page.css?v=2">
 </head>
-<body>
+<body class="semantic-page">
 
 <div id="semantic-mood-bg" aria-hidden="true"></div>
 <div id="nodes"></div>
@@ -140,7 +140,7 @@
         })
         .then(function () {
             var s = document.createElement("script");
-            s.src = "/flask_static/semantic_demo.js";
+            s.src = "/flask_static/semantic_demo.js?v=2";
             document.body.appendChild(s);
         })
         .catch(function (e) {

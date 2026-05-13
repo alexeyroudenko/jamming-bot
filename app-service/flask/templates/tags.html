@@ -875,7 +875,7 @@
       /* Фразы: вдвое уже диапазон случайного кегля, чем у слов (см. задачу phrases /tags/). */
       el.style.fontSize =
         (kind === 'phrase'
-          ? 0.5 + Math.random() * 0.75
+          ? 0.5 + Math.random() * 0.375
           : 0.5 + Math.random() * 1.5) + 'em';
       el.style.zIndex = String(++zStack);
       list.appendChild(el);
