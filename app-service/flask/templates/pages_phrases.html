@@ -3,6 +3,14 @@
 {% block body_class %}jb-pages-phrases{% endblock %}
 {% block head_extra %}
 <style>
+  @keyframes jb-pages-phrases-reveal-lr {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0 0 0 0);
+    }
+  }
   body.jb-pages-phrases {
     overflow-x: hidden;
   }
@@ -28,10 +36,8 @@
   }
   body.jb-pages-phrases .jb-pages-phrases-item:not(.jb-pages-phrases-empty) {
     position: absolute;
-  }
-  body.jb-pages-phrases .jb-pages-phrases-item {
-    opacity: 0;
-    transition: opacity 280ms ease-in;
+    opacity: 1;
+    clip-path: inset(0 100% 0 0);
     color: #fff;
     background: #ff0000;
     padding: 2px 8px;
@@ -41,8 +47,8 @@
     display: inline-flex;
     align-items: center;
   }
-  body.jb-pages-phrases .jb-pages-phrases-item.is-visible {
-    opacity: 1;
+  body.jb-pages-phrases .jb-pages-phrases-item:not(.jb-pages-phrases-empty).is-visible {
+    animation: jb-pages-phrases-reveal-lr 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
   body.jb-pages-phrases .jb-pages-phrases-empty {
     color: #9a9a9a;
@@ -91,6 +97,7 @@ document.body.classList.remove('is-admin');
     var el = document.createElement('span');
     el.className = 'jb-pages-phrases-item';
     el.textContent = p;
+    el.style.fontSize = (0.5 + Math.random() * 1.5) + 'em';
     list.appendChild(el);
     requestAnimationFrame(function () {
       placePhraseRandom(el);

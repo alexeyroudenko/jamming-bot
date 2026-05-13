@@ -75,6 +75,16 @@
     }
     #selected-info.visible { display: block; }
 
+    /** Раскрытие слева направо (прямоугольная маска через clip-path) */
+    @keyframes tags-float-reveal-lr {
+      from {
+        clip-path: inset(0 100% 0 0);
+      }
+      to {
+        clip-path: inset(0 0 0 0);
+      }
+    }
+
     /** Живые слова поверх облака (как /pages/words/). */
     #tags-floating-words {
       position: fixed;
@@ -92,8 +102,8 @@
     }
     #tags-floating-words .tags-floating-word {
       position: absolute;
-      opacity: 0;
-      transition: opacity 240ms ease-in;
+      opacity: 1;
+      clip-path: inset(0 100% 0 0);
       color: #fff;
       display: inline-flex;
       align-items: center;
@@ -105,7 +115,7 @@
       max-width: min(90vw, 360px);
     }
     #tags-floating-words .tags-floating-word.is-visible {
-      opacity: 1;
+      animation: tags-float-reveal-lr 0.48s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
 
     /** Фразы поверх облака (как /pages/phrases/): красные чипы, отдельный слой над словами */
@@ -124,8 +134,8 @@
     }
     #tags-floating-phrases .tags-floating-phrase {
       position: absolute;
-      opacity: 0;
-      transition: opacity 280ms ease-in;
+      opacity: 1;
+      clip-path: inset(0 100% 0 0);
       color: #fff;
       background: #ff0000;
       padding: 2px 8px;
@@ -135,7 +145,7 @@
       align-items: center;
     }
     #tags-floating-phrases .tags-floating-phrase.is-visible {
-      opacity: 1;
+      animation: tags-float-reveal-lr 0.52s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
   </style>
 </head>
@@ -203,6 +213,8 @@
   var APPEAR_OPACITY_SPEED = 0.055;
   /** Пауза между стартом появления соседних тегов, мс (от меньшего размера к большему; ×3 медленнее). */
   var APPEAR_STAGGER_MS = 30;
+  /** Сдвиг по X при появлении: в px = доля * кегль тега (лёгкий занос к homeX). */
+  var APPEAR_OFFSET_FRAC = 0.2;
 
   var highlightPulseTimer = null;
   var highlightGen = 0;
@@ -358,10 +370,10 @@
   var WORD_COLOR = '#4d4d4d';
   /** Цвет короткой случайной вспышки по случайному тегу (запускается после appear-анимации). */
   var RANDOM_FLASH_COLOR = '#ffffff';
-  /** Шаг таймера случайных вспышек, мс. */
-  var RANDOM_FLASH_INTERVAL_MS = 50;
-  /** Длительность одной случайной вспышки (один кадр). */
-  var RANDOM_FLASH_HOLD_MS = 50;
+  /** Интервал выбора случайного тега для вспышки после появления облака (×3 медленнее базовых 50 мс). */
+  var RANDOM_FLASH_INTERVAL_MS = 150;
+  /** Длительность одной случайной вспышки (×3). */
+  var RANDOM_FLASH_HOLD_MS = 150;
   var randomFlashTimer = null;
 
   /** Как на [Word Cloud](https://www.jasondavies.com/wordcloud/): в основном горизонтально, часть вертикально. */
@@ -573,7 +585,7 @@
     }
   }
 
-  /** После новой d3-cloud укладки: по одному с шагом APPEAR_STAGGER_MS (от меньшего size к большему), только fade-in на месте — без разлёта от центра. */
+  /** После новой d3-cloud укладки: по одному с шагом APPEAR_STAGGER_MS (от меньшего size к большему), fade-in + лёгкий сдвиг по X на 0.2×кегль к позиции. */
   function startAppearAnimation() {
     cancelAppearAnimation();
     stopRandomFlash();
@@ -581,7 +593,8 @@
       var p = particleMap[key];
       if (p.targetSize != null) p.size = p.targetSize;
       if (p.targetColor != null) p.color = p.targetColor;
-      p.x = p.homeX;
+      var fs0 = typeof p.size === 'number' ? p.size : 12;
+      p.x = p.homeX - APPEAR_OFFSET_FRAC * fs0;
       p.y = p.homeY;
       p.opacity = 0;
       p.flashUntil = 0;
@@ -601,14 +614,18 @@
       for (var i = 0; i < order.length; i++) {
         var p = order[i];
         var delayMs = i * APPEAR_STAGGER_MS;
-        p.x = p.homeX;
+        var fs = typeof p.size === 'number' ? p.size : 12;
+        var off = APPEAR_OFFSET_FRAC * fs;
         p.y = p.homeY;
         if (now - t0 < delayMs) {
           p.opacity = 0;
+          p.x = p.homeX - off;
           settling = true;
           continue;
         }
         p.opacity = Math.min(1, p.opacity + APPEAR_OPACITY_SPEED);
+        var u = Math.min(1, p.opacity);
+        p.x = p.homeX - (1 - u) * off;
         if (p.opacity < 0.995) settling = true;
       }
       redraw();
@@ -871,6 +888,7 @@
       var el = document.createElement('span');
       el.className = 'tags-floating-word';
       el.textContent = w;
+      el.style.fontSize = (0.5 + Math.random() * 1.5) + 'em';
       list.appendChild(el);
       requestAnimationFrame(function () {
         placeWordRandom(el);
@@ -981,6 +999,7 @@
       var el = document.createElement('span');
       el.className = 'tags-floating-phrase';
       el.textContent = p;
+      el.style.fontSize = (0.5 + Math.random() * 1.5) + 'em';
       list.appendChild(el);
       requestAnimationFrame(function () {
         placePhraseRandom(el);

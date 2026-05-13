@@ -3,6 +3,14 @@
 {% block body_class %}jb-pages-words{% endblock %}
 {% block head_extra %}
 <style>
+  @keyframes jb-pages-words-reveal-lr {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0 0 0 0);
+    }
+  }
   body.jb-pages-words {
     overflow-x: hidden;
   }
@@ -29,8 +37,8 @@
   }
   body.jb-pages-words .jb-pages-words-word {
     position: absolute;
-    opacity: 0;
-    transition: opacity 240ms ease-in;
+    opacity: 1;
+    clip-path: inset(0 100% 0 0);
     color: #fff;
     display: inline-flex;
     align-items: center;
@@ -42,7 +50,7 @@
     max-width: min(90vw, 480px);
   }
   body.jb-pages-words .jb-pages-words-word.is-visible {
-    opacity: 1;
+    animation: jb-pages-words-reveal-lr 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
   body.jb-pages-words .jb-pages-words-empty {
     color: #9a9a9a;
@@ -92,6 +100,8 @@ document.body.classList.remove('is-admin');
     var el = document.createElement('span');
     el.className = 'jb-pages-words-word';
     el.textContent = w;
+    /* 0.5×…2× от базового кегля списка (1em = размер .jb-pages-words-list) */
+    el.style.fontSize = (0.5 + Math.random() * 1.5) + 'em';
     list.appendChild(el);
     requestAnimationFrame(function () {
       placeWordRandom(el);
