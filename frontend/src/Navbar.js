@@ -10,6 +10,9 @@ const Navbar = () => {
                     <NavLink to="/semantic">
                     Semantic
                     </NavLink>
+                    <NavLink to="/semantic3d">
+                    Semantic 3D
+                    </NavLink>
                     <NavLink to="/tags">
                     Tags
                     </NavLink>

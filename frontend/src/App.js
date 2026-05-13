@@ -87,6 +87,7 @@ import TagEmbedPage from './pages/tagEmbed';
 
 /** Scenes cycled when autoswitch is on (key "a"); `/` is Flask /semantic/ iframe; React `/semantic` via nav. */
 const TAG_EMBED_AUTOSWITCH_ROUTES = [
+  '/semantic3d',
   '/tags',
   '/tags/3d',
   '/tags/sentiment-vortex',
@@ -285,6 +286,14 @@ export function AppContent() {
           element={
             <PwaScenesManifest>
               <TagEmbedPage title="Vectorfield 3D" path="/tags/vectorfield-3d/" />
+            </PwaScenesManifest>
+          }
+        />
+        <Route
+          path="/semantic3d"
+          element={
+            <PwaScenesManifest>
+              <TagEmbedPage title="Semantic 3D" path="/semantic3d/" />
             </PwaScenesManifest>
           }
         />

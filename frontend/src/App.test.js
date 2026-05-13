@@ -31,5 +31,6 @@ test('renders main nav', () => {
     </MemoryRouter>
   );
   expect(screen.getByRole('link', { name: 'Semantic' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Semantic 3D' })).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Tags' })).toBeInTheDocument();
 });
