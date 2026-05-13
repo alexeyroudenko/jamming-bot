@@ -1783,8 +1783,9 @@ metadata:
 spec:
   redirectRegex:
     permanent: false
-    regex: "^/scenes/semantic/?(.*)$"
-    replacement: "/semantic/$1"
+    # Traefik matches the full request URL (scheme + host + path + optional query), not path alone.
+    regex: "^https?://([^/]+)/scenes/semantic(.*)$"
+    replacement: "https://${1}/semantic${2}"
 ---
 # ===================== frontend-static-app (CRA build behind /scenes/) =====================
 apiVersion: apps/v1
