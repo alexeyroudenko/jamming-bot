@@ -1376,21 +1376,14 @@ def scenes_app_local_dev_redirect(rest=""):
 
     In production /scenes/* is handled by Traefik (StripPrefix middleware -> frontend-static-app
     nginx Service) and never reaches Flask, so this redirect only ever fires for local requests.
+    Includes /scenes/semantic (React), same as production — Flask /semantic/ stays on :5000 only.
     Guarded by host check so any non-local hit (should not happen) returns 404 instead of leaking
     a localhost URL.
     """
     host = (request.host or "").split(":")[0].lower()
     if host not in ("localhost", "127.0.0.1"):
         return Response("Not Found", status=404)
-    # Same as production Traefik: semantic demo is Flask at /semantic/, not CRA /scenes/semantic.
-    norm = (rest or "").strip("/")
-    if norm == "semantic" or norm.startswith("semantic/"):
-        tail = norm[len("semantic"):].lstrip("/")
-        target = f"/semantic/{tail}" if tail else "/semantic/"
-        qs = request.query_string.decode("utf-8") if request.query_string else ""
-        if qs:
-            target = f"{target}?{qs}"
-        return redirect(target, code=302)
+    # Production: all /scenes/* (including /scenes/semantic) is CRA behind Traefik.
     suffix = rest if rest else ""
     target = f"http://localhost:3000/scenes/{suffix}"
     qs = request.query_string.decode("utf-8") if request.query_string else ""

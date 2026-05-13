@@ -1774,19 +1774,6 @@ spec:
     prefixes:
       - /scenes
 ---
-# /scenes/semantic is the Flask tag-cloud demo at /semantic/, not the CRA scene router.
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata:
-  name: redirect-scenes-semantic-to-flask
-  namespace: jamming-bot
-spec:
-  redirectRegex:
-    permanent: false
-    # Traefik matches the full request URL (scheme + host + path + optional query), not path alone.
-    regex: "^https?://([^/]+)/scenes/semantic(.*)$"
-    replacement: "https://${1}/semantic${2}"
----
 # ===================== frontend-static-app (CRA build behind /scenes/) =====================
 apiVersion: apps/v1
 kind: Deployment
@@ -1866,33 +1853,6 @@ spec:
         backend:
           service:
             name: frontend-static-app
-            port:
-              number: 80
----
-# /scenes/semantic → 302 /semantic/ (Flask demo). Higher router priority than frontend /scenes prefix.
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: scenes-semantic-redirect-ingress
-  namespace: jamming-bot
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    traefik.ingress.kubernetes.io/router.middlewares: jamming-bot-redirect-scenes-semantic-to-flask@kubernetescrd
-    traefik.ingress.kubernetes.io/router.priority: "100"
-spec:
-  tls:
-  - hosts:
-    - jamming-bot.arthew0.online
-    secretName: jamming-bot-tls
-  rules:
-  - host: jamming-bot.arthew0.online
-    http:
-      paths:
-      - path: /scenes/semantic
-        pathType: Prefix
-        backend:
-          service:
-            name: app-service
             port:
               number: 80
 ---

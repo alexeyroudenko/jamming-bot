@@ -85,8 +85,8 @@
       }
     }
 
-    /** Живые слова поверх облака (как /pages/words/). */
-    #tags-floating-words {
+    /** Слова и фразы в одном слое: новые поверх старых (z-index + порядок в DOM). */
+    #tags-floating-layer {
       position: fixed;
       left: 0;
       right: 0;
@@ -94,57 +94,37 @@
       z-index: 2;
       pointer-events: none;
       overflow: hidden;
-      /* было 12pt (½ от /pages/words/); ×1.5 → 18pt */
-      font-size: 18pt;
+      font-size: clamp(11px, 2vw, 18pt);
       line-height: 1.35;
       word-break: break-word;
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     }
-    #tags-floating-words .tags-floating-word {
+    #tags-floating-layer .tags-floating-item {
       position: absolute;
       opacity: 1;
       clip-path: inset(0 100% 0 0);
       color: #fff;
       display: inline-flex;
       align-items: center;
+      box-decoration-break: clone;
+    }
+    #tags-floating-layer .tags-floating-item--word {
       padding: 0.19em 0.41em;
       border: 1px solid rgba(255, 255, 255, 0.28);
       border-radius: 3px;
       background: rgba(0, 0, 0, 0.5);
-      box-decoration-break: clone;
       max-width: min(90vw, 360px);
     }
-    #tags-floating-words .tags-floating-word.is-visible {
+    #tags-floating-layer .tags-floating-item--word.is-visible {
       animation: tags-float-reveal-lr 0.48s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
-
-    /** Фразы поверх облака (как /pages/phrases/): красные чипы, отдельный слой над словами */
-    #tags-floating-phrases {
-      position: fixed;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 3;
-      pointer-events: none;
-      overflow: hidden;
-      font-size: clamp(11px, 1.9vw, 17px);
-      line-height: 1.3;
-      word-break: break-word;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    }
-    #tags-floating-phrases .tags-floating-phrase {
-      position: absolute;
-      opacity: 1;
-      clip-path: inset(0 100% 0 0);
-      color: #fff;
+    #tags-floating-layer .tags-floating-item--phrase {
       background: #ff0000;
       padding: 2px 8px;
       border-radius: 3px;
       max-width: min(92vw, 520px);
-      display: inline-flex;
-      align-items: center;
     }
-    #tags-floating-phrases .tags-floating-phrase.is-visible {
+    #tags-floating-layer .tags-floating-item--phrase.is-visible {
       animation: tags-float-reveal-lr 0.52s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
   </style>
@@ -159,8 +139,7 @@
 </nav>
 
 <canvas id="cloud"></canvas>
-<div id="tags-floating-words" aria-hidden="true"></div>
-<div id="tags-floating-phrases" aria-hidden="true"></div>
+<div id="tags-floating-layer" aria-hidden="true"></div>
 <div id="selected-info"></div>
 <div id="console"></div>
 
@@ -308,10 +287,8 @@
     canvas.width = W;
     canvas.height = H;
     syncContentMetrics();
-    var floatWords = document.getElementById('tags-floating-words');
-    if (floatWords) floatWords.style.top = NAV_OFFSET + 'px';
-    var floatPhrases = document.getElementById('tags-floating-phrases');
-    if (floatPhrases) floatPhrases.style.top = NAV_OFFSET + 'px';
+    var floatLayer = document.getElementById('tags-floating-layer');
+    if (floatLayer) floatLayer.style.top = NAV_OFFSET + 'px';
   }
   resize();
 
@@ -862,17 +839,18 @@
 
   fetchAndDraw();
 
-  /** Плавающие слова поверх облака (логика как /pages/words/; кегль ×1.5 от прежних 12pt). */
+  /** Слова и фразы в одном слое: общая очередь, новые чипы поверх старых (z-index). */
   (function () {
-    var list = document.getElementById('tags-floating-words');
+    var list = document.getElementById('tags-floating-layer');
     if (!list) return;
-    var MAX_WORDS = 600;
+    var MAX_ITEMS = 800;
     var seen = new Set();
-    var wordQueue = [];
-    var wordTimer = null;
-    var WORD_GAP_MS = 200;
+    var queue = [];
+    var pumpTimer = null;
+    var GAP_MS = 200;
+    var zStack = 0;
 
-    function placeWordRandom(el) {
+    function placeRandom(el) {
       var cw = list.clientWidth;
       var ch = list.clientHeight;
       if (cw < 8 || ch < 8) return;
@@ -884,143 +862,56 @@
       el.style.top = Math.floor(Math.random() * (maxT + 1)) + 'px';
     }
 
-    function appendWordToDom(w) {
+    function seenKey(kind, text) {
+      return (kind === 'phrase' ? 'p:' : 'w:') + String(text).toLocaleLowerCase();
+    }
+
+    function appendToDom(kind, text) {
       var el = document.createElement('span');
-      el.className = 'tags-floating-word';
-      el.textContent = w;
+      el.className = 'tags-floating-item tags-floating-item--' + (kind === 'phrase' ? 'phrase' : 'word');
+      el.setAttribute('data-float-kind', kind === 'phrase' ? 'phrase' : 'word');
+      el.textContent = text;
       el.style.fontSize = (0.5 + Math.random() * 1.5) + 'em';
+      el.style.zIndex = String(++zStack);
       list.appendChild(el);
       requestAnimationFrame(function () {
-        placeWordRandom(el);
-        el.classList.add('is-visible');
-      });
-      while (list.childNodes.length > MAX_WORDS) {
-        var first = list.firstChild;
-        if (first && first.textContent) {
-          seen.delete(first.textContent.toLocaleLowerCase());
-        }
-        list.removeChild(first);
-      }
-    }
-
-    function pumpWords() {
-      wordTimer = null;
-      if (!wordQueue.length) return;
-      var w = wordQueue.shift();
-      appendWordToDom(w);
-      if (wordQueue.length) {
-        wordTimer = setTimeout(pumpWords, WORD_GAP_MS);
-      }
-    }
-
-    function wordsFromPlainText(str) {
-      if (typeof str !== 'string') return [];
-      var s = str.trim();
-      if (!s) return [];
-      var out = [];
-      var re;
-      try {
-        re = new RegExp('[\\p{L}\\p{N}][\\p{L}\\p{N}\'\\u2019-]*', 'gu');
-      } catch (e) {
-        re = /[A-Za-z0-9\u00C0-\u024F][A-Za-z0-9\u00C0-\u024F'\-]*/g;
-      }
-      var m;
-      var cap = 400;
-      while ((m = re.exec(s)) !== null && out.length < cap) {
-        if (m[0].length >= 2) out.push(m[0]);
-      }
-      return out;
-    }
-
-    function enqueueWords(words) {
-      if (!Array.isArray(words)) return;
-      var added = false;
-      words.forEach(function (raw) {
-        var w = String(raw == null ? '' : raw).trim();
-        if (!w) return;
-        var key = w.toLocaleLowerCase();
-        if (seen.has(key)) return;
-        seen.add(key);
-        wordQueue.push(w);
-        added = true;
-      });
-      if (added && !wordTimer) {
-        pumpWords();
-      }
-    }
-
-    function ingestFloating(data) {
-      if (!data) return;
-      var words = [];
-      if (Array.isArray(data.words)) words = words.concat(data.words);
-      if (Array.isArray(data.tags)) words = words.concat(data.tags);
-      if (typeof data.words_str === 'string') {
-        words = words.concat(data.words_str.split(/\s+/));
-      }
-      if (data.analyzed && Array.isArray(data.analyzed.words)) {
-        words = words.concat(data.analyzed.words);
-      }
-      enqueueWords(words);
-    }
-
-    window.tagsFloatingWordsIngest = ingestFloating;
-    window.tagsFloatingWordsOnStep = function (data) {
-      if (!data) return;
-      if (data.analyzed) ingestFloating(data);
-      if (typeof data.text === 'string' && data.text.trim().length) {
-        ingestFloating({ words: wordsFromPlainText(data.text) });
-      }
-    };
-  })();
-
-  /** Плавающие фразы (как /pages/phrases/): noun_phrases / hrases + биграммы из step.text */
-  (function () {
-    var list = document.getElementById('tags-floating-phrases');
-    if (!list) return;
-    var MAX_ITEMS = 200;
-    var seen = new Set();
-    var phraseQueue = [];
-    var phraseTimer = null;
-    var PHRASE_GAP_MS = 200;
-
-    function placePhraseRandom(el) {
-      var cw = list.clientWidth;
-      var ch = list.clientHeight;
-      if (cw < 8 || ch < 8) return;
-      var w = el.offsetWidth;
-      var h = el.offsetHeight;
-      var maxL = Math.max(0, cw - w);
-      var maxT = Math.max(0, ch - h);
-      el.style.left = Math.floor(Math.random() * (maxL + 1)) + 'px';
-      el.style.top = Math.floor(Math.random() * (maxT + 1)) + 'px';
-    }
-
-    function appendPhraseToDom(p) {
-      var el = document.createElement('span');
-      el.className = 'tags-floating-phrase';
-      el.textContent = p;
-      el.style.fontSize = (0.5 + Math.random() * 1.5) + 'em';
-      list.appendChild(el);
-      requestAnimationFrame(function () {
-        placePhraseRandom(el);
+        placeRandom(el);
         el.classList.add('is-visible');
       });
       while (list.childNodes.length > MAX_ITEMS) {
         var first = list.firstChild;
         if (first && first.textContent) {
-          seen.delete(first.textContent.toLocaleLowerCase());
+          var fk = first.getAttribute('data-float-kind');
+          seen.delete((fk === 'phrase' ? 'p:' : 'w:') + first.textContent.toLocaleLowerCase());
         }
         list.removeChild(first);
       }
     }
 
-    function pumpPhrases() {
-      phraseTimer = null;
-      if (!phraseQueue.length) return;
-      var p = phraseQueue.shift();
-      appendPhraseToDom(p);
-      if (phraseQueue.length) {
-        phraseTimer = setTimeout(pumpPhrases, PHRASE_GAP_MS);
+    function pump() {
+      pumpTimer = null;
+      if (!queue.length) return;
+      var item = queue.shift();
+      appendToDom(item.kind, item.text);
+      if (queue.length) {
+        pumpTimer = setTimeout(pump, GAP_MS);
+      }
+    }
+
+    function enqueue(kind, strings) {
+      if (!Array.isArray(strings)) return;
+      var added = false;
+      strings.forEach(function (raw) {
+        var t = String(raw == null ? '' : raw).trim();
+        if (!t) return;
+        var key = seenKey(kind, t);
+        if (seen.has(key)) return;
+        seen.add(key);
+        queue.push({ kind: kind, text: t });
+        added = true;
+      });
+      if (added && !pumpTimer) {
+        pump();
       }
     }
 
@@ -1058,24 +949,21 @@
       return out;
     }
 
-    function enqueuePhrases(phrases) {
-      if (!Array.isArray(phrases)) return;
-      var added = false;
-      phrases.forEach(function (raw) {
-        var p = String(raw == null ? '' : raw).trim();
-        if (!p) return;
-        var key = p.toLocaleLowerCase();
-        if (seen.has(key)) return;
-        seen.add(key);
-        phraseQueue.push(p);
-        added = true;
-      });
-      if (added && !phraseTimer) {
-        pumpPhrases();
+    function ingestWords(data) {
+      if (!data) return;
+      var words = [];
+      if (Array.isArray(data.words)) words = words.concat(data.words);
+      if (Array.isArray(data.tags)) words = words.concat(data.tags);
+      if (typeof data.words_str === 'string') {
+        words = words.concat(data.words_str.split(/\s+/));
       }
+      if (data.analyzed && Array.isArray(data.analyzed.words)) {
+        words = words.concat(data.analyzed.words);
+      }
+      enqueue('word', words);
     }
 
-    function ingestPhrasesFloating(data) {
+    function ingestPhrases(data) {
       if (!data) return;
       var phrases = [];
       if (Array.isArray(data.noun_phrases)) phrases = phrases.concat(data.noun_phrases);
@@ -1084,15 +972,23 @@
         if (Array.isArray(data.analyzed.noun_phrases)) phrases = phrases.concat(data.analyzed.noun_phrases);
         if (Array.isArray(data.analyzed.hrases)) phrases = phrases.concat(data.analyzed.hrases);
       }
-      enqueuePhrases(phrases);
+      enqueue('phrase', phrases);
     }
 
-    window.tagsFloatingPhrasesIngest = ingestPhrasesFloating;
+    window.tagsFloatingWordsIngest = ingestWords;
+    window.tagsFloatingPhrasesIngest = ingestPhrases;
+    window.tagsFloatingWordsOnStep = function (data) {
+      if (!data) return;
+      if (data.analyzed) ingestWords(data);
+      if (typeof data.text === 'string' && data.text.trim().length) {
+        enqueue('word', wordsFromPlainText(data.text));
+      }
+    };
     window.tagsFloatingPhrasesOnStep = function (data) {
       if (!data) return;
-      if (data.analyzed) ingestPhrasesFloating(data);
+      if (data.analyzed) ingestPhrases(data);
       if (typeof data.text === 'string' && data.text.trim().length) {
-        enqueuePhrases(phrasesFromPlainText(data.text));
+        enqueue('phrase', phrasesFromPlainText(data.text));
       }
     };
   })();

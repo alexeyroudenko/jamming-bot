@@ -85,13 +85,13 @@ import Steps from './components/Steps';
 import AtlasPage from './pages/atlas';
 import TagEmbedPage from './pages/tagEmbed';
 
-/** Scenes cycled when autoswitch is on (key "a"); order: semantic → tag cloud → 3d → vortex → vector 3d. */
+/** Scenes cycled when autoswitch is on (key "a"); `/` is Flask /semantic/ iframe; React `/semantic` via nav. */
 const TAG_EMBED_AUTOSWITCH_ROUTES = [
-  '/semantic',
   '/tags',
   '/tags/3d',
   '/tags/sentiment-vortex',
   '/tags/vectorfield-3d',
+  '/',
 ]
 
 function nextScenePath(currentPath) {
@@ -255,7 +255,7 @@ export function AppContent() {
           path="/"
           element={
             <PwaScenesManifest>
-              <TagEmbedPage title="Tags" path="/tags/" />
+              <TagEmbedPage title="Semantic" path="/semantic" />
             </PwaScenesManifest>
           }
         />
