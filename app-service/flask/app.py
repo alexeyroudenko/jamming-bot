@@ -477,7 +477,8 @@ PUBLIC_PREFIXES = ("/login", "/status", "/metrics", "/bot/", "/flask_static/",
                    "/pages/",
                    "/events",
                    "/scenes",
-                   "/rytm", "/socket.io", "/tags/", "/geo/", "/screenshots/", "/semantic", "/api/semantic/",
+                   "/rytm", "/socket.io", "/tags/", "/geo/", "/screenshots/", "/semantic", "/semantic3d",
+                   "/api/semantic/",
                    "/api/tags/get/", "/api/tags/combine/",
                    "/api/tags/sentiment-vortex/", "/api/tags/embeddings/", "/api/tags/add/",
                    "/api/step/", "/api/steps", "/api/storage_step/", "/api/storage_latest/",
@@ -1625,6 +1626,17 @@ def semantic_demo_page():
 @app.route("/semantic")
 def semantic_demo_redirect():
     return redirect("/semantic/", code=302)
+
+
+@app.route("/semantic3d/")
+@cross_origin()
+def semantic3d_demo_page():
+    return render_template("semantic3d.html")
+
+
+@app.route("/semantic3d")
+def semantic3d_demo_redirect():
+    return redirect("/semantic3d/", code=302)
 
 
 @app.route('/tags/phrases/')

@@ -1,0 +1,14 @@
+/* /semantic3d/: WebGL под панелями; орбита — drag на #semantic3d-root */
+body.semantic3d-page #semantic3d-root {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    touch-action: none;
+}
+
+body.semantic3d-page #semantic-mood-bg {
+    z-index: 1;
+}
