@@ -112,6 +112,124 @@
   /** Stagger first paint: one sprite each interval, order rare → popular (see loadTags sort). */
   var TAG_REVEAL_MS = 40;
   var tagRevealToken = 0;
+  /** Live words from socket (как /pages/words/): очередь и шаг 200ms. */
+  var wordQueue = [];
+  var wordTimer = null;
+  var WORD_GAP_MS = 200;
+
+  function collectWordsFromPayload(data) {
+    if (!data) return [];
+    var words = [];
+    if (Array.isArray(data.words)) {
+      words = words.concat(data.words);
+    }
+    if (typeof data.words_str === 'string') {
+      words = words.concat(data.words_str.split(/\s+/));
+    }
+    if (data.analyzed && Array.isArray(data.analyzed.words)) {
+      words = words.concat(data.analyzed.words);
+    }
+    if (Array.isArray(data.semantic_words)) {
+      words = words.concat(data.semantic_words);
+    }
+    return words
+      .map(function (w) { return String(w == null ? '' : w).trim(); })
+      .filter(Boolean);
+  }
+
+  function findSpriteByWordCI(word) {
+    var lw = word.toLowerCase();
+    for (var i = 0; i < sprites.length; i++) {
+      if (String(sprites[i].userData.name || '').toLowerCase() === lw) {
+        return sprites[i];
+      }
+    }
+    return null;
+  }
+
+  function recomputeMaxCountFromSprites() {
+    var m = 1;
+    for (var i = 0; i < sprites.length; i++) {
+      var c = Number(sprites[i].userData.count) || 0;
+      if (c > m) m = c;
+    }
+    return m;
+  }
+
+  function refreshAllSpritesForMax(maxCount) {
+    lastMaxCountForSprites = maxCount;
+    for (var i = 0; i < sprites.length; i++) {
+      var s = sprites[i];
+      refreshSprite(s, s.userData.name, s.userData.count, maxCount);
+    }
+  }
+
+  function applyWordToCloud(w) {
+    if (!tagsSceneInitialized || !w) return;
+    var sp = findSpriteByWordCI(w);
+    var prevMax = lastMaxCountForSprites > 0 ? lastMaxCountForSprites : recomputeMaxCountFromSprites();
+    if (sp) {
+      sp.userData.count = (Number(sp.userData.count) || 0) + DISPLAY_COUNT_MULT;
+      var newMax = Math.max(prevMax, sp.userData.count);
+      flashSpriteRed(sp);
+      if (newMax > prevMax) {
+        refreshAllSpritesForMax(newMax);
+      } else {
+        refreshSprite(sp, sp.userData.name, sp.userData.count, newMax);
+        lastMaxCountForSprites = newMax;
+      }
+      setLastTagFromList([sp.userData.name]);
+      return;
+    }
+    if (sprites.length >= MAX_TAGS) return;
+    var nm = w;
+    var cnt = DISPLAY_COUNT_MULT;
+    var newMax = Math.max(prevMax, cnt);
+    var newsp = makeSprite(nm, cnt, newMax);
+    newsp.userData.socketAdded = true;
+    newsp.position.copy(chaoticPosition(sprites.length, Math.max(8, sprites.length + 1), SPHERE_RADIUS));
+    newsp.visible = true;
+    scene.add(newsp);
+    sprites.push(newsp);
+    spriteByName[nm] = newsp;
+    if (newMax > prevMax) {
+      refreshAllSpritesForMax(newMax);
+    } else {
+      lastMaxCountForSprites = newMax;
+    }
+    flashSpriteRed(newsp);
+    setLastTagFromList([nm]);
+  }
+
+  function pumpWordQueue() {
+    wordTimer = null;
+    if (!wordQueue.length) return;
+    if (!tagsSceneInitialized) {
+      wordTimer = setTimeout(pumpWordQueue, 120);
+      return;
+    }
+    var w = wordQueue.shift();
+    applyWordToCloud(w);
+    if (wordQueue.length) {
+      wordTimer = setTimeout(pumpWordQueue, WORD_GAP_MS);
+    }
+  }
+
+  function enqueueWordsFromData(data) {
+    var arr = collectWordsFromPayload(data);
+    for (var i = 0; i < arr.length; i++) {
+      wordQueue.push(arr[i]);
+    }
+    if (!wordTimer && wordQueue.length) {
+      pumpWordQueue();
+    }
+  }
+
+  function maybeResumeWordPump() {
+    if (wordTimer || !wordQueue.length || !tagsSceneInitialized) return;
+    pumpWordQueue();
+  }
+
   var statusEl = document.getElementById('status');
   var apiErr = document.getElementById('api-error');
   var webglErr = document.getElementById('webgl-error');
@@ -456,6 +574,11 @@
 
   function clearAllTagSprites() {
     tagRevealToken++;
+    wordQueue = [];
+    if (wordTimer) {
+      clearTimeout(wordTimer);
+      wordTimer = null;
+    }
     for (var i = 0; i < sprites.length; i++) {
       disposeTagSprite(sprites[i]);
     }
@@ -526,6 +649,7 @@
       }
       revealSpritesStaggered(sprites);
       statusEl.textContent = tags.length + ' tags (max ' + MAX_TAGS + ')';
+      maybeResumeWordPump();
       return;
     }
 
@@ -569,6 +693,7 @@
     sprites = newSprites;
     spriteByName = newByName;
     statusEl.textContent = tags.length + ' tags (max ' + MAX_TAGS + ')';
+    maybeResumeWordPump();
   }
 
   function fetchTags() {
@@ -614,17 +739,24 @@
   tick();
   setInterval(tryRandomTagFocus, RANDOM_FOCUS_INTERVAL_MS);
 
-  var socket = io({ transports: ['websocket', 'polling'] });
+  var socket = io({ path: '/socket.io', transports: ['websocket', 'polling'] });
   socket.on('analyzed', function (data) {
     if (data && data.tags && data.tags.length) {
       setLastTagFromList(data.tags);
     }
+    enqueueWordsFromData(data);
   });
   socket.on('tags_updated', function (data) {
     if (data && data.semantic_words && data.semantic_words.length) {
       setLastTagFromList(data.semantic_words);
     } else if (data && data.tags && data.tags.length) {
       setLastTagFromList(data.tags);
+    }
+    enqueueWordsFromData(data);
+  });
+  socket.on('step', function (data) {
+    if (data && data.analyzed) {
+      enqueueWordsFromData(data);
     }
   });
 
