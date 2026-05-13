@@ -96,7 +96,7 @@
   var POSITION_JITTER = 3.2;
   var IDLE_MS = 10000;
   /** Каждые N мс — фокус на случайный тег из показанных. */
-  var RANDOM_FOCUS_INTERVAL_MS = 7000;
+  var RANDOM_FOCUS_INTERVAL_MS = 21000;
   var FOCUS_DURATION_MS = 1600;
   var FLASH_MS = 520;
   var FOCUS_CAM_OFFSET = 10;
@@ -108,7 +108,7 @@
   /** Удвоение разрешения текстуры спрайта без изменения видимого размера. */
   var SPRITE_DPR = 2;
   var IDLE_ROTATE_DELAY_MS = 1400;
-  var IDLE_ROTATE_Y_RAD_PER_SEC = 0.1;
+  var IDLE_ROTATE_Y_RAD_PER_SEC = 0.05;
   /** Stagger first paint: one sprite each interval, order rare → popular (see loadTags sort). */
   var TAG_REVEAL_MS = 40;
   var tagRevealToken = 0;
@@ -169,7 +169,9 @@
     var sp = findSpriteByWordCI(w);
     var prevMax = lastMaxCountForSprites > 0 ? lastMaxCountForSprites : recomputeMaxCountFromSprites();
     if (sp) {
-      sp.userData.count = (Number(sp.userData.count) || 0) + DISPLAY_COUNT_MULT;
+      var prevCnt = Number(sp.userData.count) || 0;
+      sp.userData.count = prevCnt + DISPLAY_COUNT_MULT;
+      console.log('[tags/3d] bump word:', w, '→', sp.userData.name, 'count', prevCnt, '→', sp.userData.count);
       var newMax = Math.max(prevMax, sp.userData.count);
       flashSpriteRed(sp);
       if (newMax > prevMax) {
@@ -181,7 +183,11 @@
       setLastTagFromList([sp.userData.name]);
       return;
     }
-    if (sprites.length >= MAX_TAGS) return;
+    if (sprites.length >= MAX_TAGS) {
+      console.warn('[tags/3d] skip word (MAX_TAGS):', w);
+      return;
+    }
+    console.log('[tags/3d] add word to cloud:', w);
     var nm = w;
     var cnt = DISPLAY_COUNT_MULT;
     var newMax = Math.max(prevMax, cnt);
