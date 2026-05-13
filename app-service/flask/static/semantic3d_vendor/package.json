@@ -1,0 +1,18 @@
+{
+  "private": true,
+  "name": "jamming-semantic3d-vendor",
+  "type": "module",
+  "dependencies": {
+    "3d-force-graph": "1.73.5",
+    "three": "0.160.0"
+  },
+  "overrides": {
+    "three-render-objects": "1.29.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  },
+  "scripts": {
+    "build": "node build.mjs"
+  }
+}

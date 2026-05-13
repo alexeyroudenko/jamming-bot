@@ -23,6 +23,7 @@ rnd/txt*
 # editors
 .idea/
 adapter/node_modules/*
+app-service/flask/static/semantic3d_vendor/node_modules/
 # env vars
 .env
 k8s-secrets.yaml
