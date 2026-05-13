@@ -198,10 +198,10 @@
   /** Меньше — плотнее укладка в d3-cloud (px между спрайтами). */
   var CLOUD_PADDING = 3;
   var HIGHLIGHT_COLOR = 'rgb(255,0,0)';
-  /** Длительность красной подсветки одного тега после старта его «очереди». */
-  var HIGHLIGHT_HOLD_MS = 3000;
-  /** Задержка между стартом подсветки соседних тегов в одном событии analyzed (×3 медленнее базового). */
-  var HIGHLIGHT_STAGGER_MS = 1500;
+  /** Длительность подсветки одного тега после analyzed (×3). */
+  var HIGHLIGHT_HOLD_MS = 9000;
+  /** Задержка между стартом подсветки соседних тегов в одном событии analyzed (×3). */
+  var HIGHLIGHT_STAGGER_MS = 4500;
   var RESIZE_LAYOUT_MS = 220;
   var layoutGen = 0;
   var lastLayoutSignature = '';
@@ -255,7 +255,7 @@
         if (p.highlightUntil && t >= p.highlightUntil) p.highlightUntil = 0;
       }
       redraw();
-    }, 33);
+    }, 99);
     setTimeout(function () {
       if (gen !== highlightGen) return;
       stopHighlightPulse();
@@ -370,10 +370,10 @@
   var WORD_COLOR = '#4d4d4d';
   /** Цвет короткой случайной вспышки по случайному тегу (запускается после appear-анимации). */
   var RANDOM_FLASH_COLOR = '#ffffff';
-  /** Интервал выбора случайного тега для вспышки после появления облака (×3 медленнее базовых 50 мс). */
-  var RANDOM_FLASH_INTERVAL_MS = 150;
+  /** Интервал случайной вспышки после появления облака (×3 от 150 мс). */
+  var RANDOM_FLASH_INTERVAL_MS = 450;
   /** Длительность одной случайной вспышки (×3). */
-  var RANDOM_FLASH_HOLD_MS = 150;
+  var RANDOM_FLASH_HOLD_MS = 450;
   var randomFlashTimer = null;
 
   /** Как на [Word Cloud](https://www.jasondavies.com/wordcloud/): в основном горизонтально, часть вертикально. */
