@@ -354,11 +354,25 @@ def _cors_headers_on_all_responses(response):
     return response
 
 
+def _env_truthy(name: str, default: bool = False) -> bool:
+    raw = (os.getenv(name) or "").strip().lower()
+    if raw == "":
+        return default
+    return raw in ("1", "true", "yes", "on")
+
+
 def _socketio_async_mode() -> str:
-    """eventlet.wsgi.server does not accept ssl_context; threading uses Werkzeug app.run() which does."""
+    """eventlet is default for prod-like Socket.IO; threading for Werkzeug SSL and for dev reloader."""
     explicit = os.getenv("SOCKETIO_ASYNC_MODE", "").strip().lower()
     if explicit in ("eventlet", "threading", "gevent"):
+        if _env_truthy("FLASK_USE_RELOADER") and explicit == "eventlet":
+            logger.warning(
+                "FLASK_USE_RELOADER=1 is incompatible with SOCKETIO_ASYNC_MODE=eventlet; using threading."
+            )
+            return "threading"
         return explicit
+    if _env_truthy("FLASK_USE_RELOADER"):
+        return "threading"
     ssl_adhoc = os.getenv("FLASK_SSL_ADHOC", "").strip().lower() in ("1", "true", "yes")
     ssl_files = bool(
         os.getenv("FLASK_SSL_CERTFILE", "").strip() and os.getenv("FLASK_SSL_KEYFILE", "").strip()
@@ -366,6 +380,20 @@ def _socketio_async_mode() -> str:
     if ssl_adhoc or ssl_files:
         return "threading"
     return "eventlet"
+
+
+def _extra_files_for_reloader():
+    """Paths for Werkzeug stat reloader (templates + static assets); .py is covered via imports."""
+    suffixes = (".html", ".htm", ".xml", ".j2", ".css", ".js")
+    out = []
+    for base in (app.template_folder, app.static_folder):
+        if not base or not os.path.isdir(base):
+            continue
+        for walk_root, _, files in os.walk(base):
+            for name in files:
+                if name.endswith(suffixes):
+                    out.append(os.path.join(walk_root, name))
+    return out
 
 
 socketio = SocketIO(
@@ -565,11 +593,11 @@ def _redis_flag_on(key: str, default: float = 0.0) -> bool:
     return _redis_float(key, default) >= 0.5
 
 
-BOT_YAML_KEYS = ("send_events", "send_sublinks", "log_events")
+BOT_YAML_KEYS = ("send_events", "send_sublinks", "log_events", "simulate")
 
 
 def _read_bot_yaml_flags():
-    """Current send_events / send_sublinks / log_events from bot.yaml (same file the bot reloads)."""
+    """Current bot.yaml flags (same file the bot reloads)."""
     path = (os.getenv("BOT_YAML_PATH") or "").strip()
     out = {k: False for k in BOT_YAML_KEYS}
     if not path or not os.path.isfile(path):
@@ -585,6 +613,31 @@ def _read_bot_yaml_flags():
     except Exception as e:
         logger.warning("bot.yaml read failed: %s", e)
     return out
+
+
+def _parse_socket_bool(value) -> bool:
+    """Accept bool / number / string from Socket.IO clients without raising."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        try:
+            return float(value) >= 0.5
+        except (TypeError, ValueError):
+            return False
+    if isinstance(value, str):
+        s = value.strip().lower()
+        if s in ("1", "true", "yes", "on"):
+            return True
+        if s in ("0", "false", "no", "off", ""):
+            return False
+        try:
+            return float(s) >= 0.5
+        except (TypeError, ValueError):
+            return False
+    try:
+        return float(value) >= 0.5
+    except (TypeError, ValueError):
+        return False
 
 
 def _write_bot_yaml_flags(updates: dict):
@@ -1985,6 +2038,21 @@ def ctrl():
     )
 
 
+@app.route("/api/ctrl/bot_yaml/<key>/<int:flag>/", methods=["POST"])
+def api_ctrl_bot_yaml(key, flag):
+    """Persist a boolean bot.yaml flag (used from /ctrl/; avoids checkbox `input` quirks and stale Socket.IO handlers)."""
+    if key not in BOT_YAML_KEYS:
+        return jsonify({"ok": False, "error": "unknown key"}), 400
+    try:
+        b = bool(flag)
+        _write_bot_yaml_flags({key: b})
+        logger.info("bot.yaml %s=%s (HTTP API)", key, b)
+        return jsonify({"ok": True, "key": key, "value": b})
+    except Exception as e:
+        logger.exception("bot.yaml API %s failed: %s", key, e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/ctrl/sync/", methods=["GET"])
 def ctrl_sync():
     return render_template("sync.html")
@@ -2879,7 +2947,7 @@ def handle_fetch_concurrency(value):
 
 def _socket_bot_yaml_flag(key: str, value):
     try:
-        b = bool(float(value))
+        b = _parse_socket_bool(value)
         _write_bot_yaml_flags({key: b})
         logger.info("bot.yaml %s=%s (socketio)", key, b)
     except Exception as e:
@@ -2901,6 +2969,11 @@ def handle_bot_log_events(value):
     _socket_bot_yaml_flag("log_events", value)
 
 
+@socketio.on('bot_simulate')
+def handle_bot_simulate(value):
+    _socket_bot_yaml_flag("simulate", value)
+
+
 @socketio.event
 def my_ping():
     sid = getattr(request, "sid", None)
@@ -2918,16 +2991,27 @@ def my_ping():
 
 if __name__ == '__main__':
     print("start flask 2.2.0")
-    # debug=True defaults use_reloader=True in Flask-SocketIO; the reloader breaks
-    # Engine.IO (polling GET /socket.io/ → ERR_EMPTY_RESPONSE / connection reset).
-    _dev_debug = os.getenv("FLASK_DEBUG", "1").strip().lower() in ("1", "true", "yes")
+    # Werkzeug reloader + eventlet async_mode breaks Engine.IO (polling /socket.io/ resets).
+    # Set FLASK_USE_RELOADER=1 and rely on threading (see _socketio_async_mode) for local live reload.
+    _dev_debug = _env_truthy("FLASK_DEBUG", default=True)
+    _use_reloader = _env_truthy("FLASK_USE_RELOADER")
+    if _dev_debug:
+        app.config["DEBUG"] = True
+        app.config["TEMPLATES_AUTO_RELOAD"] = True
+        app.debug = True
     _run_kw = dict(
         host=os.getenv("FLASK_HOST", "0.0.0.0"),
         port=int(os.getenv("FLASK_PORT", "5000")),
         allow_unsafe_werkzeug=True,
         debug=_dev_debug,
-        use_reloader=False,
+        use_reloader=_use_reloader,
     )
+    if _use_reloader:
+        _run_kw["extra_files"] = _extra_files_for_reloader()
+        logger.info(
+            "Dev reloader on (FLASK_USE_RELOADER=1): watching %s extra template/static paths",
+            len(_run_kw["extra_files"]),
+        )
     # Локальный HTTPS: FLASK_SSL_ADHOC=1 (самоподписанный, браузер спросит доверие)
     # или FLASK_SSL_CERTFILE + FLASK_SSL_KEYFILE (например mkcert localhost).
     if os.getenv("FLASK_SSL_ADHOC", "").strip().lower() in ("1", "true", "yes"):

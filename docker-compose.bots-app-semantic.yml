@@ -73,6 +73,8 @@ services:
     restart: unless-stopped
     command: python app.py
     environment:
+      FLASK_DEBUG: "${FLASK_DEBUG:1}"
+      FLASK_USE_RELOADER: "${FLASK_USE_RELOADER:1}"
       # Optional: tag pages at http://localhost:5000/tags/* fetch /api/tags/* from production instead of local Flask.
       TAGS_BROWSER_API_ORIGIN: "https://jamming-bot.arthew0.online"
       # ENVIRONMENT_DATA=prod перебивает localhost-guard и форсит прод-origin для /api/tags/*.

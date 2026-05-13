@@ -5,13 +5,74 @@
 (function () {
     'use strict';
 
+    function bindDashboardSimulateShortcut() {
+        window.addEventListener('keydown', function (ev) {
+            if (ev.defaultPrevented) {
+                return;
+            }
+            var el = ev.target;
+            if (el && (
+                el.tagName === 'INPUT' ||
+                el.tagName === 'TEXTAREA' ||
+                el.tagName === 'SELECT' ||
+                (typeof el.isContentEditable === 'boolean' && el.isContentEditable)
+            )) {
+                return;
+            }
+            if (ev.ctrlKey || ev.metaKey || ev.altKey) {
+                return;
+            }
+            var isKeyB = ev.key === 'b' || ev.key === 'B' || ev.code === 'KeyB';
+            if (!isKeyB) {
+                return;
+            }
+            console.log('simulate');
+        }, true);
+    }
+    bindDashboardSimulateShortcut();
+
     // Engine.IO всегда с корня хоста (как на главной /). Не привязывать path к pathname
     // страниц вроде /events/ — иначе получится /events/socket.io → 404.
     var socketPath = '/socket.io';
 
-    window.socket = window.io({ path: socketPath });
+    /** URL страницы + фактический endpoint Engine.IO (ws/http), для строки лога после connect */
+    function getSocketConnectionDescription(sock) {
+        var page = typeof window !== 'undefined' && window.location ? window.location.href : '';
+        var endpoint = '';
+        try {
+            var ioMgr = sock && sock.io;
+            var eng = ioMgr && ioMgr.engine;
+            var tr = eng && eng.transport;
+            if (tr && tr.name === 'websocket' && tr.socket && tr.socket.url) {
+                endpoint = String(tr.socket.url);
+            } else if (tr && tr.opts && tr.opts.uri) {
+                endpoint = String(tr.opts.uri);
+            } else if (ioMgr && ioMgr.uri != null && ioMgr.uri !== '') {
+                endpoint = String(ioMgr.uri) + (socketPath || '/socket.io');
+            }
+        } catch (ignore) { /* empty */ }
+        if (!endpoint && page) {
+            try {
+                endpoint = new URL(socketPath || '/socket.io', window.location.origin).href;
+            } catch (ignore2) {
+                endpoint = '';
+            }
+        }
+        return { page: page, endpoint: endpoint };
+    }
 
-    var socket = window.socket;
+    var socket;
+    try {
+        if (typeof window.io !== 'function') {
+            throw new Error('window.io is not defined (socket.io client script missing?)');
+        }
+        window.socket = window.io({ path: socketPath });
+        socket = window.socket;
+    } catch (err) {
+        console.warn('[dashboard_socket] Socket.IO client init failed:', err);
+        window.socket = null;
+        socket = null;
+    }
 
     var counter = 0;
     var start_time = new Date().getTime();
@@ -101,6 +162,11 @@
         }
         if (eventName === 'tags_updated') return 'tags refreshed';
         if (eventName === 'response') return String((payload && payload.message) || 'response');
+        if (eventName === 'socket_endpoint') {
+            if (payload && payload.endpoint) return String(payload.endpoint);
+            if (payload && payload.page) return String(payload.page);
+            return 'socket endpoint';
+        }
         return typeof payload === 'string' ? payload : eventName;
     }
 
@@ -313,9 +379,17 @@
         if (el) el.textContent = text;
     }
 
+    if (socket) {
     socket.on('connect', function () {
         console.log('on connect');
+        var loc = getSocketConnectionDescription(socket);
+        if (loc.endpoint) {
+            console.log('connected to', loc.endpoint);
+        } else if (loc.page) {
+            console.log('connected to', loc.page);
+        }
         pushSocketLog('connect', { sid: socket.id }, 'system');
+        pushSocketLog('socket_endpoint', { page: loc.page, endpoint: loc.endpoint }, 'system');
         if (pingInterval) {
             clearInterval(pingInterval);
             pingInterval = null;
@@ -403,6 +477,8 @@
             window.jQuery('#counter').html(counterStr);
         }
     });
+
+    }
 
     function bootCursor() {
         if (!document.getElementById('step-timeline-track')) {

@@ -3,6 +3,14 @@
 {% block body_class %}jb-pages-words{% endblock %}
 {% block head_extra %}
 <style>
+  @keyframes jb-pages-words-reveal-lr {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0 0 0 0);
+    }
+  }
   body.jb-pages-words {
     overflow-x: hidden;
   }
@@ -29,8 +37,8 @@
   }
   body.jb-pages-words .jb-pages-words-word {
     position: absolute;
-    opacity: 0;
-    transition: opacity 240ms ease-in;
+    opacity: 1;
+    clip-path: inset(0 100% 0 0);
     color: #fff;
     display: inline-flex;
     align-items: center;
@@ -42,7 +50,7 @@
     max-width: min(90vw, 480px);
   }
   body.jb-pages-words .jb-pages-words-word.is-visible {
-    opacity: 1;
+    animation: jb-pages-words-reveal-lr 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
   body.jb-pages-words .jb-pages-words-empty {
     color: #9a9a9a;
@@ -92,6 +100,8 @@ document.body.classList.remove('is-admin');
     var el = document.createElement('span');
     el.className = 'jb-pages-words-word';
     el.textContent = w;
+    /* 0.5×…2× от базового кегля списка (1em = размер .jb-pages-words-list) */
+    el.style.fontSize = (0.5 + Math.random() * 1.5) + 'em';
     list.appendChild(el);
     requestAnimationFrame(function () {
       placeWordRandom(el);
@@ -114,6 +124,26 @@ document.body.classList.remove('is-admin');
     if (wordQueue.length) {
       wordTimer = setTimeout(pumpWords, WORD_GAP_MS);
     }
+  }
+
+  /** Токены из текста шага (как на /pages/texts/), если semantic-service ещё не дал words или do_analyze выкл. */
+  function wordsFromPlainText(str) {
+    if (typeof str !== 'string') return [];
+    var s = str.trim();
+    if (!s) return [];
+    var out = [];
+    var re;
+    try {
+      re = new RegExp('[\\p{L}\\p{N}][\\p{L}\\p{N}\'\\u2019-]*', 'gu');
+    } catch (e) {
+      re = /[A-Za-z0-9\u00C0-\u024F][A-Za-z0-9\u00C0-\u024F'\-]*/g;
+    }
+    var m;
+    var cap = 400;
+    while ((m = re.exec(s)) !== null && out.length < cap) {
+      if (m[0].length >= 2) out.push(m[0]);
+    }
+    return out;
   }
 
   function enqueueWords(words) {
@@ -139,6 +169,9 @@ document.body.classList.remove('is-admin');
     if (Array.isArray(data.words)) {
       words = words.concat(data.words);
     }
+    if (Array.isArray(data.tags)) {
+      words = words.concat(data.tags);
+    }
     if (typeof data.words_str === 'string') {
       words = words.concat(data.words_str.split(/\s+/));
     }
@@ -150,7 +183,11 @@ document.body.classList.remove('is-admin');
 
   s.on('analyzed', ingest);
   s.on('step', function (data) {
-    if (data && data.analyzed) ingest(data);
+    if (!data) return;
+    if (data.analyzed) ingest(data);
+    if (typeof data.text === 'string' && data.text.trim().length) {
+      ingest({ words: wordsFromPlainText(data.text) });
+    }
   });
 })();
 </script>

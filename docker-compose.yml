@@ -93,6 +93,9 @@ services:
       - "5000:5000"
     command: python app.py
     environment:
+      # Локальная разработка: debug + перезапуск при правках app.py / templates / flask_static (нужен threading для Socket.IO).
+      - FLASK_DEBUG=${FLASK_DEBUG:-1}
+      - FLASK_USE_RELOADER=${FLASK_USE_RELOADER:-1}
       - SENTRY_DSN=${SHHH_SENTRY_URL}
       - S3_ACCESS_KEY=${S3_ACCESS_KEY}
       - S3_SECRET_KEY=${S3_SECRET_KEY}

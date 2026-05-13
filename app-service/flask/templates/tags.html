@@ -74,6 +74,79 @@
       white-space: nowrap;
     }
     #selected-info.visible { display: block; }
+
+    /** Раскрытие слева направо (прямоугольная маска через clip-path) */
+    @keyframes tags-float-reveal-lr {
+      from {
+        clip-path: inset(0 100% 0 0);
+      }
+      to {
+        clip-path: inset(0 0 0 0);
+      }
+    }
+
+    /** Живые слова поверх облака (как /pages/words/). */
+    #tags-floating-words {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 2;
+      pointer-events: none;
+      overflow: hidden;
+      /* было 12pt (½ от /pages/words/); ×1.5 → 18pt */
+      font-size: 18pt;
+      line-height: 1.35;
+      word-break: break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    #tags-floating-words .tags-floating-word {
+      position: absolute;
+      opacity: 1;
+      clip-path: inset(0 100% 0 0);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      padding: 0.19em 0.41em;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 3px;
+      background: rgba(0, 0, 0, 0.5);
+      box-decoration-break: clone;
+      max-width: min(90vw, 360px);
+    }
+    #tags-floating-words .tags-floating-word.is-visible {
+      animation: tags-float-reveal-lr 0.48s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    /** Фразы поверх облака (как /pages/phrases/): красные чипы, отдельный слой над словами */
+    #tags-floating-phrases {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 3;
+      pointer-events: none;
+      overflow: hidden;
+      font-size: clamp(11px, 1.9vw, 17px);
+      line-height: 1.3;
+      word-break: break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    #tags-floating-phrases .tags-floating-phrase {
+      position: absolute;
+      opacity: 1;
+      clip-path: inset(0 100% 0 0);
+      color: #fff;
+      background: #ff0000;
+      padding: 2px 8px;
+      border-radius: 3px;
+      max-width: min(92vw, 520px);
+      display: inline-flex;
+      align-items: center;
+    }
+    #tags-floating-phrases .tags-floating-phrase.is-visible {
+      animation: tags-float-reveal-lr 0.52s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
   </style>
 </head>
 <body>
@@ -86,6 +159,8 @@
 </nav>
 
 <canvas id="cloud"></canvas>
+<div id="tags-floating-words" aria-hidden="true"></div>
+<div id="tags-floating-phrases" aria-hidden="true"></div>
 <div id="selected-info"></div>
 <div id="console"></div>
 
@@ -123,10 +198,10 @@
   /** Меньше — плотнее укладка в d3-cloud (px между спрайтами). */
   var CLOUD_PADDING = 3;
   var HIGHLIGHT_COLOR = 'rgb(255,0,0)';
-  /** Длительность красной подсветки одного тега после старта его «очереди». */
-  var HIGHLIGHT_HOLD_MS = 3000;
-  /** Задержка между стартом подсветки соседних тегов в одном событии analyzed. */
-  var HIGHLIGHT_STAGGER_MS = 500;
+  /** Длительность подсветки одного тега после analyzed (×3). */
+  var HIGHLIGHT_HOLD_MS = 9000;
+  /** Задержка между стартом подсветки соседних тегов в одном событии analyzed (×3). */
+  var HIGHLIGHT_STAGGER_MS = 4500;
   var RESIZE_LAYOUT_MS = 220;
   var layoutGen = 0;
   var lastLayoutSignature = '';
@@ -136,8 +211,10 @@
   var appearRaf = null;
   /** Скорость нарастания alpha при появлении облака (кадр). */
   var APPEAR_OPACITY_SPEED = 0.055;
-  /** Пауза между стартом появления соседних тегов, мс (от меньшего размера к большему). */
-  var APPEAR_STAGGER_MS = 10;
+  /** Пауза между стартом появления соседних тегов, мс (от меньшего размера к большему; ×3 медленнее). */
+  var APPEAR_STAGGER_MS = 30;
+  /** Сдвиг по X при появлении: в px = доля * кегль тега (лёгкий занос к homeX). */
+  var APPEAR_OFFSET_FRAC = 0.2;
 
   var highlightPulseTimer = null;
   var highlightGen = 0;
@@ -178,7 +255,7 @@
         if (p.highlightUntil && t >= p.highlightUntil) p.highlightUntil = 0;
       }
       redraw();
-    }, 33);
+    }, 99);
     setTimeout(function () {
       if (gen !== highlightGen) return;
       stopHighlightPulse();
@@ -231,6 +308,10 @@
     canvas.width = W;
     canvas.height = H;
     syncContentMetrics();
+    var floatWords = document.getElementById('tags-floating-words');
+    if (floatWords) floatWords.style.top = NAV_OFFSET + 'px';
+    var floatPhrases = document.getElementById('tags-floating-phrases');
+    if (floatPhrases) floatPhrases.style.top = NAV_OFFSET + 'px';
   }
   resize();
 
@@ -289,10 +370,10 @@
   var WORD_COLOR = '#4d4d4d';
   /** Цвет короткой случайной вспышки по случайному тегу (запускается после appear-анимации). */
   var RANDOM_FLASH_COLOR = '#ffffff';
-  /** Шаг таймера случайных вспышек, мс. */
-  var RANDOM_FLASH_INTERVAL_MS = 50;
-  /** Длительность одной случайной вспышки (один кадр). */
-  var RANDOM_FLASH_HOLD_MS = 50;
+  /** Интервал случайной вспышки после появления облака (×3 от 150 мс). */
+  var RANDOM_FLASH_INTERVAL_MS = 450;
+  /** Длительность одной случайной вспышки (×3). */
+  var RANDOM_FLASH_HOLD_MS = 450;
   var randomFlashTimer = null;
 
   /** Как на [Word Cloud](https://www.jasondavies.com/wordcloud/): в основном горизонтально, часть вертикально. */
@@ -504,7 +585,7 @@
     }
   }
 
-  /** После новой d3-cloud укладки: по одному с шагом APPEAR_STAGGER_MS (от меньшего size к большему), только fade-in на месте — без разлёта от центра. */
+  /** После новой d3-cloud укладки: по одному с шагом APPEAR_STAGGER_MS (от меньшего size к большему), fade-in + лёгкий сдвиг по X на 0.2×кегль к позиции. */
   function startAppearAnimation() {
     cancelAppearAnimation();
     stopRandomFlash();
@@ -512,7 +593,8 @@
       var p = particleMap[key];
       if (p.targetSize != null) p.size = p.targetSize;
       if (p.targetColor != null) p.color = p.targetColor;
-      p.x = p.homeX;
+      var fs0 = typeof p.size === 'number' ? p.size : 12;
+      p.x = p.homeX - APPEAR_OFFSET_FRAC * fs0;
       p.y = p.homeY;
       p.opacity = 0;
       p.flashUntil = 0;
@@ -532,14 +614,18 @@
       for (var i = 0; i < order.length; i++) {
         var p = order[i];
         var delayMs = i * APPEAR_STAGGER_MS;
-        p.x = p.homeX;
+        var fs = typeof p.size === 'number' ? p.size : 12;
+        var off = APPEAR_OFFSET_FRAC * fs;
         p.y = p.homeY;
         if (now - t0 < delayMs) {
           p.opacity = 0;
+          p.x = p.homeX - off;
           settling = true;
           continue;
         }
         p.opacity = Math.min(1, p.opacity + APPEAR_OPACITY_SPEED);
+        var u = Math.min(1, p.opacity);
+        p.x = p.homeX - (1 - u) * off;
         if (p.opacity < 0.995) settling = true;
       }
       redraw();
@@ -776,6 +862,241 @@
 
   fetchAndDraw();
 
+  /** Плавающие слова поверх облака (логика как /pages/words/; кегль ×1.5 от прежних 12pt). */
+  (function () {
+    var list = document.getElementById('tags-floating-words');
+    if (!list) return;
+    var MAX_WORDS = 600;
+    var seen = new Set();
+    var wordQueue = [];
+    var wordTimer = null;
+    var WORD_GAP_MS = 200;
+
+    function placeWordRandom(el) {
+      var cw = list.clientWidth;
+      var ch = list.clientHeight;
+      if (cw < 8 || ch < 8) return;
+      var w = el.offsetWidth;
+      var h = el.offsetHeight;
+      var maxL = Math.max(0, cw - w);
+      var maxT = Math.max(0, ch - h);
+      el.style.left = Math.floor(Math.random() * (maxL + 1)) + 'px';
+      el.style.top = Math.floor(Math.random() * (maxT + 1)) + 'px';
+    }
+
+    function appendWordToDom(w) {
+      var el = document.createElement('span');
+      el.className = 'tags-floating-word';
+      el.textContent = w;
+      el.style.fontSize = (0.5 + Math.random() * 1.5) + 'em';
+      list.appendChild(el);
+      requestAnimationFrame(function () {
+        placeWordRandom(el);
+        el.classList.add('is-visible');
+      });
+      while (list.childNodes.length > MAX_WORDS) {
+        var first = list.firstChild;
+        if (first && first.textContent) {
+          seen.delete(first.textContent.toLocaleLowerCase());
+        }
+        list.removeChild(first);
+      }
+    }
+
+    function pumpWords() {
+      wordTimer = null;
+      if (!wordQueue.length) return;
+      var w = wordQueue.shift();
+      appendWordToDom(w);
+      if (wordQueue.length) {
+        wordTimer = setTimeout(pumpWords, WORD_GAP_MS);
+      }
+    }
+
+    function wordsFromPlainText(str) {
+      if (typeof str !== 'string') return [];
+      var s = str.trim();
+      if (!s) return [];
+      var out = [];
+      var re;
+      try {
+        re = new RegExp('[\\p{L}\\p{N}][\\p{L}\\p{N}\'\\u2019-]*', 'gu');
+      } catch (e) {
+        re = /[A-Za-z0-9\u00C0-\u024F][A-Za-z0-9\u00C0-\u024F'\-]*/g;
+      }
+      var m;
+      var cap = 400;
+      while ((m = re.exec(s)) !== null && out.length < cap) {
+        if (m[0].length >= 2) out.push(m[0]);
+      }
+      return out;
+    }
+
+    function enqueueWords(words) {
+      if (!Array.isArray(words)) return;
+      var added = false;
+      words.forEach(function (raw) {
+        var w = String(raw == null ? '' : raw).trim();
+        if (!w) return;
+        var key = w.toLocaleLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        wordQueue.push(w);
+        added = true;
+      });
+      if (added && !wordTimer) {
+        pumpWords();
+      }
+    }
+
+    function ingestFloating(data) {
+      if (!data) return;
+      var words = [];
+      if (Array.isArray(data.words)) words = words.concat(data.words);
+      if (Array.isArray(data.tags)) words = words.concat(data.tags);
+      if (typeof data.words_str === 'string') {
+        words = words.concat(data.words_str.split(/\s+/));
+      }
+      if (data.analyzed && Array.isArray(data.analyzed.words)) {
+        words = words.concat(data.analyzed.words);
+      }
+      enqueueWords(words);
+    }
+
+    window.tagsFloatingWordsIngest = ingestFloating;
+    window.tagsFloatingWordsOnStep = function (data) {
+      if (!data) return;
+      if (data.analyzed) ingestFloating(data);
+      if (typeof data.text === 'string' && data.text.trim().length) {
+        ingestFloating({ words: wordsFromPlainText(data.text) });
+      }
+    };
+  })();
+
+  /** Плавающие фразы (как /pages/phrases/): noun_phrases / hrases + биграммы из step.text */
+  (function () {
+    var list = document.getElementById('tags-floating-phrases');
+    if (!list) return;
+    var MAX_ITEMS = 200;
+    var seen = new Set();
+    var phraseQueue = [];
+    var phraseTimer = null;
+    var PHRASE_GAP_MS = 200;
+
+    function placePhraseRandom(el) {
+      var cw = list.clientWidth;
+      var ch = list.clientHeight;
+      if (cw < 8 || ch < 8) return;
+      var w = el.offsetWidth;
+      var h = el.offsetHeight;
+      var maxL = Math.max(0, cw - w);
+      var maxT = Math.max(0, ch - h);
+      el.style.left = Math.floor(Math.random() * (maxL + 1)) + 'px';
+      el.style.top = Math.floor(Math.random() * (maxT + 1)) + 'px';
+    }
+
+    function appendPhraseToDom(p) {
+      var el = document.createElement('span');
+      el.className = 'tags-floating-phrase';
+      el.textContent = p;
+      el.style.fontSize = (0.5 + Math.random() * 1.5) + 'em';
+      list.appendChild(el);
+      requestAnimationFrame(function () {
+        placePhraseRandom(el);
+        el.classList.add('is-visible');
+      });
+      while (list.childNodes.length > MAX_ITEMS) {
+        var first = list.firstChild;
+        if (first && first.textContent) {
+          seen.delete(first.textContent.toLocaleLowerCase());
+        }
+        list.removeChild(first);
+      }
+    }
+
+    function pumpPhrases() {
+      phraseTimer = null;
+      if (!phraseQueue.length) return;
+      var p = phraseQueue.shift();
+      appendPhraseToDom(p);
+      if (phraseQueue.length) {
+        phraseTimer = setTimeout(pumpPhrases, PHRASE_GAP_MS);
+      }
+    }
+
+    function wordsFromPlainText(str) {
+      if (typeof str !== 'string') return [];
+      var s = str.trim();
+      if (!s) return [];
+      var out = [];
+      var re;
+      try {
+        re = new RegExp('[\\p{L}\\p{N}][\\p{L}\\p{N}\'\\u2019-]*', 'gu');
+      } catch (e) {
+        re = /[A-Za-z0-9\u00C0-\u024F][A-Za-z0-9\u00C0-\u024F'\-]*/g;
+      }
+      var m;
+      var cap = 400;
+      while ((m = re.exec(s)) !== null && out.length < cap) {
+        if (m[0].length >= 2) out.push(m[0]);
+      }
+      return out;
+    }
+
+    function phrasesFromPlainText(str) {
+      var tokens = wordsFromPlainText(str);
+      if (tokens.length < 2) return [];
+      var out = [];
+      var i;
+      var cap = 150;
+      for (i = 0; i < tokens.length - 1 && out.length < cap; i++) {
+        out.push(tokens[i] + ' ' + tokens[i + 1]);
+      }
+      for (i = 0; i < tokens.length - 2 && out.length < cap; i++) {
+        out.push(tokens[i] + ' ' + tokens[i + 1] + ' ' + tokens[i + 2]);
+      }
+      return out;
+    }
+
+    function enqueuePhrases(phrases) {
+      if (!Array.isArray(phrases)) return;
+      var added = false;
+      phrases.forEach(function (raw) {
+        var p = String(raw == null ? '' : raw).trim();
+        if (!p) return;
+        var key = p.toLocaleLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        phraseQueue.push(p);
+        added = true;
+      });
+      if (added && !phraseTimer) {
+        pumpPhrases();
+      }
+    }
+
+    function ingestPhrasesFloating(data) {
+      if (!data) return;
+      var phrases = [];
+      if (Array.isArray(data.noun_phrases)) phrases = phrases.concat(data.noun_phrases);
+      if (Array.isArray(data.hrases)) phrases = phrases.concat(data.hrases);
+      if (data.analyzed) {
+        if (Array.isArray(data.analyzed.noun_phrases)) phrases = phrases.concat(data.analyzed.noun_phrases);
+        if (Array.isArray(data.analyzed.hrases)) phrases = phrases.concat(data.analyzed.hrases);
+      }
+      enqueuePhrases(phrases);
+    }
+
+    window.tagsFloatingPhrasesIngest = ingestPhrasesFloating;
+    window.tagsFloatingPhrasesOnStep = function (data) {
+      if (!data) return;
+      if (data.analyzed) ingestPhrasesFloating(data);
+      if (typeof data.text === 'string' && data.text.trim().length) {
+        enqueuePhrases(phrasesFromPlainText(data.text));
+      }
+    };
+  })();
+
   var socket = io({ transports: ['websocket', 'polling'] });
   socket.on('connect', function () {
     statusEl.textContent = 'live';
@@ -785,6 +1106,8 @@
     wsLog('tags_updated' + (data ? ' ' + JSON.stringify(data) : ''));
   });
   socket.on('step', function (data) {
+    if (window.tagsFloatingWordsOnStep) window.tagsFloatingWordsOnStep(data);
+    if (window.tagsFloatingPhrasesOnStep) window.tagsFloatingPhrasesOnStep(data);
     wsLog('step ' + (data && data.url ? data.url : JSON.stringify(data)));
   });
   socket.on('screenshot', function (data) {
@@ -794,6 +1117,8 @@
     wsLog('location ' + JSON.stringify(data));
   });
   socket.on('analyzed', function (data) {
+    if (window.tagsFloatingWordsIngest) window.tagsFloatingWordsIngest(data);
+    if (window.tagsFloatingPhrasesIngest) window.tagsFloatingPhrasesIngest(data);
     if (data && data.tags) {
       highlightTags(data.tags);
     }
