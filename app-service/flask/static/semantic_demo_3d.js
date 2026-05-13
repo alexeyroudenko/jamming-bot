@@ -1,6 +1,20 @@
 /* global ForceGraph3D, io, THREE */
 /* Jamming Bot semantic demo: same data path as semantic_demo.js, 3D force graph (WebGL). */
 
+function semanticPeriodicLog(name, detail) {
+    try {
+        if (typeof console !== "undefined" && console.log) {
+            if (detail !== undefined && detail !== null && detail !== "") {
+                console.log("[semantic3d] " + name, detail);
+            } else {
+                console.log("[semantic3d] " + name);
+            }
+        }
+    } catch (eLog) {
+        /* ignore */
+    }
+}
+
 var SEMANTIC_FORCE_LS = "jammingSemantic3dForceParams";
 var SEMANTIC_FORCE_PANEL_COLLAPSED_LS = "jammingSemantic3dForcePanelCollapsed";
 
@@ -357,73 +371,11 @@ function createSemanticGraph3D(containerEl) {
         });
     }
 
-    /* Вместо FOCUS: каждые 21 с — случайно ±45° по Y сцене или «орбита» камеры вокруг Y (тот же период, что был у random focus) */
-    var RANDOM_MOTION_INTERVAL_MS = 21000;
-    var ORBIT_ANGLE_RAD = Math.PI / 3;
-    /* Орбита камеры: в 2× быстрее прежних 2800 ms */
-    var ORBIT_DURATION_MS = 1400;
-    var RAD45 = Math.PI / 4;
+    /* Периодический tilt сцены / орбита камеры (applyRandomSceneOrOrbit) — выключено */
 
-    var cameraMotionActive = false;
-    var cameraMotionClearTimer = null;
-
-    function getCameraLookAt() {
-        var p = typeof fg.cameraPosition === "function" ? fg.cameraPosition() : null;
-        if (p && p.lookAt && isFinite(p.lookAt.x)) {
-            return { x: p.lookAt.x, y: p.lookAt.y, z: p.lookAt.z };
-        }
-        return { x: 0, y: 0, z: 0 };
-    }
-
-    function applyRandomSceneOrOrbit() {
-        if (cameraMotionActive) {
-            return;
-        }
-        if (Math.random() < 0.5) {
-            var sc = typeof fg.scene === "function" ? fg.scene() : null;
-            if (sc) {
-                sc.rotation.y += (Math.random() < 0.5 ? 1 : -1) * RAD45;
-            }
-            return;
-        }
-        var p = typeof fg.cameraPosition === "function" ? fg.cameraPosition() : null;
-        if (!p || !isFinite(p.x) || !isFinite(p.z)) {
-            return;
-        }
-        cameraMotionActive = true;
-        bumpGraphActivity();
-        var lk = getCameraLookAt();
-        var sign = Math.random() < 0.5 ? 1 : -1;
-        var angle = sign * ORBIT_ANGLE_RAD;
-        var cos = Math.cos(angle);
-        var sin = Math.sin(angle);
-        var cx = p.x;
-        var cy = p.y || 0;
-        var cz = p.z;
-        var nx = cx * cos + cz * sin;
-        var nz = -cx * sin + cz * cos;
-        if (typeof fg.cameraPosition === "function") {
-            fg.cameraPosition({ x: nx, y: cy, z: nz }, lk, ORBIT_DURATION_MS);
-        }
-        if (cameraMotionClearTimer) {
-            clearTimeout(cameraMotionClearTimer);
-        }
-        cameraMotionClearTimer = setTimeout(function () {
-            cameraMotionActive = false;
-            cameraMotionClearTimer = null;
-            bumpGraphActivity();
-        }, ORBIT_DURATION_MS + 200);
-    }
-
-    setTimeout(function () {
-        applyRandomSceneOrOrbit();
-        setInterval(applyRandomSceneOrOrbit, RANDOM_MOTION_INTERVAL_MS);
-    }, RANDOM_MOTION_INTERVAL_MS);
-
-    /* Как tags_3d.html: после паузы ввода — медленный поворот сцены вокруг Y */
+    /* После паузы ввода — медленный поворот сцены вокруг горизонтальной оси X */
     var IDLE_ROTATE_DELAY_MS = 1400;
-    /* Поворот сцены вокруг Y при простое: ×2.5 к базе 0.05 рад/с */
-    var IDLE_ROTATE_Y_RAD_PER_SEC = 0.05 * 2.5;
+    var IDLE_ROTATE_X_RAD_PER_SEC = 0.05 * 2.5;
     var lastGraphActivityMs = performance.now();
     var lastEngineTickMs = performance.now();
 
@@ -439,7 +391,7 @@ function createSemanticGraph3D(containerEl) {
         try {
             var ctrls0 = fg.controls();
             if (ctrls0 && typeof ctrls0.addEventListener === "function") {
-                ctrls0.addEventListener("change", bumpGraphActivity);
+                /* 'change' часто шлётся каждый кадр при инерции — гасит idle; достаточно 'end' */
                 ctrls0.addEventListener("end", bumpGraphActivity);
             }
         } catch (eCtrl) {
@@ -448,6 +400,7 @@ function createSemanticGraph3D(containerEl) {
     }
 
     var cam2xApplied = false;
+    var lastPeriodicIdleLogMs = 0;
     fg.onEngineTick(function () {
         var now = performance.now();
         var dt = Math.min(0.05, (now - lastEngineTickMs) / 1000);
@@ -464,7 +417,11 @@ function createSemanticGraph3D(containerEl) {
         if (now - lastGraphActivityMs >= IDLE_ROTATE_DELAY_MS) {
             var sc2 = typeof fg.scene === "function" ? fg.scene() : null;
             if (sc2) {
-                sc2.rotation.y += IDLE_ROTATE_Y_RAD_PER_SEC * dt;
+                sc2.rotation.x += IDLE_ROTATE_X_RAD_PER_SEC * dt;
+                if (now - lastPeriodicIdleLogMs >= 2500) {
+                    lastPeriodicIdleLogMs = now;
+                    semanticPeriodicLog("onEngineTick.idleRotateSceneX");
+                }
             }
         }
     });
@@ -609,6 +566,7 @@ function createSemanticGraph3D(containerEl) {
                 semanticClearNodeForcePin(node);
             }
             graphData.nodes.push(node);
+            semanticPeriodicLog("createSemanticGraph3D.addNode", String(id));
             pushGraph();
             return id;
         },
@@ -694,6 +652,10 @@ function createSemanticGraph3D(containerEl) {
             var px = Number(p.x);
             var py = Number(p.y);
             var pz = Number(p.z);
+            semanticPeriodicLog(
+                "createSemanticGraph3D.refreshSpawnFromPartner",
+                String(newId) + " ← " + String(partnerId)
+            );
             var sp = semanticSpawnJitteredFromAnchor(px, py, pz);
             n.x = sp.x;
             n.y = sp.y;
@@ -737,7 +699,11 @@ function initGraph() {
             console.error("ForceGraph3D / 3d-force-graph failed to load.");
             var st = document.getElementById("semantic-status");
             if (st) st.textContent = "3d-force-graph load failed";
+            semanticPeriodicLog("initGraph.giveUpForceGraph3D", String(graphInitAttempts));
             return;
+        }
+        if (graphInitAttempts % 10 === 1) {
+            semanticPeriodicLog("initGraph.retryForceGraph3D", String(graphInitAttempts));
         }
         setTimeout(initGraph, 100);
         return;
@@ -756,6 +722,8 @@ function initGraph() {
     if (!graph) {
         var el = document.getElementById("semantic-status");
         if (el) el.textContent = "graph init failed";
+    } else {
+        semanticPeriodicLog("initGraph", "createSemanticGraph3D ok");
     }
 }
 
@@ -828,12 +796,19 @@ function scheduleDeferredAnchorSpawn(prevHadSrc, prevHadHead, srcId, headId) {
     if (prevHadSrc && prevHadHead) {
         return;
     }
+    semanticPeriodicLog(
+        "scheduleDeferredAnchorSpawn",
+        String(srcId) + " | " + String(headId) + " prevSrc=" + String(prevHadSrc) + " prevHead=" + String(prevHadHead)
+    );
     var frames = 0;
     function tick() {
         if (!graph || typeof graph.refreshSpawnFromPartner !== "function") {
             return;
         }
         frames += 1;
+        if (frames === 1) {
+            semanticPeriodicLog("scheduleDeferredAnchorSpawn.tick", "rAF start");
+        }
         if (frames > SEMANTIC_DEFER_SPAWN_MAX_FRAMES) {
             return;
         }
@@ -844,6 +819,7 @@ function scheduleDeferredAnchorSpawn(prevHadSrc, prevHadHead, srcId, headId) {
             done = graph.refreshSpawnFromPartner(headId, srcId);
         }
         if (done) {
+            semanticPeriodicLog("scheduleDeferredAnchorSpawn.done");
             return;
         }
         requestAnimationFrame(tick);
@@ -885,6 +861,7 @@ function appendDependencyEdge(src, head, stepNum) {
     appendSemanticLogLine(src, head);
     keepNodesOnTop();
     semanticTrimNodes();
+    semanticPeriodicLog("appendDependencyEdge", String(src) + " > " + String(head) + " step=" + String(stepNum));
     return true;
 }
 
@@ -902,6 +879,7 @@ function semanticUpdateStatus() {
 }
 
 function semanticStepOnce() {
+    semanticPeriodicLog("semanticStepOnce", "demoIndex=" + String(demoIndex));
     if (!graph) return;
     if (demoIndex >= demoEdges.length) {
         semanticPause();
@@ -913,6 +891,7 @@ function semanticStepOnce() {
 }
 
 function semanticPause() {
+    semanticPeriodicLog("semanticPause");
     demoPlaying = false;
     if (demoTimer) {
         clearInterval(demoTimer);
@@ -927,6 +906,7 @@ function semanticPause() {
 }
 
 function semanticPlay() {
+    semanticPeriodicLog("semanticPlay");
     stopLiveCollectReplay();
     if (!demoEdges.length || !graph) return;
     if (demoIndex >= demoEdges.length) {
@@ -952,6 +932,7 @@ function semanticTogglePlay() {
 }
 
 function semanticReset() {
+    semanticPeriodicLog("semanticReset");
     semanticPause();
     stopLiveCollectReplay();
     semanticWorkerApplySinceClear = 0;
@@ -969,6 +950,7 @@ function semanticReset() {
 }
 
 function semanticStepManual() {
+    semanticPeriodicLog("semanticStepManual");
     if (!graph) return;
     if (demoIndex >= demoEdges.length) {
         stopLiveCollectReplay();
@@ -1059,6 +1041,7 @@ function onForceSliderInput() {
     }
     if (_forceSliderSaveTimer) clearTimeout(_forceSliderSaveTimer);
     _forceSliderSaveTimer = setTimeout(function () {
+        semanticPeriodicLog("onForceSliderInput.debouncedSaveLocalStorage");
         saveForceParamsToStorage();
         _forceSliderSaveTimer = null;
     }, 120);
@@ -1191,6 +1174,11 @@ function applySemanticCollectPayload(data, sourceTag) {
 
     var validEdgeCount = parsedEdges.length;
 
+    semanticPeriodicLog(
+        "applySemanticCollectPayload",
+        String(src) + " step=" + stepLabel + " edges=" + String(validEdgeCount)
+    );
+
     semanticWorkerApplySinceClear += 1;
     var atOrOver = semanticWorkerApplySinceClear >= semanticWorkerClearEvery;
     var bigBatch = validEdgeCount > SEMANTIC_COLLECT_FULL_CLEAR_MIN_EDGES;
@@ -1199,6 +1187,7 @@ function applySemanticCollectPayload(data, sourceTag) {
     }
     var doFullClear = atOrOver && bigBatch;
     if (doFullClear) {
+        semanticPeriodicLog("applySemanticCollectPayload.graphFullClear", "edges=" + String(validEdgeCount));
         graph.removeallLinks();
         graph.removeAllNodes();
         demoLinkKeys = {};
@@ -1256,11 +1245,13 @@ function applySemanticCollectPayload(data, sourceTag) {
             return;
         }
         var e = liveCollectQueue.shift();
+        semanticPeriodicLog("liveCollectReplay.timerAppendEdge", String(e.src) + " > " + String(e.head));
         appendDependencyEdge(e.src, e.head, liveCollectStepNum);
     }, SEMANTIC_REPLAY_MS);
 }
 
 function pollSemanticLastCollect() {
+    semanticPeriodicLog("pollSemanticLastCollect", "n=" + String(semanticLastCollectPollCount + 1));
     semanticLastCollectPollCount += 1;
     fetch("/api/semantic/last-collect/", { credentials: "same-origin", cache: "no-store" })
         .then(function (r) {
@@ -1326,6 +1317,8 @@ function applyMoodCollectPayload(data, sourceTag) {
         lastAppliedMoodFp = fp;
     }
 
+    semanticPeriodicLog("applyMoodCollectPayload", String(sourceTag || "mood"));
+
     var pals = Array.isArray(data.palette) ? data.palette : [];
     var root = document.documentElement;
     for (var i = 0; i < 5; i++) {
@@ -1375,6 +1368,7 @@ function applyMoodCollectPayload(data, sourceTag) {
 }
 
 function pollMoodLastCollect() {
+    semanticPeriodicLog("pollMoodLastCollect");
     fetch("/api/semantic/mood-last/", { credentials: "same-origin", cache: "no-store" })
         .then(function (r) {
             return r.json();
@@ -1420,15 +1414,20 @@ function initSemanticSocket() {
     semanticSocket = io({ path: "/socket.io" });
 
     semanticSocket.on("connect", function () {
+        semanticPeriodicLog("semanticSocket.connect");
         stopSemanticPingLoop();
         semanticPingTimer = setInterval(function () {
             semanticPingCounter += 1;
             semanticPingStartMs = Date.now();
             semanticSocket.emit("my_ping");
+            if (semanticPingCounter % 25 === 0) {
+                semanticPeriodicLog("semanticSocket.pingEmit", "counter=" + String(semanticPingCounter));
+            }
         }, 250);
     });
 
     semanticSocket.on("disconnect", function () {
+        semanticPeriodicLog("semanticSocket.disconnect");
         stopSemanticPingLoop();
     });
 
@@ -1438,10 +1437,12 @@ function initSemanticSocket() {
     });
 
     semanticSocket.on("semantic_collect", function (data) {
+        semanticPeriodicLog("semanticSocket.on.semantic_collect");
         applySemanticCollectPayload(data, "Socket.IO");
     });
 
     semanticSocket.on("mood_collect", function (data) {
+        semanticPeriodicLog("semanticSocket.on.mood_collect");
         applyMoodCollectPayload(data, "Socket.IO");
     });
 }
@@ -1474,6 +1475,7 @@ function loadDemoPayload() {
 
 function startWhenGraphReady(attempts) {
     if (graph) {
+        semanticPeriodicLog("startWhenGraphReady.graphReady", "attempts=" + String(attempts));
         if (typeof graph.setValues === "function") {
             graph.setValues(values);
         }
@@ -1481,8 +1483,12 @@ function startWhenGraphReady(attempts) {
         return;
     }
     if (attempts > 150) {
+        semanticPeriodicLog("startWhenGraphReady.giveUpNoGraph", "attempts=" + String(attempts));
         loadDemoPayload();
         return;
+    }
+    if (attempts > 0 && attempts % 30 === 0) {
+        semanticPeriodicLog("startWhenGraphReady.retry", String(attempts));
     }
     setTimeout(function () {
         startWhenGraphReady(attempts + 1);
@@ -1490,6 +1496,7 @@ function startWhenGraphReady(attempts) {
 }
 
 setTimeout(function () {
+    semanticPeriodicLog("semantic3d.deferredBoot", "50ms");
     initGraph();
     wireDemoControls();
     wireForcePanelCollapse();
