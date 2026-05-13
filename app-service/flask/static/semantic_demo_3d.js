@@ -427,7 +427,12 @@ function createSemanticGraph3D(containerEl) {
         }
         /* После смены сил обязательно разогреть, иначе при alpha≈0 ползунки почти не ощущаются */
         if (typeof fg.d3ReheatSimulation === "function") {
-            fg.d3ReheatSimulation();
+            try {
+                fg.d3ReheatSimulation();
+            } catch (e) {
+                /* при несовместимых версиях three/3d-force-graph reheat может падать до полной инициализации */
+                if (window.console && console.warn) console.warn("d3ReheatSimulation:", e);
+            }
         }
     }
 

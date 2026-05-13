@@ -102,49 +102,27 @@
   </div>
 </div>
 
-<script>
-(function () {
-    function loadScript(src) {
-        return new Promise(function (resolve, reject) {
-            var script = document.createElement("script");
-            script.src = src;
-            script.async = true;
-            script.onload = function () { resolve(); };
-            script.onerror = function () { reject(new Error("Failed to load: " + src)); };
-            document.head.appendChild(script);
-        });
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script type="module">
+/* Один экземпляр Three (ESM) + 3d-force-graph с тем же three — без UMD build/three.min.js и без «Multiple instances». */
+(async function () {
+    try {
+        var THREE_ns = await import("https://esm.sh/three@0.160.0");
+        var FGM = await import("https://esm.sh/3d-force-graph@1.73.5?deps=three@0.160.0");
+        window.THREE = THREE_ns;
+        var FG = FGM && (typeof FGM.default === "function" ? FGM.default : FGM);
+        if (typeof FG !== "function") {
+            throw new Error("ForceGraph3D: нет default export");
+        }
+        window.ForceGraph3D = FG;
+        var s = document.createElement("script");
+        s.src = "/flask_static/semantic_demo_3d.js?v=18";
+        document.body.appendChild(s);
+    } catch (e) {
+        if (window.console && console.error) console.error(e);
+        var el = document.getElementById("semantic-status");
+        if (el) el.textContent = "Не удалось загрузить Three.js / 3d-force-graph (сеть или CDN)";
     }
-    /* THREE должен быть в window ДО 3d-force-graph: иначе бандл берёт свой three, а подписи — window.THREE → два экземпляра, спрайты не видны (см. консоль). */
-    loadScript("https://cdn.socket.io/4.7.5/socket.io.min.js")
-        .catch(function () {
-            console.warn("socket.io failed; semantic_collect disabled");
-        })
-        .then(function () {
-            return loadScript("https://unpkg.com/three@0.160.0/build/three.min.js")
-                .catch(function () {
-                    return loadScript("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js");
-                })
-                .catch(function () {
-                    console.warn("three.min.js preload failed; graph will use bundled three (node labels may be off)");
-                    return Promise.resolve();
-                });
-        })
-        .then(function () {
-            return loadScript("https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.5/dist/3d-force-graph.min.js")
-                .catch(function () {
-                    return loadScript("https://unpkg.com/3d-force-graph@1.73.5/dist/3d-force-graph.min.js");
-                });
-        })
-        .then(function () {
-            var s = document.createElement("script");
-            s.src = "/flask_static/semantic_demo_3d.js?v=16";
-            document.body.appendChild(s);
-        })
-        .catch(function (e) {
-            console.error(e);
-            var el = document.getElementById("semantic-status");
-            if (el) el.textContent = "script load failed (see console)";
-        });
 })();
 </script>
 </body>
