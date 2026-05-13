@@ -163,9 +163,93 @@ function linkEndpoint(x) {
     return String(x);
 }
 
+/** Доля расстояния |якорь| от центра сцены → амплитуда случайного смещения новой ноды */
+var SEMANTIC_SPAWN_JITTER_FRAC = 0.3;
+/** Макс. угол поворота вектора 3×якорь вокруг случайной оси: доля π (30% → 0.3π рад ≈ 54°) */
+var SEMANTIC_SPAWN_ROT_FRAC = 0.3;
+
+function semanticRandomUnitSphere3() {
+    var u = Math.random() * 2 * Math.PI;
+    var v = Math.random() * 2 - 1;
+    var s = Math.sqrt(Math.max(0, 1 - v * v));
+    return {
+        x: Math.cos(u) * s,
+        y: Math.sin(u) * s,
+        z: v
+    };
+}
+
+function semanticVecCross(a, b) {
+    return {
+        x: a.y * b.z - a.z * b.y,
+        y: a.z * b.x - a.x * b.z,
+        z: a.x * b.y - a.y * b.x
+    };
+}
+
+function semanticVecDot(a, b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+function semanticVecScale(a, s) {
+    return { x: a.x * s, y: a.y * s, z: a.z * s };
+}
+
+function semanticVecAdd(a, b) {
+    return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
+}
+
+function semanticRotateRodrigues(v, kUnit, theta) {
+    var cosT = Math.cos(theta);
+    var sinT = Math.sin(theta);
+    var kd = semanticVecDot(kUnit, v);
+    var kxv = semanticVecCross(kUnit, v);
+    return semanticVecAdd(
+        semanticVecAdd(semanticVecScale(v, cosT), semanticVecScale(kxv, sinT)),
+        semanticVecScale(kUnit, kd * (1 - cosT))
+    );
+}
+
+/**
+ * База: 3× позиция якоря; слегка: смещение на SEMANTIC_SPAWN_JITTER_FRAC×|якорь| в случайном R³
+ * и поворот базового вектора вокруг случайной оси на до ±SEMANTIC_SPAWN_ROT_FRAC×π.
+ * @param {number} ax
+ * @param {number} ay
+ * @param {number} az
+ * @returns {{ x: number, y: number, z: number }}
+ */
+function semanticSpawnJitteredFromAnchor(ax, ay, az) {
+    var bx = ax * 3;
+    var by = ay * 3;
+    var bz = az * 3;
+    var rA = Math.sqrt(ax * ax + ay * ay + az * az);
+    var jitterR = SEMANTIC_SPAWN_JITTER_FRAC * (rA > 1e-9 ? rA : 1);
+    var ju = semanticRandomUnitSphere3();
+    var k = semanticRandomUnitSphere3();
+    var base = { x: bx, y: by, z: bz };
+    var omega = (Math.random() * 2 - 1) * (SEMANTIC_SPAWN_ROT_FRAC * Math.PI);
+    var rot = semanticRotateRodrigues(base, k, omega);
+    return {
+        x: rot.x + ju.x * jitterR,
+        y: rot.y + ju.y * jitterR,
+        z: rot.z + ju.z * jitterR
+    };
+}
+
+/** d3-force / 3d-force-graph фиксируют узел через fx,fy,fz при drag — снять, иначе симуляция не тянет узел */
+function semanticClearNodeForcePin(node) {
+    if (!node || typeof node !== "object") {
+        return;
+    }
+    delete node.fx;
+    delete node.fy;
+    delete node.fz;
+}
+
 /**
  * @param {HTMLElement} containerEl
- * @returns {{ getNodes: Function, addNode: Function, removeNode: Function, addLink: Function, removeallLinks: Function, removeAllNodes: Function, findNode: Function, removeLinksForNode: Function, findNodeIndex: Function, setValues: Function } | null}
+ * @returns {{ getNodes: Function, addNode: Function, removeNode: Function, addLink: Function, removeallLinks: Function, removeAllNodes: Function, findNode: Function, removeLinksForNode: Function, findNodeIndex: Function, refreshSpawnFromPartner: Function, setValues: Function } | null}
+ * addNode(id, step, r, anchorNode?) — при anchor: позиция из semanticSpawnJitteredFromAnchor (3× + джиттер).
  */
 function createSemanticGraph3D(containerEl) {
     if (typeof ForceGraph3D !== "function") {
@@ -267,6 +351,12 @@ function createSemanticGraph3D(containerEl) {
         .backgroundColor("#000000")
         .showNavInfo(false);
 
+    if (typeof fg.onNodeDragEnd === "function") {
+        fg.onNodeDragEnd(function (node) {
+            semanticClearNodeForcePin(node);
+        });
+    }
+
     /* Вместо FOCUS: каждые 21 с — случайно ±45° по Y сцене или «орбита» камеры вокруг Y (тот же период, что был у random focus) */
     var RANDOM_MOTION_INTERVAL_MS = 21000;
     var ORBIT_ANGLE_RAD = Math.PI / 3;
@@ -332,8 +422,8 @@ function createSemanticGraph3D(containerEl) {
 
     /* Как tags_3d.html: после паузы ввода — медленный поворот сцены вокруг Y */
     var IDLE_ROTATE_DELAY_MS = 1400;
-    /* Поворот сцены вокруг Y при простое: 2× быстрее */
-    var IDLE_ROTATE_Y_RAD_PER_SEC = 0.05;
+    /* Поворот сцены вокруг Y при простое: ×2.5 к базе 0.05 рад/с */
+    var IDLE_ROTATE_Y_RAD_PER_SEC = 0.05 * 2.5;
     var lastGraphActivityMs = performance.now();
     var lastEngineTickMs = performance.now();
 
@@ -371,7 +461,7 @@ function createSemanticGraph3D(containerEl) {
             }
         }
 
-        if (!cameraMotionActive && now - lastGraphActivityMs >= IDLE_ROTATE_DELAY_MS) {
+        if (now - lastGraphActivityMs >= IDLE_ROTATE_DELAY_MS) {
             var sc2 = typeof fg.scene === "function" ? fg.scene() : null;
             if (sc2) {
                 sc2.rotation.y += IDLE_ROTATE_Y_RAD_PER_SEC * dt;
@@ -496,9 +586,29 @@ function createSemanticGraph3D(containerEl) {
             return graphData.nodes;
         },
 
-        addNode: function (id, step, r) {
+        addNode: function (id, step, r, anchorNode) {
             if (r === undefined) r = 6;
-            graphData.nodes.push({ id: String(id), step: step, r: r });
+            var node = { id: String(id), step: step, r: r };
+            if (
+                anchorNode &&
+                typeof anchorNode === "object" &&
+                isFinite(Number(anchorNode.x)) &&
+                isFinite(Number(anchorNode.y)) &&
+                isFinite(Number(anchorNode.z))
+            ) {
+                var ax = Number(anchorNode.x);
+                var ay = Number(anchorNode.y);
+                var az = Number(anchorNode.z);
+                var sp = semanticSpawnJitteredFromAnchor(ax, ay, az);
+                node.x = sp.x;
+                node.y = sp.y;
+                node.z = sp.z;
+                node.vx = 0;
+                node.vy = 0;
+                node.vz = 0;
+                semanticClearNodeForcePin(node);
+            }
+            graphData.nodes.push(node);
             pushGraph();
             return id;
         },
@@ -564,6 +674,48 @@ function createSemanticGraph3D(containerEl) {
             return -1;
         },
 
+        /**
+         * Ставит newId рядом с partnerId: semanticSpawnJitteredFromAnchor (3× + джиттер), когда у партнёра уже есть x,y,z.
+         * @returns {boolean} true если применили координаты
+         */
+        refreshSpawnFromPartner: function (newId, partnerId) {
+            var n = this.findNode(newId);
+            var p = this.findNode(partnerId);
+            if (!n || !p) {
+                return false;
+            }
+            if (
+                !isFinite(Number(p.x)) ||
+                !isFinite(Number(p.y)) ||
+                !isFinite(Number(p.z))
+            ) {
+                return false;
+            }
+            var px = Number(p.x);
+            var py = Number(p.y);
+            var pz = Number(p.z);
+            var sp = semanticSpawnJitteredFromAnchor(px, py, pz);
+            n.x = sp.x;
+            n.y = sp.y;
+            n.z = sp.z;
+            n.vx = 0;
+            n.vy = 0;
+            n.vz = 0;
+            semanticClearNodeForcePin(n);
+            pushGraph();
+            if (typeof fg.refresh === "function") {
+                fg.refresh();
+            }
+            if (typeof fg.d3ReheatSimulation === "function") {
+                try {
+                    fg.d3ReheatSimulation();
+                } catch (eRh) {
+                    /* ignore */
+                }
+            }
+            return true;
+        },
+
         setValues: function (v) {
             values = mergeForceDefaults(v);
             applyForceLayoutParameters();
@@ -626,6 +778,9 @@ var liveCollectTimer = null;
 var liveCollectQueue = [];
 var liveCollectStepNum = 1;
 
+/** Полный сброс collect-графа только при «толстом» пакете: больше стольки валидных рёбер */
+var SEMANTIC_COLLECT_FULL_CLEAR_MIN_EDGES = 20;
+
 var SEMANTIC_LOG_MAX_LINES = 400;
 var semanticLogLines = [];
 
@@ -663,11 +818,54 @@ function semanticTrimNodes() {
     }
 }
 
-function semanticEnsureNode(step, token) {
-    if (!graph) return;
-    if (!graph.findNode(token)) {
-        graph.addNode(token, step, 8);
+var SEMANTIC_DEFER_SPAWN_MAX_FRAMES = 24;
+
+/**
+ * Если новая нода не получила якорь синхронно (оба конца ребра новые или симуляция ещё не выставила x,y,z),
+ * догоняем позицию по rAF.
+ */
+function scheduleDeferredAnchorSpawn(prevHadSrc, prevHadHead, srcId, headId) {
+    if (prevHadSrc && prevHadHead) {
+        return;
     }
+    var frames = 0;
+    function tick() {
+        if (!graph || typeof graph.refreshSpawnFromPartner !== "function") {
+            return;
+        }
+        frames += 1;
+        if (frames > SEMANTIC_DEFER_SPAWN_MAX_FRAMES) {
+            return;
+        }
+        var done = false;
+        if (!prevHadSrc && prevHadHead) {
+            done = graph.refreshSpawnFromPartner(srcId, headId);
+        } else if (!prevHadHead) {
+            done = graph.refreshSpawnFromPartner(headId, srcId);
+        }
+        if (done) {
+            return;
+        }
+        requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+}
+
+/**
+ * @param {number} step
+ * @param {string} token
+ * @param {string} [partnerId] — уже существующая нода на другом конце ребра; новая ставится в 3× её координаты.
+ */
+function semanticEnsureNode(step, token, partnerId) {
+    if (!graph) return;
+    if (graph.findNode(token)) {
+        return;
+    }
+    var anchor = null;
+    if (partnerId != null && partnerId !== "") {
+        anchor = graph.findNode(String(partnerId));
+    }
+    graph.addNode(token, step, 8, anchor);
 }
 
 function appendDependencyEdge(src, head, stepNum) {
@@ -676,10 +874,14 @@ function appendDependencyEdge(src, head, stepNum) {
     if (demoLinkKeys[key]) {
         return false;
     }
+    var prevHadSrc = !!graph.findNode(src);
+    var prevHadHead = !!graph.findNode(head);
     demoLinkKeys[key] = true;
-    semanticEnsureNode(stepNum, src);
-    semanticEnsureNode(stepNum, head);
+    /* Порядок: сначала конец с уже известной позицией, затем новый — у якоря будут x,y,z после первого add. */
+    semanticEnsureNode(stepNum, src, head);
+    semanticEnsureNode(stepNum, head, src);
     graph.addLink(src, head, "15");
+    scheduleDeferredAnchorSpawn(prevHadSrc, prevHadHead, src, head);
     appendSemanticLogLine(src, head);
     keepNodesOnTop();
     semanticTrimNodes();
@@ -963,8 +1165,39 @@ function applySemanticCollectPayload(data, sourceTag) {
         return;
     }
 
+    var parsedEdges = [];
+    var pi;
+    for (pi = 0; pi < lines.length; pi++) {
+        var line0 = String(lines[pi]);
+        var ix0 = line0.indexOf(">");
+        if (ix0 < 0) {
+            continue;
+        }
+        var s0 = line0.slice(0, ix0).trim();
+        var h0 = line0.slice(ix0 + 1).trim();
+        if (!s0 || !h0) {
+            continue;
+        }
+        parsedEdges.push({ src: s0, head: h0 });
+    }
+
+    if (!parsedEdges.length) {
+        if (fp) {
+            lastAppliedCollectFp = fp;
+        }
+        setSemanticWorkerHint(src + ": шаг " + stepLabel + " — строки не распарсились (ожидается token>head)");
+        return;
+    }
+
+    var validEdgeCount = parsedEdges.length;
+
     semanticWorkerApplySinceClear += 1;
-    var doFullClear = semanticWorkerApplySinceClear >= semanticWorkerClearEvery;
+    var atOrOver = semanticWorkerApplySinceClear >= semanticWorkerClearEvery;
+    var bigBatch = validEdgeCount > SEMANTIC_COLLECT_FULL_CLEAR_MIN_EDGES;
+    if (atOrOver && !bigBatch) {
+        semanticWorkerApplySinceClear = 0;
+    }
+    var doFullClear = atOrOver && bigBatch;
     if (doFullClear) {
         graph.removeallLinks();
         graph.removeAllNodes();
@@ -979,40 +1212,37 @@ function applySemanticCollectPayload(data, sourceTag) {
         liveCollectStepNum = 1;
     }
 
-    liveCollectQueue = [];
-    for (var i = 0; i < lines.length; i++) {
-        var line = String(lines[i]);
-        var ix = line.indexOf(">");
-        if (ix < 0) {
-            continue;
-        }
-        var s = line.slice(0, ix).trim();
-        var h = line.slice(ix + 1).trim();
-        if (!s || !h) {
-            continue;
-        }
-        liveCollectQueue.push({ src: s, head: h });
-    }
-
-    if (!liveCollectQueue.length) {
-        if (fp) {
-            lastAppliedCollectFp = fp;
-        }
-        setSemanticWorkerHint(src + ": шаг " + stepLabel + " — строки не распарсились (ожидается token>head)");
-        return;
-    }
+    liveCollectQueue = parsedEdges.slice();
 
     if (fp) {
         lastAppliedCollectFp = fp;
     }
     var ra = data.received_at ? " @ " + data.received_at : "";
-    var packHint = doFullClear
-        ? " · граф очищен; следующий через " + String(semanticWorkerClearEvery) + " пак."
-        : " · накопление, полный сброс через ~" +
-          String(semanticWorkerClearEvery - semanticWorkerApplySinceClear) +
-          " пак.";
+    var packHint;
+    if (doFullClear) {
+        packHint =
+            " · граф очищен (порог и >" +
+            String(SEMANTIC_COLLECT_FULL_CLEAR_MIN_EDGES) +
+            " рёбер); следующий через " +
+            String(semanticWorkerClearEvery) +
+            " пак.";
+    } else if (atOrOver && !bigBatch) {
+        packHint =
+            " · пакет ≤" +
+            String(SEMANTIC_COLLECT_FULL_CLEAR_MIN_EDGES) +
+            " рёбер — сброс счётчика; полный clear при пороге и >" +
+            String(SEMANTIC_COLLECT_FULL_CLEAR_MIN_EDGES) +
+            ".";
+    } else {
+        packHint =
+            " · накопление, полный сброс при ~" +
+            String(semanticWorkerClearEvery - semanticWorkerApplySinceClear) +
+            " пак. и >" +
+            String(SEMANTIC_COLLECT_FULL_CLEAR_MIN_EDGES) +
+            " рёбер.";
+    }
     setSemanticWorkerHint(
-        src + ": шаг " + stepLabel + ", рёбер " + String(liveCollectQueue.length) + ra + packHint
+        src + ": шаг " + stepLabel + ", рёбер " + String(validEdgeCount) + ra + packHint
     );
 
     liveCollectTimer = setInterval(function () {
