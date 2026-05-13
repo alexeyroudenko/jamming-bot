@@ -195,6 +195,21 @@ document.body.classList.remove('is-admin');
       enqueuePhrases(phrasesFromPlainText(data.text));
     }
   });
+  function isTypingTarget(el) {
+    if (!el || !el.tagName) return false;
+    var t = el.tagName;
+    return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT';
+  }
+  document.addEventListener('keydown', function (e) {
+    if (isTypingTarget(e.target)) return;
+    if (e.key !== 'b' && e.key !== 'B') return;
+    e.preventDefault();
+    var batch = [];
+    for (var i = 0; i < 10; i++) {
+      batch.push('phrase ' + Math.random().toString(36).slice(2, 6) + ' ' + Math.random().toString(36).slice(2, 6));
+    }
+    enqueuePhrases(batch);
+  }, true);
 })();
 </script>
 {% endblock %}

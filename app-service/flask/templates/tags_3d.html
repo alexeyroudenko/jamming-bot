@@ -72,7 +72,7 @@
 
 <nav>
   <div>
-    {% include "components/bot_primary_header_plain.html" %}
+    {% include "components/bot_primary_header_tag_vis.html" %}
   </div>
   <span id="status"></span>
 </nav>
@@ -97,7 +97,8 @@
   var IDLE_MS = 10000;
   /** Каждые N мс — фокус на случайный тег из показанных. */
   var RANDOM_FOCUS_INTERVAL_MS = 21000;
-  var FOCUS_DURATION_MS = 1600;
+  /** Длительность анимации фокуса на тег (×3 к базовым 1600 мс). */
+  var FOCUS_DURATION_MS = 4800;
   var FLASH_MS = 520;
   var FOCUS_CAM_OFFSET = 10;
   var FONT_MIN = 7;
@@ -108,7 +109,7 @@
   /** Удвоение разрешения текстуры спрайта без изменения видимого размера. */
   var SPRITE_DPR = 2;
   var IDLE_ROTATE_DELAY_MS = 1400;
-  var IDLE_ROTATE_Y_RAD_PER_SEC = 0.05;
+  var IDLE_ROTATE_Y_RAD_PER_SEC = 0.025;
   /** Stagger first paint: one sprite each interval, order rare → popular (see loadTags sort). */
   var TAG_REVEAL_MS = 40;
   var tagRevealToken = 0;
@@ -224,6 +225,7 @@
   function enqueueWordsFromData(data) {
     var arr = collectWordsFromPayload(data);
     for (var i = 0; i < arr.length; i++) {
+      console.log('[tags/3d] queue word:', arr[i]);
       wordQueue.push(arr[i]);
     }
     if (!wordTimer && wordQueue.length) {
