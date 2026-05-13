@@ -872,7 +872,11 @@
       el.className = 'tags-floating-item tags-floating-item--' + (kind === 'phrase' ? 'phrase' : 'word');
       el.setAttribute('data-float-kind', kind === 'phrase' ? 'phrase' : 'word');
       el.textContent = text;
-      el.style.fontSize = (0.5 + Math.random() * 1.5) + 'em';
+      /* Фразы: вдвое уже диапазон случайного кегля, чем у слов (см. задачу phrases /tags/). */
+      el.style.fontSize =
+        (kind === 'phrase'
+          ? 0.5 + Math.random() * 0.75
+          : 0.5 + Math.random() * 1.5) + 'em';
       el.style.zIndex = String(++zStack);
       list.appendChild(el);
       requestAnimationFrame(function () {

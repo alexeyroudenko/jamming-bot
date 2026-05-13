@@ -28,6 +28,11 @@
       pointer-events: none;
       text-align: left;
     }
+    .sv-label.sv-label--neutral {
+      color: #ffffff;
+      background: transparent;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95), 0 0 8px rgba(0, 0, 0, 0.65);
+    }
     body.tags-sentiment-vortex:not(.sv-panel-visible) .tags-vis-toolbar {
       display: none !important;
     }
@@ -145,6 +150,28 @@
     if (!s) return '';
     if (s.length <= maxLen) return s;
     return s.slice(0, maxLen - 1) + '…';
+  }
+
+  /** Нейтральная полярность в API часто float около нуля. */
+  var SV_POLARITY_NEUTRAL_EPS = 0.05;
+  function isNeutralPolarity(p) {
+    return typeof p === 'number' && Math.abs(p) < SV_POLARITY_NEUTRAL_EPS;
+  }
+
+  function syncLabelPolarityClasses() {
+    for (var i = 0; i < labelObjs.length; i++) {
+      var el = labelObjs[i].element;
+      if (!el) continue;
+      if (i >= nActive) {
+        el.classList.remove('sv-label--neutral');
+        continue;
+      }
+      if (isNeutralPolarity(state.polarity[i])) {
+        el.classList.add('sv-label--neutral');
+      } else {
+        el.classList.remove('sv-label--neutral');
+      }
+    }
   }
 
   function updateLabelVisibility() {
@@ -398,6 +425,7 @@
       for (var zi = 0; zi < labelObjs.length; zi++) {
         labelObjs[zi].element.textContent = '';
         labelObjs[zi].visible = false;
+        labelObjs[zi].element.classList.remove('sv-label--neutral');
       }
       statusEl.textContent = 'no phrases — add tags or wait for combine';
       return;
@@ -533,6 +561,7 @@
     trailGeom.attributes.size.needsUpdate = true;
     geom.setDrawRange(0, nActive);
     trailGeom.setDrawRange(0, nActive);
+    syncLabelPolarityClasses();
   }
 
   function stepPhysics() {
