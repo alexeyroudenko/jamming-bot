@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en" class="semantic3d-page">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+  <title>Jamming bot — semantic 3D</title>
+  <link rel="manifest" href="/flask_static/manifest.json">
+  <link rel="icon" href="/flask_static/favicon.ico" type="image/x-icon">
+  <meta name="theme-color" content="#000000">
+  <meta name="description" content="Semantic dependency graph in 3D (WebGL force layout)">
+  <link rel="stylesheet" href="/flask_static/semantic_page.css">
+  <link rel="stylesheet" href="/flask_static/semantic3d_page.css">
+</head>
+<body class="semantic3d-page">
+
+<div id="semantic-mood-bg" aria-hidden="true"></div>
+<div id="semantic3d-root" aria-label="Semantic graph 3D viewport"></div>
+<div class="semantic-log-row">
+  <div id="log_semantic" class="text"></div>
+  <pre id="log_mood" class="semantic-log-mood" aria-label="Mood log"></pre>
+</div>
+
+<div id="debug">
+  <section class="bot-panel bot-primary-panel bot-move-target">
+    <div class="bot-primary-head">
+      <div class="bot-brand">
+        <a class="bot-brand-kicker" href="/">Jamming Bot v2.1.0</a>
+        <div class="bot-nav-grid">
+          {% include "components/bot_primary_nav_full.html" %}
+        </div>
+      </div>
+    </div>
+    <div class="semantic-demo-row">
+      <button type="button" class="bot-action" id="semantic-play">play</button>
+      <button type="button" class="bot-action" id="semantic-step-once">step</button>
+      <button type="button" class="bot-action" id="semantic-reset">reset</button>
+      <span class="semantic-demo-meta" id="semantic-status">loading…</span>
+      <div class="semantic-demo-metrics" aria-live="polite">
+        <div class="bot-metric">
+          <span class="bot-metric-label">Counter</span>
+          <span class="bot-metric-value" id="semantic-socket-counter"></span>
+        </div>
+        <div class="bot-metric">
+          <span class="bot-metric-label">Latency</span>
+          <span class="bot-metric-value" id="semantic-socket-latency"></span>
+        </div>
+      </div>
+    </div>
+    <div class="semantic-worker-row">
+      <span class="semantic-demo-meta" id="semantic-worker-hint">Socket.IO + HTTP: ожидание данных воркеров…</span>
+    </div>
+    <div id="semantic-source-panel" aria-label="Source text excerpt"></div>
+  </section>
+</div>
+
+<div id="semantic-force-panel" class="semantic-force-panel is-collapsed" aria-label="Параметры силового графа">
+  <div class="semantic-force-toolbar">
+    <button type="button" class="semantic-force-toggle" id="semantic-force-toggle" aria-expanded="false" aria-controls="semantic-force-body" title="Показать параметры силы">
+      <span class="semantic-force-toggle-icon" aria-hidden="true">▸</span>
+    </button>
+    <span class="semantic-force-head">Сила / расстояния (3D)</span>
+  </div>
+  <div id="semantic-force-body" class="semantic-force-body" hidden>
+  <div class="semantic-force-row">
+    <label>Длина ребра <span class="semantic-force-val" data-force-display="v1"></span>
+      <input type="range" data-force-key="v1" id="semantic-f-v1" min="5" max="100" step="1" value="25"/>
+    </label>
+  </div>
+  <div class="semantic-force-row">
+    <label>Сила связи <span class="semantic-force-val" data-force-display="v4"></span>
+      <input type="range" data-force-key="v4" id="semantic-f-v4" min="5" max="100" step="1" value="25"/>
+    </label>
+  </div>
+  <div class="semantic-force-row">
+    <label>Гравитация (к центру) <span class="semantic-force-val" data-force-display="v2"></span>
+      <input type="range" data-force-key="v2" id="semantic-f-v2" min="5" max="100" step="1" value="25"/>
+    </label>
+  </div>
+  <div class="semantic-force-row">
+    <label>Заряд (отталкивание) <span class="semantic-force-val" data-force-display="v3"></span>
+      <input type="range" data-force-key="v3" id="semantic-f-v3" min="5" max="100" step="1" value="25"/>
+    </label>
+  </div>
+  <div class="semantic-force-row">
+    <label>Трение <span class="semantic-force-val" data-force-display="v5"></span>
+      <input type="range" data-force-key="v5" id="semantic-f-v5" min="5" max="100" step="1" value="25"/>
+    </label>
+  </div>
+  <div class="semantic-force-row">
+    <label>Theta (Barnes–Hut) <span class="semantic-force-val" data-force-display="theta"></span>
+      <input type="range" data-force-key="theta" id="semantic-f-theta" min="15" max="95" step="1" value="80"/>
+    </label>
+  </div>
+  <div class="semantic-force-row">
+    <label>Дистанция заряда <span class="semantic-force-val" data-force-display="chargeDist"></span>
+      <input type="range" data-force-key="chargeDist" id="semantic-f-chargeDist" min="400" max="10000" step="100" value="10000"/>
+    </label>
+  </div>
+  <div class="semantic-force-actions">
+    <button type="button" class="bot-action" id="semantic-force-reset">сброс по умолчанию</button>
+  </div>
+  </div>
+</div>
+
+<script>
+(function () {
+    function loadScript(src) {
+        return new Promise(function (resolve, reject) {
+            var script = document.createElement("script");
+            script.src = src;
+            script.async = true;
+            script.onload = function () { resolve(); };
+            script.onerror = function () { reject(new Error("Failed to load: " + src)); };
+            document.head.appendChild(script);
+        });
+    }
+    /* THREE должен быть в window ДО 3d-force-graph: иначе бандл берёт свой three, а подписи — window.THREE → два экземпляра, спрайты не видны (см. консоль). */
+    loadScript("https://cdn.socket.io/4.7.5/socket.io.min.js")
+        .catch(function () {
+            console.warn("socket.io failed; semantic_collect disabled");
+        })
+        .then(function () {
+            return loadScript("https://unpkg.com/three@0.160.0/build/three.min.js")
+                .catch(function () {
+                    return loadScript("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js");
+                })
+                .catch(function () {
+                    console.warn("three.min.js preload failed; graph will use bundled three (node labels may be off)");
+                    return Promise.resolve();
+                });
+        })
+        .then(function () {
+            return loadScript("https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.5/dist/3d-force-graph.min.js")
+                .catch(function () {
+                    return loadScript("https://unpkg.com/3d-force-graph@1.73.5/dist/3d-force-graph.min.js");
+                });
+        })
+        .then(function () {
+            var s = document.createElement("script");
+            s.src = "/flask_static/semantic_demo_3d.js?v=14";
+            document.body.appendChild(s);
+        })
+        .catch(function (e) {
+            console.error(e);
+            var el = document.getElementById("semantic-status");
+            if (el) el.textContent = "script load failed (see console)";
+        });
+})();
+</script>
+</body>
+</html>
