@@ -100,7 +100,7 @@
   var API_BASE = {{ tags_api_base|tojson }};
   var TAGS_API = (API_BASE || '') + '/api/tags/get/';
   var EMB_API = (API_BASE || '') + '/api/tags/embeddings/';
-  var MAX_PARTICLES_CAPACITY = 28000;
+  var MAX_PARTICLES_CAPACITY = 56000;
   var FLOW_SPEED = 0.05;
   var RELOAD_DEBOUNCE_MS = 550;
   /** Half-extent of simulation cube (world units). */
@@ -115,8 +115,7 @@
   var ANCHORS_BASE = 1.0;
   var animSlow = 1;
   var reduceMotionPreferred = false;
-  /** Periodic orbit nudge (≈30–60° total), mouse-like via damping + smooth burst. */
-  var ORBIT_AUTO_KICK_MS = 7000;
+  /** Orbit kick decay (редкие остаточные burst); периодический kick заменён фокусом по якорям как на /tags/3d/. */
   /** Меньше — тот же суммарный угол kick размазывается на больше кадров (ниже угловая скорость). ×1/2.5 к базовому 0.17. */
   var ORBIT_KICK_SMOOTH = 0.17 / 2.5;
   var orbitKickBurstAz = 0;
@@ -171,6 +170,10 @@
   var vf3AnchorLabelsRevealEverCompleted = false;
   var vf3AnchorRevealToken = 0;
 
+  var vf3FocusAnimating = false;
+  var VF3_ANCHOR_FOCUS_MS = 1600;
+  var VF3_ANCHOR_FOCUS_INTERVAL_MS = 21000;
+
   var _vf3OrbitOff = new THREE.Vector3();
   var _vf3OrbitSph = new THREE.Spherical();
   var _vf3OrbitQuat = new THREE.Quaternion();
@@ -217,9 +220,9 @@
     var pref = getDensityPref();
     var cores = typeof navigator.hardwareConcurrency === 'number' ? navigator.hardwareConcurrency : 4;
     var narrow = window.innerWidth < 640;
-    var particlesHi = 28000;
-    var particlesMed = 16000;
-    var particlesLo = 8000;
+    var particlesHi = 56000;
+    var particlesMed = 32000;
+    var particlesLo = 16000;
     var tagsHi = 48;
     var tagsMed = 36;
     var tagsLo = 24;
@@ -1197,6 +1200,58 @@
     },
   });
 
+  function easeInOutQuadVf3(x) {
+    return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+  }
+
+  function vf3RunFocusOnAnchor(a) {
+    if (!a || vf3FocusAnimating || !camera || !controls) return;
+    vf3FocusAnimating = true;
+    orbitKickBurstAz = 0;
+    orbitKickBurstPol = 0;
+    controls.enabled = false;
+    var endTarget = new THREE.Vector3(a.x, a.y, a.z);
+    var dir = endTarget.clone();
+    if (dir.lengthSq() < 1e-8) {
+      dir.set(0, 0, 1);
+    } else {
+      dir.normalize();
+    }
+    var dist = Math.max(
+      camera.position.distanceTo(endTarget) * 0.45,
+      WORLD_HALF * 0.38
+    );
+    var endCam = endTarget.clone().add(dir.multiplyScalar(dist));
+    var startTarget = controls.target.clone();
+    var startCam = camera.position.clone();
+    var t0 = performance.now();
+    function animStep() {
+      var raw = (performance.now() - t0) / VF3_ANCHOR_FOCUS_MS;
+      var k = easeInOutQuadVf3(Math.min(1, raw));
+      controls.target.lerpVectors(startTarget, endTarget, k);
+      camera.position.lerpVectors(startCam, endCam, k);
+      camera.lookAt(controls.target);
+      if (raw < 1) {
+        requestAnimationFrame(animStep);
+      } else {
+        controls.target.copy(endTarget);
+        camera.position.copy(endCam);
+        camera.lookAt(controls.target);
+        controls.enabled = true;
+        controls.update();
+        vf3FocusAnimating = false;
+      }
+    }
+    requestAnimationFrame(animStep);
+  }
+
+  function vf3RunFocusOnRandomAnchor() {
+    if (vf3FocusAnimating || !anchors || anchors.length === 0) return;
+    if (TagsVisControls.frozen || reduceMotionPreferred) return;
+    var a = anchors[Math.floor(Math.random() * anchors.length)];
+    vf3RunFocusOnAnchor(a);
+  }
+
   if (reduceMotionPreferred) {
     TagsVisControls.frozen = true;
     var freezeBtn = document.getElementById('btn-freeze');
@@ -1235,7 +1290,7 @@
         veil.addEventListener('transitionend', onEnd);
       });
     }
-    if (orbitKickBurstAz !== 0 || orbitKickBurstPol !== 0) {
+    if (!vf3FocusAnimating && (orbitKickBurstAz !== 0 || orbitKickBurstPol !== 0)) {
       var dAz = orbitKickBurstAz * ORBIT_KICK_SMOOTH;
       var dPo = orbitKickBurstPol * ORBIT_KICK_SMOOTH;
       orbitKickBurstAz -= dAz;
@@ -1244,7 +1299,9 @@
       if (Math.abs(orbitKickBurstAz) < 1e-5) orbitKickBurstAz = 0;
       if (Math.abs(orbitKickBurstPol) < 1e-5) orbitKickBurstPol = 0;
     }
-    controls.update();
+    if (!vf3FocusAnimating) {
+      controls.update();
+    }
     if (document.visibilityState === 'hidden') {
       renderer.render(scene, camera);
       return;
@@ -1289,11 +1346,8 @@
   setInterval(function () {
     if (reduceMotionPreferred) return;
     if (TagsVisControls.frozen) return;
-    var turn = (30 + Math.random() * 30) * (Math.PI / 180);
-    var w = Math.random() * Math.PI * 2;
-    orbitKickBurstAz += Math.cos(w) * turn;
-    orbitKickBurstPol += Math.sin(w) * turn * 0.52;
-  }, ORBIT_AUTO_KICK_MS);
+    vf3RunFocusOnRandomAnchor();
+  }, VF3_ANCHOR_FOCUS_INTERVAL_MS);
 
   function vf3IsTypingTarget(el) {
     if (!el || !el.tagName) return false;

@@ -1,0 +1,6 @@
+{% set p = request.path %}
+<a class="bot-link-chip{% if p.startswith('/semantic') %} is-primary{% endif %}" href="/semantic/">semantic</a>
+<a class="bot-link-chip{% if p.rstrip('/') == '/tags' %} is-primary{% endif %}" href="/tags/">tag cloud</a>
+<a class="bot-link-chip{% if p.startswith('/tags/3d') %} is-primary{% endif %}" href="/tags/3d/">3D cloud</a>
+<a class="bot-link-chip{% if p.startswith('/tags/sentiment-vortex') %} is-primary{% endif %}" href="/tags/sentiment-vortex/">sentiment vortex</a>
+<a class="bot-link-chip{% if p.startswith('/tags/vectorfield-3d') %} is-primary{% endif %}" href="/tags/vectorfield-3d/">vector 3D</a>

@@ -1,0 +1,6 @@
+{% set p = request.path %}
+<a class="bot-link-chip{% if p.startswith('/pages/url') %} is-primary{% endif %}" href="/pages/url/">url</a>
+<a class="bot-link-chip{% if p.startswith('/pages/texts') %} is-primary{% endif %}" href="/pages/texts/">texts</a>
+<a class="bot-link-chip{% if p.startswith('/pages/words') %} is-primary{% endif %}" href="/pages/words/">words</a>
+<a class="bot-link-chip{% if p.startswith('/pages/phrases') %} is-primary{% endif %}" href="/pages/phrases/">phrases</a>
+<a class="bot-link-chip{% if p.startswith('/pages/empty') %} is-primary{% endif %}" href="/pages/empty/">empty</a>
