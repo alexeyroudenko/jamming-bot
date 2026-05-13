@@ -61,6 +61,8 @@ services:
     container_name: jamming-vf-flask
     command: python app.py
     environment:
+      FLASK_DEBUG: "${FLASK_DEBUG:-1}"
+      FLASK_USE_RELOADER: "${FLASK_USE_RELOADER:-1}"
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       TAGS_SERVICE_URL: http://tags_service:8000

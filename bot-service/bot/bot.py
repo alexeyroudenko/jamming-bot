@@ -33,6 +33,9 @@ import telemetry
 
 config_file = "bot.yaml"
 
+# When bot.yaml `simulate: true`, every step loads this page (see NetSpider.do_step).
+SIMULATE_PAGE_URL = "https://arthew0.online/blog/2024-10_jamming_bot_v2.0/"
+
 USER_AGENT = "JammingBot/2.1 (+https://jamming-bot.arthew0.online/)"
 # Domains to never request (e.g. reported abuse from them)
 BLOCKED_DOMAINS = frozenset({"canine.tools"})
@@ -426,7 +429,9 @@ class NetSpider():
         self.send_step = False
         self.send_osc = False
         self.send_sublinks = False
-        
+        self.simulate = False
+        self.cfg_src_url = ""
+
         self.resume_at_restart = False
         
         self.do_save_html = False
@@ -492,6 +497,8 @@ class NetSpider():
             self.send_step = config['send_step']
             self.send_osc = config['send_osc']
             self.send_sublinks = config['send_sublinks']
+            self.simulate = bool(config.get("simulate", False))
+            self.cfg_src_url = str(config.get("src_url") or "")
             self.resume_at_restart = config['resume_at_restart']
             self.do_save_html = config['do_save_html']
             #self.is_active = config['is_active']
@@ -748,47 +755,54 @@ class NetSpider():
                 #
                 
                 self.notify_about_eventp("retrieve_next_url", self.step_number)
-                
-                # Host with fewest unvisited rows, then one row (uses idx_urls_visited_hostname).
-                pick_host_sql = (
-                    "SELECT hostname FROM Urls WHERE visited = 0 "
-                    "GROUP BY hostname ORDER BY COUNT(*) ASC, hostname ASC LIMIT 1"
-                )
-                host_row = await self._db_fetch_one(query=pick_host_sql)
-                pick_row_sql = (
-                    "SELECT id, hostname, url, src_url FROM Urls "
-                    "WHERE visited = 0 AND hostname = :hostname ORDER BY id ASC LIMIT 1"
-                )
-                rows = (
-                    await self._db_fetch_all(
-                        query=pick_row_sql,
-                        values={"hostname": host_row[0]},
+
+                if self.simulate:
+                    current_url = SIMULATE_PAGE_URL
+                    src_url = self.cfg_src_url or current_url
+                    self.step.url = current_url
+                    self.step.src = src_url
+                    self.notify_about_eventp("steps_forwards", -1)
+                else:
+                    # Host with fewest unvisited rows, then one row (uses idx_urls_visited_hostname).
+                    pick_host_sql = (
+                        "SELECT hostname FROM Urls WHERE visited = 0 "
+                        "GROUP BY hostname ORDER BY COUNT(*) ASC, hostname ASC LIMIT 1"
                     )
-                    if host_row
-                    else []
-                )
-                
-                steps_forwards_query = "SELECT COUNT(*) FROM Urls WHERE visited=0"
-                steps_forwards_result = await self._db_fetch_one(query=steps_forwards_query)
-                steps_forwards = steps_forwards_result[0] if steps_forwards_result else 0
-                self.notify_about_eventp("steps_forwards", steps_forwards)
-                # logging.info(f"steps_forwards {steps_forwards}")
-                
-                url_id = rows[0][0]
-                # domain = get_second_level_domain(rows[0][1])
-                current_url = rows[0][2]
-                src_url = rows[0][3]
-                
-                self.step.url = current_url
-                self.step.src = src_url
-                
-                #
-                #  Set visited
-                #
-                self.notify_about_eventp("set_visited", url_id)
-                #
-                query = "UPDATE Urls SET visited=1 WHERE id = :id"
-                await self._db_execute(query=query, values={"id": url_id})
+                    host_row = await self._db_fetch_one(query=pick_host_sql)
+                    pick_row_sql = (
+                        "SELECT id, hostname, url, src_url FROM Urls "
+                        "WHERE visited = 0 AND hostname = :hostname ORDER BY id ASC LIMIT 1"
+                    )
+                    rows = (
+                        await self._db_fetch_all(
+                            query=pick_row_sql,
+                            values={"hostname": host_row[0]},
+                        )
+                        if host_row
+                        else []
+                    )
+
+                    steps_forwards_query = "SELECT COUNT(*) FROM Urls WHERE visited=0"
+                    steps_forwards_result = await self._db_fetch_one(query=steps_forwards_query)
+                    steps_forwards = steps_forwards_result[0] if steps_forwards_result else 0
+                    self.notify_about_eventp("steps_forwards", steps_forwards)
+                    # logging.info(f"steps_forwards {steps_forwards}")
+
+                    url_id = rows[0][0]
+                    # domain = get_second_level_domain(rows[0][1])
+                    current_url = rows[0][2]
+                    src_url = rows[0][3]
+
+                    self.step.url = current_url
+                    self.step.src = src_url
+
+                    #
+                    #  Set visited
+                    #
+                    self.notify_about_eventp("set_visited", url_id)
+                    #
+                    query = "UPDATE Urls SET visited=1 WHERE id = :id"
+                    await self._db_execute(query=query, values={"id": url_id})
                 
                 
                 #
@@ -1084,8 +1098,9 @@ async def main():
     # osc_server.run_osc_reciver()
     
     #feature_states = self.osc_feature_controler.feature_states
-    
-    await spider.start(config['start_url'], config['src_url'])
+
+    _seed_url = SIMULATE_PAGE_URL if spider.simulate else config["start_url"]
+    await spider.start(_seed_url, config["src_url"])
     
     
         
@@ -1126,8 +1141,12 @@ async def main():
                                 await spider.do_step()
                                     
                             if data == "restart":
-                                logging.info(f"restart") 
-                                await spider.start(config['start_url'], config['src_url'])
+                                logging.info(f"restart")
+                                spider.reload_config()
+                                _restart_seed = (
+                                    SIMULATE_PAGE_URL if spider.simulate else config["start_url"]
+                                )
+                                await spider.start(_restart_seed, config["src_url"])
 
 
             except Exception as e:

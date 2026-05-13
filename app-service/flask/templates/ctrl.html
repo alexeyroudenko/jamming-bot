@@ -38,6 +38,7 @@
     <li><label class="jb-check"><input type="checkbox" id="send_events" name="send_events" {% if bot_flags['send_events'] %}checked{% endif %}> send_events</label></li>
     <li><label class="jb-check"><input type="checkbox" id="send_sublinks" name="send_sublinks" {% if bot_flags['send_sublinks'] %}checked{% endif %}> send_sublinks</label></li>
     <li><label class="jb-check"><input type="checkbox" id="log_events" name="log_events" {% if bot_flags['log_events'] %}checked{% endif %}> log_events</label></li>
+    <li><label class="jb-check"><input type="checkbox" id="simulate" name="simulate" {% if bot_flags['simulate'] %}checked{% endif %}> simulate <span class="jb-muted">(always load fixed blog page)</span></label></li>
   </ul>
 </fieldset>
 
@@ -128,8 +129,41 @@
   function bindCheckbox(id, eventName) {
     var el = document.getElementById(id);
     if (!el) return;
-    el.addEventListener('input', function (event) {
+    /* `change` срабатывает для чекбоксов везде; `input` — не во всех браузерах */
+    el.addEventListener('change', function (event) {
       socket.emit(eventName, event.target.checked ? 1 : 0);
+    });
+  }
+
+  function bindBotYamlCheckbox(id, yamlKey) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', function (event) {
+      var checked = event.target.checked;
+      var v = checked ? 1 : 0;
+      fetch('/api/ctrl/bot_yaml/' + encodeURIComponent(yamlKey) + '/' + v + '/', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' }
+      })
+        .then(function (r) {
+          return r.text().then(function (text) {
+            var body = {};
+            try {
+              body = text ? JSON.parse(text) : {};
+            } catch (ignore) {
+              body = {};
+            }
+            if (!r.ok || !body.ok) {
+              el.checked = !checked;
+              console.warn('bot.yaml save failed', yamlKey, r.status, text);
+            }
+          });
+        })
+        .catch(function (e) {
+          el.checked = !checked;
+          console.warn('bot.yaml save failed', yamlKey, e);
+        });
     });
   }
 
@@ -141,9 +175,10 @@
   bindCheckbox('do_screenshot', 'do_screenshot');
   bindCheckbox('do_image_analyze', 'do_image_analyze');
   bindCheckbox('do_storage', 'do_storage');
-  bindCheckbox('send_events', 'bot_send_events');
-  bindCheckbox('send_sublinks', 'bot_send_sublinks');
-  bindCheckbox('log_events', 'bot_log_events');
+  bindBotYamlCheckbox('send_events', 'send_events');
+  bindBotYamlCheckbox('send_sublinks', 'send_sublinks');
+  bindBotYamlCheckbox('log_events', 'log_events');
+  bindBotYamlCheckbox('simulate', 'simulate');
   bindCheckbox('backfill_active', 'backfill_active');
 
   function bindRangeOutput(inputId, outputId, eventName, parser) {

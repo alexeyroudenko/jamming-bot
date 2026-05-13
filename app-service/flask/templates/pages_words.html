@@ -116,6 +116,26 @@ document.body.classList.remove('is-admin');
     }
   }
 
+  /** Токены из текста шага (как на /pages/texts/), если semantic-service ещё не дал words или do_analyze выкл. */
+  function wordsFromPlainText(str) {
+    if (typeof str !== 'string') return [];
+    var s = str.trim();
+    if (!s) return [];
+    var out = [];
+    var re;
+    try {
+      re = new RegExp('[\\p{L}\\p{N}][\\p{L}\\p{N}\'\\u2019-]*', 'gu');
+    } catch (e) {
+      re = /[A-Za-z0-9\u00C0-\u024F][A-Za-z0-9\u00C0-\u024F'\-]*/g;
+    }
+    var m;
+    var cap = 400;
+    while ((m = re.exec(s)) !== null && out.length < cap) {
+      if (m[0].length >= 2) out.push(m[0]);
+    }
+    return out;
+  }
+
   function enqueueWords(words) {
     if (!Array.isArray(words)) return;
     var added = false;
@@ -139,6 +159,9 @@ document.body.classList.remove('is-admin');
     if (Array.isArray(data.words)) {
       words = words.concat(data.words);
     }
+    if (Array.isArray(data.tags)) {
+      words = words.concat(data.tags);
+    }
     if (typeof data.words_str === 'string') {
       words = words.concat(data.words_str.split(/\s+/));
     }
@@ -150,7 +173,11 @@ document.body.classList.remove('is-admin');
 
   s.on('analyzed', ingest);
   s.on('step', function (data) {
-    if (data && data.analyzed) ingest(data);
+    if (!data) return;
+    if (data.analyzed) ingest(data);
+    if (typeof data.text === 'string' && data.text.trim().length) {
+      ingest({ words: wordsFromPlainText(data.text) });
+    }
   });
 })();
 </script>

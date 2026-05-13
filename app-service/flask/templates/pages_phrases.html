@@ -132,10 +132,61 @@ document.body.classList.remove('is-admin');
     }
   }
 
-  s.on('analyzed', function (data) {
+  /** Те же токены, что на /pages/words/ из текста шага */
+  function wordsFromPlainText(str) {
+    if (typeof str !== 'string') return [];
+    var s = str.trim();
+    if (!s) return [];
+    var out = [];
+    var re;
+    try {
+      re = new RegExp('[\\p{L}\\p{N}][\\p{L}\\p{N}\'\\u2019-]*', 'gu');
+    } catch (e) {
+      re = /[A-Za-z0-9\u00C0-\u024F][A-Za-z0-9\u00C0-\u024F'\-]*/g;
+    }
+    var m;
+    var cap = 400;
+    while ((m = re.exec(s)) !== null && out.length < cap) {
+      if (m[0].length >= 2) out.push(m[0]);
+    }
+    return out;
+  }
+
+  /** Если semantic не дал hrases, показываем биграммы/триграммы из текста шага */
+  function phrasesFromPlainText(str) {
+    var tokens = wordsFromPlainText(str);
+    if (tokens.length < 2) return [];
+    var out = [];
+    var i;
+    var cap = 150;
+    for (i = 0; i < tokens.length - 1 && out.length < cap; i++) {
+      out.push(tokens[i] + ' ' + tokens[i + 1]);
+    }
+    for (i = 0; i < tokens.length - 2 && out.length < cap; i++) {
+      out.push(tokens[i] + ' ' + tokens[i + 1] + ' ' + tokens[i + 2]);
+    }
+    return out;
+  }
+
+  function ingestPhrases(data) {
     if (!data) return;
-    var phrases = Array.isArray(data.noun_phrases) ? data.noun_phrases : [];
+    var phrases = [];
+    if (Array.isArray(data.noun_phrases)) phrases = phrases.concat(data.noun_phrases);
+    if (Array.isArray(data.hrases)) phrases = phrases.concat(data.hrases);
+    if (data.analyzed) {
+      if (Array.isArray(data.analyzed.noun_phrases)) phrases = phrases.concat(data.analyzed.noun_phrases);
+      if (Array.isArray(data.analyzed.hrases)) phrases = phrases.concat(data.analyzed.hrases);
+    }
     enqueuePhrases(phrases);
+  }
+
+  s.on('analyzed', ingestPhrases);
+  s.on('step', function (data) {
+    if (!data) return;
+    if (data.analyzed) ingestPhrases(data);
+    if (typeof data.text === 'string' && data.text.trim().length) {
+      enqueuePhrases(phrasesFromPlainText(data.text));
+    }
   });
 })();
 </script>
