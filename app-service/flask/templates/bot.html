@@ -331,26 +331,6 @@ code {
     overflow: hidden;
 }    
 
-#log_screenshot {
-    position: absolute;
-    top: 148px;
-    right: 320px;
-    z-index: 115;
-    width: 90px;
-    height: 160px;
-    overflow: hidden;
-    pointer-events: none;
-}
-
-#log_screenshot img {
-    display: block;
-    width: 90px;
-    height: 160px;
-    object-fit: cover;
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    box-shadow: var(--bot-shadow);
-}
-
 #log_palette {
     position: fixed;
     right: 24px;
@@ -682,11 +662,6 @@ button {
         opacity: .3 !important;
     }
 
-    #log_screenshot {
-        top: 96px;
-        right: 10px;
-    }
-
     #log_palette {
         right: 10px;
         bottom: 10px;
@@ -927,7 +902,6 @@ button {
     <div id="log_sub" class="text"></div> 
     <div id="log_events" class="text"></div> 
     <div id="log_headers" class="text"></div>  
-    <div id="log_screenshot" class="text"></div>
     <div id="log_palette" class="text"></div>
     <div id="log_urls" class="text"></div>  
     <div id="log_words" class="text"></div> 
@@ -1137,7 +1111,6 @@ var MOVE_TARGET_SELECTOR = [
     '#log_sub',
     '#log_events',
     '#log_headers',
-    '#log_screenshot',
     '#log_palette',
     '#log_urls',
     '#log_words'
@@ -1151,7 +1124,6 @@ var BLOCK_VISIBILITY_TARGETS = [
     { selector: '#log_sub', label: 'sub' },
     { selector: '#log_events', label: 'events' },
     { selector: '#log_headers', label: 'headers' },
-    { selector: '#log_screenshot', label: 'shot' },
     { selector: '#log_palette', label: 'palette' },
     { selector: '#log_urls', label: 'urls' },
     { selector: '#log_words', label: 'words' }
@@ -1874,10 +1846,6 @@ return length
         setCodeText('log_phrases', '')
         graph.removeAllNodes()
         graph.removeallLinks()
-        const screenshotElement = document.getElementById('log_screenshot');
-        if (screenshotElement) {
-            screenshotElement.innerHTML = "";
-        }
         renderPalette([]);
         if (typeof window.clearStepTimeline === 'function') {
             window.clearStepTimeline();
@@ -2023,26 +1991,6 @@ return length
 
 
     }); // socket on step
-
-    socket.on('screenshot', function(data) {
-        if (!data || !data.screenshot_url) return;
-
-        const shotWidth = 90;
-        const shotHeight = 160;
-        const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-        const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-        const maxLeft = Math.max(0, viewportWidth - shotWidth);
-        const maxTop = Math.max(0, viewportHeight - shotHeight);
-        const left = Math.random() * maxLeft;
-        const top = Math.random() * maxTop;
-        const screenshotElement = document.getElementById('log_screenshot');
-        if (!screenshotElement) return;
-
-        screenshotElement.style.left = left + 'px';
-        screenshotElement.style.top = top + 'px';
-        screenshotElement.style.right = 'auto';
-        screenshotElement.innerHTML = "<img src=\"" + data.screenshot_url + "\" alt=\"step screenshot\">";
-    });
 
     function renderPalette(palette) {
         currentPalette = Array.isArray(palette) ? palette.slice(0, 7) : [];
