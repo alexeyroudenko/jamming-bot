@@ -1782,7 +1782,10 @@ return length
     let last_event_time = -1;
     let last_event = "";
     var event_time = (new Date).getTime()
-    socket.on('event', function(data) {                
+    socket.on('event', function(data) {
+        if (window._injectActive) {
+            return;
+        }
         if (data['event'] == "retrieve_next_url") {
             log_page = ""
             event_time = (new Date).getTime()
@@ -1849,6 +1852,8 @@ return length
         text = "";
         currentNounPhrases = [];
         log_sub_lines = [];
+        log_page = "";
+        event_time = (new Date).getTime();
         setCodeText('log_sub', '');
         setCodeText('log_phrases', '');
         setCodeText('log_words', '');
@@ -1862,9 +1867,13 @@ return length
         if (logUrls) {
             logUrls.innerHTML = '';
         }
-        var logEvents = document.getElementById('log_events');
-        if (logEvents) {
-            logEvents.innerHTML = '';
+        if (window.jQuery) {
+            window.jQuery('#log_events').html('');
+        } else {
+            var logEvents = document.getElementById('log_events');
+            if (logEvents) {
+                logEvents.innerHTML = '';
+            }
         }
         var screenshotEl = document.getElementById('log_screenshot');
         if (screenshotEl) {

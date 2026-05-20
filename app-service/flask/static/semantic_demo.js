@@ -777,11 +777,15 @@ function setSemanticWorkerHint(text) {
 }
 
 function setBotTransportState(state) {
+    var label = state || "Stopped";
+    if (window._lastBotTransportState !== label) {
+        window._lastBotTransportState = label;
+        console.log("[jamming-bot] State:", label);
+    }
     var el = document.getElementById("metric-bot-state");
     if (!el) {
         return;
     }
-    var label = state || "Stopped";
     el.textContent = label;
     el.dataset.state = String(label).toLowerCase();
 }
