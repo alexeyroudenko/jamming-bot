@@ -1055,7 +1055,9 @@ function semanticStepOnce() {
 }
 
 function semanticPause() {
-    s3dLog("демо: pause");
+    if (demoPlaying) {
+        s3dLog("демо: pause");
+    }
     demoPlaying = false;
     if (demoTimer) {
         clearInterval(demoTimer);
@@ -1095,8 +1097,11 @@ function semanticTogglePlay() {
     }
 }
 
-function semanticReset() {
-    s3dLog("демо: reset");
+function semanticReset(opts) {
+    var quiet = opts && opts.quiet;
+    if (!quiet) {
+        s3dLog("демо: reset");
+    }
     semanticPause();
     stopLiveCollectReplay();
     semanticWorkerApplySinceClear = 0;
@@ -1295,8 +1300,8 @@ function semanticCollectFingerprint(data) {
 }
 
 function applySemanticCollectPayload(data, sourceTag) {
-    if (!demoCompleted) {
-        s3dLog("collect: пропуск (демо ещё не завершено)", { source: sourceTag });
+    if (!demoCompleted && sourceTag === "HTTP") {
+        s3dLog("collect: пропуск HTTP (демо не запускали)", { source: sourceTag });
         return;
     }
     if (!data || typeof data !== "object") {
@@ -1534,11 +1539,13 @@ function pollMoodLastCollect() {
         });
 }
 
-function startSemanticLastCollectPoll() {
+function startSemanticLastCollectPoll(immediate) {
     if (semanticLastCollectPollTimer) {
         return;
     }
-    pollSemanticLastCollect();
+    if (immediate !== false) {
+        pollSemanticLastCollect();
+    }
     semanticLastCollectPollTimer = setInterval(pollSemanticLastCollect, 3000);
     pollMoodLastCollect();
     if (!semanticMoodPollTimer) {
@@ -1643,6 +1650,7 @@ function initSemanticSocket() {
     semanticSocket.on("semantic_collect", function (data) {
         s3dLog("socket: semantic_collect");
         applySemanticCollectPayload(data, "Socket.IO");
+        startSemanticLastCollectPoll(false);
     });
 
     semanticSocket.on("mood_collect", function (data) {
@@ -1663,7 +1671,22 @@ function loadDemoPayload() {
             if (srcPanel && data.source_text) {
                 srcPanel.textContent = data.source_text;
             }
-            semanticReset();
+            demoCompleted = false;
+            demoIndex = 0;
+            demoLinkKeys = {};
+            demoPlaying = false;
+            if (demoTimer) {
+                clearInterval(demoTimer);
+                demoTimer = null;
+            }
+            if (graph) {
+                graph.removeallLinks();
+                graph.removeAllNodes();
+                if (typeof graph.resetCameraFraming === "function") {
+                    graph.resetCameraFraming();
+                }
+            }
+            clearSemanticLog();
             if (!demoEdges.length) {
                 var el = document.getElementById("semantic-status");
                 if (el) el.textContent = "no data (semantic/semantic.txt)";
@@ -1676,8 +1699,7 @@ function loadDemoPayload() {
                 statusEl.textContent =
                     "demo " + String(demoEdges.length) + " edges — play";
             }
-            demoCompleted = true;
-            startSemanticLastCollectPoll();
+            s3dLog("демо: готово (без autostart)");
         })
         .catch(function (err) {
             console.error(err);
