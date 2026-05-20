@@ -912,6 +912,73 @@ function clearSemanticLog() {
     if (el) el.textContent = "";
 }
 
+var semanticGraphDismantleTimer = null;
+var semanticInjectDismantling = false;
+
+function clearSemanticPanels() {
+    clearSemanticLog();
+    var moodEl = document.getElementById("log_mood");
+    if (moodEl) {
+        moodEl.textContent = "";
+    }
+    var srcPanel = document.getElementById("semantic-source-panel");
+    if (srcPanel) {
+        srcPanel.textContent = "";
+    }
+    lastAppliedCollectFp = null;
+    lastAppliedMoodFp = null;
+}
+
+function stopSemanticGraphDismantle() {
+    if (semanticGraphDismantleTimer) {
+        clearTimeout(semanticGraphDismantleTimer);
+        semanticGraphDismantleTimer = null;
+    }
+    semanticInjectDismantling = false;
+}
+
+function runSemanticGraphDismantle(intervalMs) {
+    stopSemanticGraphDismantle();
+    semanticPause();
+    stopLiveCollectReplay();
+    demoPlaying = false;
+    if (demoTimer) {
+        clearInterval(demoTimer);
+        demoTimer = null;
+    }
+    clearSemanticPanels();
+    if (!graph) {
+        setSemanticWorkerHint("inject: ожидание semantic_collect…");
+        return;
+    }
+    semanticInjectDismantling = true;
+    setSemanticWorkerHint("inject: разбор графа…");
+    var nodes = graph.getNodes().slice();
+    var idx = 0;
+    var interval = intervalMs || 20;
+    function tick() {
+        if (!graph) {
+            stopSemanticGraphDismantle();
+            return;
+        }
+        if (idx >= nodes.length) {
+            stopSemanticGraphDismantle();
+            demoLinkKeys = {};
+            demoIndex = 0;
+            semanticUpdateStatus();
+            setSemanticWorkerHint("inject: граф очищен");
+            return;
+        }
+        var node = nodes[idx];
+        if (node && node.id) {
+            graph.removeNode(node.id);
+        }
+        idx += 1;
+        semanticGraphDismantleTimer = setTimeout(tick, interval);
+    }
+    tick();
+}
+
 function stopLiveCollectReplay() {
     if (liveCollectTimer) {
         clearInterval(liveCollectTimer);
@@ -1526,6 +1593,19 @@ function initSemanticSocket() {
     semanticSocket.on("inject_begin", function () {
         document.documentElement.classList.add("inject-active");
         setBotTransportState("Injected");
+        semanticPause();
+        stopLiveCollectReplay();
+        demoPlaying = false;
+        if (demoTimer) {
+            clearInterval(demoTimer);
+            demoTimer = null;
+        }
+    });
+
+    semanticSocket.on("graph_dismantle", function (data) {
+        semanticPeriodicLog("semanticSocket.on.graph_dismantle");
+        var interval = data && data.interval_ms ? data.interval_ms : 20;
+        runSemanticGraphDismantle(interval);
     });
 
     semanticSocket.on("semantic_inject_begin", function (data) {
@@ -1538,11 +1618,6 @@ function initSemanticSocket() {
         if (demoTimer) {
             clearInterval(demoTimer);
             demoTimer = null;
-        }
-        clearSemanticLog();
-        if (graph) {
-            graph.removeallLinks();
-            graph.removeAllNodes();
         }
         demoCompleted = true;
         semanticUpdateStatus();
@@ -1560,6 +1635,7 @@ function initSemanticSocket() {
     });
 
     semanticSocket.on("inject_end", function () {
+        stopSemanticGraphDismantle();
         document.documentElement.classList.remove("inject-active");
         setBotTransportState("Active");
     });
