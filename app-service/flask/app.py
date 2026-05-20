@@ -327,6 +327,12 @@ CORS_ALLOWED_ORIGINS = frozenset({
     "http://127.0.0.1:3000",
     "http://localhost:5000",
     "http://127.0.0.1:5000",
+    "http://localhost:8765",
+    "http://127.0.0.1:8765",
+    "http://localhost:8766",
+    "http://127.0.0.1:8766",
+    "http://localhost:8767",
+    "http://127.0.0.1:8767",
     "https://jamming-bot.arthew0.online",
     "http://jamming-bot.arthew0.online",
 })
@@ -336,6 +342,38 @@ if _extra_origins.strip():
         CORS_ALLOWED_ORIGINS
         | {o.strip() for o in _extra_origins.split(",") if o.strip()}
     )
+
+# Любой порт localhost / 127.0.0.1 (TouchDesigner, dev static servers :8766, …)
+CORS_LOCAL_ORIGIN_RE = re.compile(
+    r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    re.IGNORECASE,
+)
+
+
+def _cors_origin_allowed(origin: str | None) -> bool:
+    if not origin:
+        return False
+    if origin in CORS_ALLOWED_ORIGINS:
+        return True
+    return bool(CORS_LOCAL_ORIGIN_RE.match(origin))
+
+
+def _apply_cors_headers(response, origin: str | None):
+    if not _cors_origin_allowed(origin):
+        return response
+    response.headers["Access-Control-Allow-Origin"] = origin
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    if request.method == "OPTIONS":
+        req_headers = request.headers.get("Access-Control-Request-Headers")
+        response.headers["Access-Control-Allow-Methods"] = (
+            "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        )
+        response.headers["Access-Control-Allow-Headers"] = (
+            req_headers if req_headers else "Content-Type, Authorization"
+        )
+        response.headers["Access-Control-Max-Age"] = "86400"
+    return response
+
 
 cors = CORS(
     app,
@@ -347,12 +385,8 @@ cors = CORS(
 
 @app.after_request
 def _cors_headers_on_all_responses(response):
-    """Ensure ACAO on edge responses (e.g. redirects) if not already set."""
-    origin = request.headers.get("Origin")
-    if origin in CORS_ALLOWED_ORIGINS:
-        response.headers.setdefault("Access-Control-Allow-Origin", origin)
-        response.headers.setdefault("Access-Control-Allow-Credentials", "true")
-    return response
+    """Ensure ACAO on edge responses (e.g. redirects, OPTIONS preflight)."""
+    return _apply_cors_headers(response, request.headers.get("Origin"))
 
 
 def _env_truthy(name: str, default: bool = False) -> bool:
@@ -509,6 +543,9 @@ def _check_auth():
     _ensure_sublink_listener_started()
     _prune_stale_viewers()
     if request.method == "OPTIONS":
+        origin = request.headers.get("Origin")
+        if _cors_origin_allowed(origin):
+            return _apply_cors_headers(Response("", status=204), origin)
         return
     if request.path in PUBLIC_PATHS or any(request.path.startswith(p) for p in PUBLIC_PREFIXES):
         return
@@ -2360,8 +2397,11 @@ def sublink_add():
     return "step"
 
 
-@app.route("/bot/inject/text/", methods=["POST"])
+@app.route("/bot/inject/text/", methods=["POST", "OPTIONS"])
+@cross_origin()
 def bot_inject_text():
+    if request.method == "OPTIONS":
+        return _apply_cors_headers(Response("", status=204), request.headers.get("Origin"))
     """Stop bot, dismantle main graph, analyze injected text, rebuild semantic3d, then restore."""
     text = ""
     if request.is_json:
