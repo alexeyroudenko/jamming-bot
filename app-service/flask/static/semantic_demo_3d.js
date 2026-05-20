@@ -293,6 +293,343 @@ function createSemanticGraph3D(containerEl) {
         /* Не гасить force layout после cooldown — иначе onEngineTick (волна, idle) перестаёт вызываться */
         .cooldownTicks(Infinity);
 
+    /* Полупрозрачные белые треугольники между ближайшими узлами (каждые 3–5 addNode). */
+    var recentNodes = [];
+    var RECENT_NODES_CAP = 32;
+    var addsUntilAccentTriangle = 3 + Math.floor(Math.random() * 3);
+    var accentTriangles = [];
+    var accentWanderMeshes = [];
+    var accentNextWanderMs = 0;
+    var ACCENT_TRIANGLE_OPACITY = 0.24 / 3 / 2;
+    var ACCENT_TRIANGLES_PER_SPAWN = 9;
+    var ACCENT_WANDER_COUNT = 2;
+
+    function accentRandomInt(min, max) {
+        return min + Math.floor(Math.random() * (max - min + 1));
+    }
+
+    function accentRandomMs1to2() {
+        return 1000 + Math.random() * 1000;
+    }
+
+    function accentNodeHasPos(n) {
+        return (
+            n &&
+            isFinite(Number(n.x)) &&
+            isFinite(Number(n.y)) &&
+            isFinite(Number(n.z))
+        );
+    }
+
+    function accentDistSq(a, b) {
+        var dx = Number(a.x) - Number(b.x);
+        var dy = Number(a.y) - Number(b.y);
+        var dz = Number(a.z) - Number(b.z);
+        return dx * dx + dy * dy + dz * dz;
+    }
+
+    function accentBuildPositionPool(nodes) {
+        var pool = [];
+        var i;
+        for (i = 0; i < nodes.length; i++) {
+            if (accentNodeHasPos(nodes[i])) {
+                pool.push(nodes[i]);
+            }
+        }
+        return pool;
+    }
+
+    function accentGetNodePool() {
+        var pool = accentBuildPositionPool(graphData.nodes);
+        if (pool.length >= 3) {
+            return pool;
+        }
+        return accentBuildPositionPool(recentNodes);
+    }
+
+    function accentPickNearestTrio() {
+        var pool = accentGetNodePool();
+        if (pool.length < 3) {
+            return null;
+        }
+        var seed = pool[Math.floor(Math.random() * pool.length)];
+        var ranked = [];
+        var i;
+        for (i = 0; i < pool.length; i++) {
+            if (pool[i] === seed) {
+                continue;
+            }
+            ranked.push({ node: pool[i], d2: accentDistSq(seed, pool[i]) });
+        }
+        if (ranked.length < 2) {
+            return null;
+        }
+        ranked.sort(function (u, v) {
+            return u.d2 - v.d2;
+        });
+        return [seed, ranked[0].node, ranked[1].node];
+    }
+
+    function accentPickRandomTrio() {
+        var pool = accentGetNodePool();
+        if (pool.length < 3) {
+            return null;
+        }
+        var a = pool[Math.floor(Math.random() * pool.length)];
+        var b;
+        var c;
+        var guard;
+        guard = 0;
+        do {
+            b = pool[Math.floor(Math.random() * pool.length)];
+            guard += 1;
+        } while (b === a && guard < 24);
+        guard = 0;
+        do {
+            c = pool[Math.floor(Math.random() * pool.length)];
+            guard += 1;
+        } while ((c === a || c === b) && guard < 24);
+        if (c === a || c === b) {
+            return null;
+        }
+        return [a, b, c];
+    }
+
+    function accentTrioKey(trio) {
+        if (!trio || trio.length !== 3) {
+            return "";
+        }
+        var ids = [
+            String(trio[0].id),
+            String(trio[1].id),
+            String(trio[2].id)
+        ];
+        ids.sort();
+        return ids.join("\u0000");
+    }
+
+    function accentHasTriangleTrio(trio) {
+        var key = accentTrioKey(trio);
+        if (!key) {
+            return false;
+        }
+        var ti;
+        for (ti = 0; ti < accentTriangles.length; ti++) {
+            var existing =
+                accentTriangles[ti].userData &&
+                accentTriangles[ti].userData.accentNodes;
+            if (accentTrioKey(existing) === key) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function accentUnregisterMesh(mesh) {
+        var ti;
+        for (ti = accentTriangles.length - 1; ti >= 0; ti--) {
+            if (accentTriangles[ti] === mesh) {
+                accentTriangles.splice(ti, 1);
+            }
+        }
+        var wi;
+        for (wi = accentWanderMeshes.length - 1; wi >= 0; wi--) {
+            if (accentWanderMeshes[wi] === mesh) {
+                accentWanderMeshes.splice(wi, 1);
+            }
+        }
+    }
+
+    function accentDisposeMesh(mesh) {
+        if (!mesh) {
+            return;
+        }
+        accentUnregisterMesh(mesh);
+        var sc = typeof fg.scene === "function" ? fg.scene() : null;
+        if (sc) {
+            sc.remove(mesh);
+        }
+        if (mesh.geometry) {
+            mesh.geometry.dispose();
+        }
+        if (mesh.material) {
+            mesh.material.dispose();
+        }
+    }
+
+    function accentClearTriangles() {
+        while (accentTriangles.length > 0) {
+            accentDisposeMesh(accentTriangles[accentTriangles.length - 1]);
+        }
+        accentNextWanderMs = 0;
+        recentNodes.length = 0;
+        addsUntilAccentTriangle = accentRandomInt(3, 5);
+    }
+
+    function accentRemoveTrianglesForNode(node) {
+        var ti;
+        for (ti = accentTriangles.length - 1; ti >= 0; ti--) {
+            var mesh = accentTriangles[ti];
+            var trio =
+                mesh.userData && mesh.userData.accentNodes
+                    ? mesh.userData.accentNodes
+                    : null;
+            if (
+                trio &&
+                (trio[0] === node || trio[1] === node || trio[2] === node)
+            ) {
+                accentDisposeMesh(mesh);
+            }
+        }
+    }
+
+    function accentUpdateTriangles() {
+        var ti;
+        for (ti = accentTriangles.length - 1; ti >= 0; ti--) {
+            var mesh = accentTriangles[ti];
+            var trio =
+                mesh.userData && mesh.userData.accentNodes
+                    ? mesh.userData.accentNodes
+                    : null;
+            if (
+                !trio ||
+                trio.length !== 3 ||
+                !accentNodeHasPos(trio[0]) ||
+                !accentNodeHasPos(trio[1]) ||
+                !accentNodeHasPos(trio[2])
+            ) {
+                accentDisposeMesh(mesh);
+                continue;
+            }
+            var attr = mesh.geometry.getAttribute("position");
+            if (!attr || !attr.array) {
+                continue;
+            }
+            var arr = attr.array;
+            arr[0] = Number(trio[0].x);
+            arr[1] = Number(trio[0].y);
+            arr[2] = Number(trio[0].z);
+            arr[3] = Number(trio[1].x);
+            arr[4] = Number(trio[1].y);
+            arr[5] = Number(trio[1].z);
+            arr[6] = Number(trio[2].x);
+            arr[7] = Number(trio[2].y);
+            arr[8] = Number(trio[2].z);
+            attr.needsUpdate = true;
+            mesh.geometry.computeVertexNormals();
+        }
+    }
+
+    function accentCreateTriangleMesh(trio, opts) {
+        opts = opts || {};
+        if (typeof THREE === "undefined" || !trio) {
+            return null;
+        }
+        if (!opts.allowDuplicate && accentHasTriangleTrio(trio)) {
+            return null;
+        }
+        var sc = typeof fg.scene === "function" ? fg.scene() : null;
+        if (!sc) {
+            return null;
+        }
+        var positions = new Float32Array([
+            Number(trio[0].x),
+            Number(trio[0].y),
+            Number(trio[0].z),
+            Number(trio[1].x),
+            Number(trio[1].y),
+            Number(trio[1].z),
+            Number(trio[2].x),
+            Number(trio[2].y),
+            Number(trio[2].z)
+        ]);
+        var geom = new THREE.BufferGeometry();
+        geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        geom.computeVertexNormals();
+        var mat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: ACCENT_TRIANGLE_OPACITY,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        var mesh = new THREE.Mesh(geom, mat);
+        mesh.renderOrder = 2;
+        mesh.userData.accentNodes = trio;
+        if (opts.wander) {
+            mesh.userData.accentWander = true;
+        }
+        sc.add(mesh);
+        accentTriangles.push(mesh);
+        return mesh;
+    }
+
+    function accentReassignMeshTrio(mesh, trio) {
+        if (!mesh || !trio) {
+            return;
+        }
+        mesh.userData.accentNodes = trio;
+    }
+
+    function accentEnsureWanderPair() {
+        while (accentWanderMeshes.length < ACCENT_WANDER_COUNT) {
+            var trio = accentPickRandomTrio() || accentPickNearestTrio();
+            var mesh = accentCreateTriangleMesh(trio, {
+                allowDuplicate: true,
+                wander: true
+            });
+            if (!mesh) {
+                return;
+            }
+            accentWanderMeshes.push(mesh);
+        }
+    }
+
+    function accentWanderStep(now) {
+        if (accentGetNodePool().length < 3) {
+            return;
+        }
+        accentEnsureWanderPair();
+        if (accentNextWanderMs === 0) {
+            accentNextWanderMs = now + accentRandomMs1to2();
+        }
+        if (now < accentNextWanderMs) {
+            return;
+        }
+        accentNextWanderMs = now + accentRandomMs1to2();
+        var wi;
+        for (wi = 0; wi < accentWanderMeshes.length; wi++) {
+            var nextTrio = accentPickRandomTrio();
+            if (nextTrio) {
+                accentReassignMeshTrio(accentWanderMeshes[wi], nextTrio);
+            }
+        }
+    }
+
+    function accentMaybeAddTriangle() {
+        var trio = accentPickNearestTrio();
+        accentCreateTriangleMesh(trio, { allowDuplicate: false, wander: false });
+    }
+
+    function accentSpawnTriangleBatch() {
+        var si;
+        for (si = 0; si < ACCENT_TRIANGLES_PER_SPAWN; si++) {
+            accentMaybeAddTriangle();
+        }
+    }
+
+    function accentOnNodeAdded(node) {
+        recentNodes.push(node);
+        if (recentNodes.length > RECENT_NODES_CAP) {
+            recentNodes.shift();
+        }
+        addsUntilAccentTriangle -= 1;
+        if (addsUntilAccentTriangle <= 0) {
+            accentSpawnTriangleBatch();
+            addsUntilAccentTriangle = accentRandomInt(3, 5);
+        }
+    }
+
     function applyNodeWaveNoise() {
         var t = performance.now() * 0.001;
         var amp = 0.95;
@@ -590,6 +927,9 @@ function createSemanticGraph3D(containerEl) {
         var dt = Math.min(0.05, (now - lastEngineTickMs) / 1000);
         lastEngineTickMs = now;
 
+        accentUpdateTriangles();
+        accentWanderStep(now);
+
         sanitizeNodePositions();
 
         var isIdleRotating =
@@ -736,8 +1076,10 @@ function createSemanticGraph3D(containerEl) {
         addNode: function (id, step, r) {
             if (r === undefined) r = 6;
             var nid = String(id);
-            graphData.nodes.push({ id: nid, step: step, r: r });
+            var node = { id: nid, step: step, r: r };
+            graphData.nodes.push(node);
             pushGraph();
+            accentOnNodeAdded(node);
             return id;
         },
 
@@ -748,8 +1090,19 @@ function createSemanticGraph3D(containerEl) {
                 return linkEndpoint(l.source) !== sid && linkEndpoint(l.target) !== sid;
             });
             var idx = this.findNodeIndex(id);
+            var removed = null;
             if (idx >= 0) {
+                removed = graphData.nodes[idx];
                 graphData.nodes.splice(idx, 1);
+            }
+            if (removed) {
+                var ri;
+                for (ri = recentNodes.length - 1; ri >= 0; ri--) {
+                    if (recentNodes[ri] === removed) {
+                        recentNodes.splice(ri, 1);
+                    }
+                }
+                accentRemoveTrianglesForNode(removed);
             }
             pushGraph();
         },
@@ -762,6 +1115,7 @@ function createSemanticGraph3D(containerEl) {
 
         removeAllNodes: function () {
             s3dLog("граф: все узлы и рёбра удалены");
+            accentClearTriangles();
             graphData.nodes.length = 0;
             graphData.links.length = 0;
             pushGraph();
