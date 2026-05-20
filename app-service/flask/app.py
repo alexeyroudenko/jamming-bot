@@ -662,10 +662,35 @@ INJECT_DISMANTLE_INTERVAL_MS = 20
 INJECT_SEMANTIC_SNIPPET_CHARS = 2500
 
 
-def _wait_rq_job(job, timeout=30, poll_interval=0.5):
+def _inject_current_id():
+    current = redis.get(INJECT_ACTIVE_KEY)
+    if isinstance(current, bytes):
+        current = current.decode()
+    return current or None
+
+
+def _inject_still_active(inject_id: str) -> bool:
+    return _inject_current_id() == inject_id
+
+
+def _inject_interruptible_sleep(inject_id: str, seconds: float, poll_interval: float = 0.5) -> bool:
+    """Sleep up to *seconds*; return False if another inject superseded this one."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if not _inject_still_active(inject_id):
+            return False
+        remaining = deadline - time.monotonic()
+        time.sleep(min(poll_interval, max(0.0, remaining)))
+    return _inject_still_active(inject_id)
+
+
+def _wait_rq_job(job, timeout=30, poll_interval=0.5, inject_id=None):
     """Synchronously wait for an RQ job (used by text-inject orchestrator)."""
     elapsed = 0.0
     while elapsed < timeout:
+        if inject_id is not None and not _inject_still_active(inject_id):
+            logger.info("inject %s superseded while waiting for RQ job %s", inject_id, job.id)
+            return None, False
         time.sleep(poll_interval)
         elapsed += poll_interval
         try:
@@ -697,8 +722,12 @@ def _emit_semantic_collect_payload(result):
 
 def _run_text_inject(text: str, inject_id: str):
     step_key = "step:inject"
+    superseded = False
     try:
         with app.app_context():
+            if not _inject_still_active(inject_id):
+                superseded = True
+                return
             _publish_ctrl("stop", f"inject/{inject_id}")
             socketio.emit(
                 "inject_begin",
@@ -713,8 +742,11 @@ def _run_text_inject(text: str, inject_id: str):
                 "graph_dismantle",
                 {"inject_id": inject_id, "interval_ms": INJECT_DISMANTLE_INTERVAL_MS},
             )
-            time.sleep(INJECT_STOP_WAIT_SEC)
-            time.sleep(INJECT_DISMANTLE_ESTIMATE_SEC)
+            if not _inject_interruptible_sleep(
+                inject_id, INJECT_STOP_WAIT_SEC + INJECT_DISMANTLE_ESTIMATE_SEC
+            ):
+                superseded = True
+                return
 
             _save_to_step_hash(step_key, {"text": text, "url": "inject://text"})
 
@@ -722,7 +754,10 @@ def _run_text_inject(text: str, inject_id: str):
                 text, step_number="inject", step_url="inject://text"
             )
             inject_trace_context_into_job(job)
-            result, ok = _wait_rq_job(job, timeout=30)
+            result, ok = _wait_rq_job(job, timeout=30, inject_id=inject_id)
+            if not _inject_still_active(inject_id):
+                superseded = True
+                return
             if ok and result is not None:
                 socketio.emit("analyzed", result)
                 if isinstance(result, dict):
@@ -732,33 +767,44 @@ def _run_text_inject(text: str, inject_id: str):
             socketio.emit("semantic_inject_begin", {"inject_id": inject_id})
 
             snippet = text.strip()[:INJECT_SEMANTIC_SNIPPET_CHARS]
-            semantic_done = False
             if snippet:
                 j2 = jobs.analyze_semantic.delay(
                     snippet, step_number="inject", step_url="inject://text"
                 )
                 inject_trace_context_into_job(j2)
-                sem_result, sem_ok = _wait_rq_job(j2, timeout=30)
+                sem_result, sem_ok = _wait_rq_job(j2, timeout=30, inject_id=inject_id)
+                if not _inject_still_active(inject_id):
+                    superseded = True
+                    return
                 if sem_ok and sem_result is not None:
                     _emit_semantic_collect_payload(sem_result)
-                    semantic_done = True
 
-            time.sleep(INJECT_POST_SEMANTIC_HOLD_SEC)
+            if not _inject_interruptible_sleep(inject_id, INJECT_POST_SEMANTIC_HOLD_SEC):
+                superseded = True
+                return
 
             _publish_ctrl("start", f"inject/{inject_id}")
             socketio.emit("semantic_restore_demo", {"inject_id": inject_id})
             socketio.emit("inject_end", {"inject_id": inject_id})
             logger.info("inject %s finished", inject_id)
     except Exception as exc:
+        if not _inject_still_active(inject_id):
+            superseded = True
+            logger.info("inject %s superseded during error: %s", inject_id, exc)
+            return
         logger.exception("inject %s failed: %s", inject_id, exc)
         try:
             with app.app_context():
-                _publish_ctrl("start", f"inject/{inject_id}/error")
-                socketio.emit("semantic_restore_demo", {"inject_id": inject_id})
-                socketio.emit("inject_end", {"inject_id": inject_id, "error": str(exc)})
+                if _inject_still_active(inject_id):
+                    _publish_ctrl("start", f"inject/{inject_id}/error")
+                    socketio.emit("semantic_restore_demo", {"inject_id": inject_id})
+                    socketio.emit("inject_end", {"inject_id": inject_id, "error": str(exc)})
         except Exception:
             pass
     finally:
+        if superseded or not _inject_still_active(inject_id):
+            logger.info("inject %s aborted (superseded)", inject_id)
+            return
         try:
             redis.delete(INJECT_ACTIVE_KEY)
         except Exception as exc:
@@ -2496,21 +2542,27 @@ def bot_inject_text():
             {"ok": False, "error": f"text exceeds {INJECT_MAX_TEXT_CHARS} characters"}
         ), 400
     inject_id = str(uuid.uuid4())
-    acquired = redis.set(INJECT_ACTIVE_KEY, inject_id, nx=True, ex=INJECT_ACTIVE_TTL_SEC)
-    if not acquired:
-        active = redis.get(INJECT_ACTIVE_KEY)
-        if isinstance(active, bytes):
-            active = active.decode()
-        return jsonify(
-            {"ok": False, "error": "inject already active", "inject_id": active}
-        ), 409
+    previous_id = _inject_current_id()
+    redis.set(INJECT_ACTIVE_KEY, inject_id, ex=INJECT_ACTIVE_TTL_SEC)
     ip = request.remote_addr or "?"
-    logger.info("inject %s accepted from %s (%d chars)", inject_id, ip, len(text))
+    if previous_id and previous_id != inject_id:
+        logger.info(
+            "inject %s supersedes %s from %s (%d chars)",
+            inject_id,
+            previous_id,
+            ip,
+            len(text),
+        )
+    else:
+        logger.info("inject %s accepted from %s (%d chars)", inject_id, ip, len(text))
     _publish_ctrl("stop", f"HTTP /bot/inject/text/ ip={ip}")
     threading.Thread(
         target=_run_text_inject, args=(text, inject_id), daemon=True
     ).start()
-    return jsonify({"ok": True, "inject_id": inject_id}), 202
+    payload = {"ok": True, "inject_id": inject_id}
+    if previous_id and previous_id != inject_id:
+        payload["supersedes"] = previous_id
+    return jsonify(payload), 202
 
 
 @app.route('/bot/step/', methods=['GET', 'POST'])
