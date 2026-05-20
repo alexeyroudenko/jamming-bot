@@ -1671,7 +1671,13 @@ function loadDemoPayload() {
                 startSemanticLastCollectPoll();
                 return;
             }
-            semanticPlay();
+            var statusEl = document.getElementById("semantic-status");
+            if (statusEl) {
+                statusEl.textContent =
+                    "demo " + String(demoEdges.length) + " edges — play";
+            }
+            demoCompleted = true;
+            startSemanticLastCollectPoll();
         })
         .catch(function (err) {
             console.error(err);
