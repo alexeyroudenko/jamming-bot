@@ -107,6 +107,10 @@ a:visited {
     text-transform: uppercase;
 }
 
+html.inject-active .bot-brand-kicker {
+    color: #e53935;
+}
+
 .bot-nav-grid {
     display: flex;
     flex-wrap: wrap;
@@ -475,6 +479,18 @@ button {
     font-size: 12px;
     font-weight: 600;
     font-family: inherit;
+}
+
+#metric-bot-state[data-state="active"] {
+    color: var(--bot-text);
+}
+
+#metric-bot-state[data-state="stopped"] {
+    color: var(--bot-muted);
+}
+
+#metric-bot-state[data-state="injected"] {
+    color: #e53935;
 }
 
 .bot-action {

@@ -1199,6 +1199,16 @@ function setSemanticWorkerHint(text) {
     }
 }
 
+function setBotTransportState(state) {
+    var el = document.getElementById("metric-bot-state");
+    if (!el) {
+        return;
+    }
+    var label = state || "Stopped";
+    el.textContent = label;
+    el.dataset.state = String(label).toLowerCase();
+}
+
 function semanticCollectFingerprint(data) {
     if (!data || typeof data !== "object") {
         return "";
@@ -1503,6 +1513,17 @@ function initSemanticSocket() {
         paintSemanticSocketMetrics(lat);
     });
 
+    semanticSocket.on("bot_transport_state", function (data) {
+        if (data && data.state) {
+            setBotTransportState(data.state);
+        }
+    });
+
+    semanticSocket.on("inject_begin", function () {
+        document.documentElement.classList.add("inject-active");
+        setBotTransportState("Injected");
+    });
+
     semanticSocket.on("semantic_inject_begin", function (data) {
         semanticPeriodicLog("semanticSocket.on.semantic_inject_begin");
         semanticPause();
@@ -1528,8 +1549,15 @@ function initSemanticSocket() {
 
     semanticSocket.on("semantic_restore_demo", function (data) {
         semanticPeriodicLog("semanticSocket.on.semantic_restore_demo");
+        document.documentElement.classList.remove("inject-active");
+        setBotTransportState("Active");
         semanticReset();
         loadDemoPayload();
+    });
+
+    semanticSocket.on("inject_end", function () {
+        document.documentElement.classList.remove("inject-active");
+        setBotTransportState("Active");
     });
 
     semanticSocket.on("semantic_collect", function (data) {

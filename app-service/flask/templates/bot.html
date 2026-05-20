@@ -1836,12 +1836,61 @@ return length
     window._injectActive = false;
     var graphDismantleTimer = null;
 
+    function setInjectBrandActive(on) {
+        document.documentElement.classList.toggle('inject-active', !!on);
+    }
+
+    function clearMainLogPanels() {
+        if (typeof timeoutId !== 'undefined' && timeoutId !== -1) {
+            clearTimeout(timeoutId);
+            timeoutId = -1;
+        }
+        url = "";
+        text = "";
+        currentNounPhrases = [];
+        log_sub_lines = [];
+        setCodeText('log_sub', '');
+        setCodeText('log_phrases', '');
+        setCodeText('log_words', '');
+        setCodeText('log_headers', '');
+        renderHighlightedLogText('', []);
+        var logUrl = document.getElementById('log_url');
+        if (logUrl) {
+            logUrl.innerHTML = '';
+        }
+        var logUrls = document.getElementById('log_urls');
+        if (logUrls) {
+            logUrls.innerHTML = '';
+        }
+        var logEvents = document.getElementById('log_events');
+        if (logEvents) {
+            logEvents.innerHTML = '';
+        }
+        var screenshotEl = document.getElementById('log_screenshot');
+        if (screenshotEl) {
+            screenshotEl.innerHTML = '';
+        }
+        renderPalette([]);
+        if (typeof window.clearStepTimeline === 'function') {
+            window.clearStepTimeline();
+        }
+    }
+
     socket.on('inject_begin', function(data) {
         window._injectActive = true;
+        setInjectBrandActive(true);
+        clearMainLogPanels();
+        if (typeof window.setBotTransportState === 'function') {
+            window.setBotTransportState('Injected');
+        }
     });
 
     socket.on('inject_end', function(data) {
         window._injectActive = false;
+        setInjectBrandActive(false);
+        if (typeof window.setBotTransportState === 'function') {
+            window.setBotTransportState('Active');
+        }
         if (graphDismantleTimer) {
             clearTimeout(graphDismantleTimer);
             graphDismantleTimer = null;
@@ -1853,6 +1902,7 @@ return length
             clearTimeout(graphDismantleTimer);
             graphDismantleTimer = null;
         }
+        clearMainLogPanels();
         var interval = (data && data.interval_ms) ? data.interval_ms : 20;
         var nodes = graph.getNodes().slice();
         var idx = 0;
@@ -1888,19 +1938,9 @@ return length
 
     socket.on('clear', function(data){
         console.log("clear")
-        url = ""
-        text = ""
-        currentNounPhrases = []
-        log_sub_lines = []
-        setCodeText('log_sub', '')
-        renderHighlightedLogText('', [])
-        setCodeText('log_phrases', '')
+        clearMainLogPanels();
         graph.removeAllNodes()
         graph.removeallLinks()
-        renderPalette([]);
-        if (typeof window.clearStepTimeline === 'function') {
-            window.clearStepTimeline();
-        }
     })
 
 
@@ -1959,6 +1999,10 @@ return length
         // add node and delete fifo (skip during text-inject scenario)
         if (!window._injectActive && !data.inject) {
             graph.add_node_safe(step, url, from_url, words_count);
+        }
+
+        if (window._injectActive) {
+            return;
         }
 
         var log_view = document.getElementById('log_url');
@@ -2189,11 +2233,17 @@ return length
     text = ""    
     graph.removeAllNodes()
     graph.removeallLinks()
+    if (typeof window.setBotTransportState === 'function') {
+      window.setBotTransportState('Stopped');
+    }
     socket.emit('stop');
   }
 
   function start() {
     console.log("start")
+    if (typeof window.setBotTransportState === 'function') {
+      window.setBotTransportState('Active');
+    }
     socket.emit('start');
   }
 

@@ -101,6 +101,11 @@ body.jb-pages-empty .bot-status-panel {
     text-transform: uppercase;
 }
 
+html.inject-active .bot-brand-kicker,
+html.inject-active a.bot-brand-kicker {
+    color: #e53935 !important;
+}
+
 .bot-brand-title {
     color: var(--bot-text);
     font-size: 18px;
@@ -380,6 +385,18 @@ body.is-move-mode .bot-move-target.is-move-selected {
     font-size: 12px;
     font-weight: 600;
     font-family: inherit;
+}
+
+#metric-bot-state[data-state="active"] {
+    color: var(--bot-text);
+}
+
+#metric-bot-state[data-state="stopped"] {
+    color: var(--bot-muted);
+}
+
+#metric-bot-state[data-state="injected"] {
+    color: #e53935;
 }
 
 .bot-status-panel,

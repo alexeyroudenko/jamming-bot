@@ -776,6 +776,16 @@ function setSemanticWorkerHint(text) {
     }
 }
 
+function setBotTransportState(state) {
+    var el = document.getElementById("metric-bot-state");
+    if (!el) {
+        return;
+    }
+    var label = state || "Stopped";
+    el.textContent = label;
+    el.dataset.state = String(label).toLowerCase();
+}
+
 function semanticCollectFingerprint(data) {
     if (!data || typeof data !== "object") {
         return "";
@@ -1066,6 +1076,22 @@ function initSemanticSocket() {
     semanticSocket.on("my_pong", function () {
         var lat = Date.now() - semanticPingStartMs;
         paintSemanticSocketMetrics(lat);
+    });
+
+    semanticSocket.on("bot_transport_state", function (data) {
+        if (data && data.state) {
+            setBotTransportState(data.state);
+        }
+    });
+
+    semanticSocket.on("inject_begin", function () {
+        document.documentElement.classList.add("inject-active");
+        setBotTransportState("Injected");
+    });
+
+    semanticSocket.on("inject_end", function () {
+        document.documentElement.classList.remove("inject-active");
+        setBotTransportState("Active");
     });
 
     semanticSocket.on("semantic_collect", function (data) {

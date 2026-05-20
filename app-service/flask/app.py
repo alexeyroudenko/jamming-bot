@@ -599,16 +599,33 @@ def _slow_request_logger(response):
     return response
 
 
+_CTRL_TRANSPORT_STATE = {
+    "start": "Active",
+    "stop": "Stopped",
+}
+
+
+def _emit_bot_transport_state(state: str):
+    if state:
+        socketio.emit("bot_transport_state", {"state": state})
+
+
 def _ctrl_log(action: str, source: str):
     ip = request.remote_addr if request else "?"
     logger.info(f"ctrl '{action}' from {source} (ip={ip})")
     redis.publish("ctrl", json.dumps(action))
+    mapped = _CTRL_TRANSPORT_STATE.get(action)
+    if mapped:
+        _emit_bot_transport_state(mapped)
 
 
 def _publish_ctrl(action: str, source: str):
     """Publish transport control without Flask request context (background inject thread)."""
     logger.info("ctrl '%s' from %s", action, source)
     redis.publish("ctrl", json.dumps(action))
+    mapped = _CTRL_TRANSPORT_STATE.get(action)
+    if mapped:
+        _emit_bot_transport_state(mapped)
 
 
 INJECT_ACTIVE_KEY = "inject:active"
@@ -665,6 +682,7 @@ def _run_text_inject(text: str, inject_id: str):
                 "inject_begin",
                 {"inject_id": inject_id, "interval_ms": INJECT_DISMANTLE_INTERVAL_MS},
             )
+            _emit_bot_transport_state("Injected")
             socketio.emit(
                 "graph_dismantle",
                 {"inject_id": inject_id, "interval_ms": INJECT_DISMANTLE_INTERVAL_MS},

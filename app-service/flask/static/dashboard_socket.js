@@ -379,6 +379,17 @@
         if (el) el.textContent = text;
     }
 
+    function setBotTransportState(state) {
+        var el = document.getElementById('metric-bot-state');
+        if (!el) {
+            return;
+        }
+        var label = state || 'Stopped';
+        el.textContent = label;
+        el.dataset.state = String(label).toLowerCase();
+    }
+    window.setBotTransportState = setBotTransportState;
+
     if (socket) {
     socket.on('connect', function () {
         console.log('on connect');
@@ -449,6 +460,23 @@
         var step = data && data.step;
         resetStepTimeline(step, Date.now());
         setMetricStep(step != null ? String(step) : '—');
+        if (!window._injectActive) {
+            setBotTransportState('Active');
+        }
+    });
+
+    socket.on('bot_transport_state', function (data) {
+        if (data && data.state) {
+            setBotTransportState(data.state);
+        }
+    });
+
+    socket.on('inject_begin', function () {
+        setBotTransportState('Injected');
+    });
+
+    socket.on('inject_end', function () {
+        setBotTransportState('Active');
     });
 
     socket.on('screenshot', function (data) {
