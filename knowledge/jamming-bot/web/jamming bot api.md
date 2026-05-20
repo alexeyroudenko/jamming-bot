@@ -85,8 +85,10 @@ tags:
 
 | endpoint | описание |
 | --- | --- |
-| `GET /ctrl/` | Control panel. |
+| `GET /ctrl/` | Control panel (radiogroup Active / Stopped / Injected, Redis `bot:transport_state`). |
 | `GET /ctrl/<action>/` | Триггер control action. |
+| `GET /api/ctrl/transport-state/` | Текущий transport state из Redis (требует сессию). |
+| `POST /api/ctrl/transport-state/` | Установить state: JSON `{"state":"Active\|Stopped\|Injected"}` + side effects (start/stop). |
 | `GET /set/<v>/` | Установить одно значение и отправить Socket.IO event. |
 | `POST /set_values/` | Отправить набор значений в realtime-канал. |
 | `GET /set_tick/` | Control endpoint для tick / restart action. |

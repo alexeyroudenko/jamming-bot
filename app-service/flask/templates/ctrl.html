@@ -19,6 +19,33 @@
 </section>
 
 <fieldset class="jb-fieldset">
+  <legend>Transport state</legend>
+  <p class="jb-muted" style="margin-bottom:var(--jb-space-2); max-width:60ch;">
+    Redis key <code class="jb-code">{{ transport_state_redis_key }}</code> —
+    просмотр: <code class="jb-code">redis-cli GET {{ transport_state_redis_key }}</code>
+    (в pod: <code class="jb-code">kubectl exec -n jamming-bot deploy/redis -- redis-cli GET {{ transport_state_redis_key }}</code>).
+  </p>
+  <div class="jb-radio-row" id="transport-state-group" role="radiogroup" aria-label="Transport state">
+    <label class="jb-radio">
+      <input type="radio" name="transport_state" value="Active" {% if transport_state == 'Active' %}checked{% endif %}>
+      Active
+    </label>
+    <label class="jb-radio">
+      <input type="radio" name="transport_state" value="Stopped" {% if transport_state == 'Stopped' %}checked{% endif %}>
+      Stopped
+    </label>
+    <label class="jb-radio">
+      <input type="radio" name="transport_state" value="Injected" {% if transport_state == 'Injected' %}checked{% endif %}>
+      Injected
+    </label>
+  </div>
+  <p class="jb-muted" style="margin-top:var(--jb-space-2);">
+    Current: <strong id="transport-state-current">{{ transport_state }}</strong>
+    <span id="transport-state-status" class="jb-muted" aria-live="polite"></span>
+  </p>
+</fieldset>
+
+<fieldset class="jb-fieldset">
   <legend>Pipeline flags</legend>
   <ul class="jb-check-grid">
     <li><label class="jb-check"><input type="checkbox" id="do_pass" name="do_pass" {% if cfg.do_pass == 1 %}checked{% endif %}> do_pass</label></li>
@@ -198,6 +225,60 @@
   bindRangeOutput('backfill_sleep_input', 'backfill_sleep_value', 'backfill_sleep', parseFloat);
   bindRangeOutput('backfill_timeout_input', 'backfill_timeout_value', 'backfill_timeout', parseFloat);
   bindRangeOutput('fetch_concurrency_input', 'fetch_concurrency_value', 'fetch_concurrency', function (v) { return parseInt(v, 10); });
+
+  var transportStateRadios = document.querySelectorAll('input[name="transport_state"]');
+  var transportStateCurrent = document.getElementById('transport-state-current');
+  var transportStateStatus = document.getElementById('transport-state-status');
+  var transportStateSaving = false;
+
+  function syncTransportStateUi(state) {
+    if (!state) return;
+    transportStateRadios.forEach(function (radio) {
+      radio.checked = radio.value === state;
+    });
+    if (transportStateCurrent) {
+      transportStateCurrent.textContent = state;
+    }
+    console.log('[jamming-bot] State:', state);
+  }
+
+  socket.on('bot_transport_state', function (data) {
+    if (transportStateSaving || !data || !data.state) return;
+    syncTransportStateUi(data.state);
+  });
+
+  transportStateRadios.forEach(function (radio) {
+    radio.addEventListener('change', function () {
+      if (!radio.checked || transportStateSaving) return;
+      var next = radio.value;
+      var prev = transportStateCurrent ? transportStateCurrent.textContent : '';
+      transportStateSaving = true;
+      if (transportStateStatus) transportStateStatus.textContent = ' … saving';
+      fetch('/api/ctrl/transport-state/', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ state: next })
+      })
+        .then(function (r) {
+          return r.json().then(function (body) {
+            if (!r.ok || !body.ok) {
+              throw new Error(body.error || ('HTTP ' + r.status));
+            }
+            syncTransportStateUi(body.state || next);
+            if (transportStateStatus) transportStateStatus.textContent = '';
+          });
+        })
+        .catch(function (e) {
+          console.warn('transport state save failed', e);
+          syncTransportStateUi(prev);
+          if (transportStateStatus) transportStateStatus.textContent = ' — error';
+        })
+        .finally(function () {
+          transportStateSaving = false;
+        });
+    });
+  });
 
   socket.on('disconnect', function () {
     console.log('Disconnected from server');

@@ -603,11 +603,35 @@ _CTRL_TRANSPORT_STATE = {
     "start": "Active",
     "stop": "Stopped",
 }
+BOT_TRANSPORT_STATE_KEY = "bot:transport_state"
+BOT_TRANSPORT_STATES = frozenset({"Active", "Stopped", "Injected"})
+BOT_TRANSPORT_STATE_DEFAULT = "Stopped"
 
 
-def _emit_bot_transport_state(state: str):
-    if state:
-        socketio.emit("bot_transport_state", {"state": state})
+def _read_bot_transport_state() -> str:
+    try:
+        raw = redis.get(BOT_TRANSPORT_STATE_KEY)
+        if raw is None:
+            return BOT_TRANSPORT_STATE_DEFAULT
+        label = raw.decode() if isinstance(raw, bytes) else str(raw)
+        label = label.strip()
+        if label in BOT_TRANSPORT_STATES:
+            return label
+    except Exception as exc:
+        logger.warning("read %s: %s", BOT_TRANSPORT_STATE_KEY, exc)
+    return BOT_TRANSPORT_STATE_DEFAULT
+
+
+def _set_bot_transport_state(state: str, source: str):
+    """Persist transport state in Redis and broadcast to Socket.IO clients."""
+    if state not in BOT_TRANSPORT_STATES:
+        return
+    try:
+        redis.set(BOT_TRANSPORT_STATE_KEY, state)
+    except Exception as exc:
+        logger.warning("persist %s=%s: %s", BOT_TRANSPORT_STATE_KEY, state, exc)
+    socketio.emit("bot_transport_state", {"state": state})
+    logger.info("transport state %s from %s", state, source)
 
 
 def _ctrl_log(action: str, source: str):
@@ -616,7 +640,7 @@ def _ctrl_log(action: str, source: str):
     redis.publish("ctrl", json.dumps(action))
     mapped = _CTRL_TRANSPORT_STATE.get(action)
     if mapped:
-        _emit_bot_transport_state(mapped)
+        _set_bot_transport_state(mapped, source)
 
 
 def _publish_ctrl(action: str, source: str):
@@ -625,7 +649,7 @@ def _publish_ctrl(action: str, source: str):
     redis.publish("ctrl", json.dumps(action))
     mapped = _CTRL_TRANSPORT_STATE.get(action)
     if mapped:
-        _emit_bot_transport_state(mapped)
+        _set_bot_transport_state(mapped, source)
 
 
 INJECT_ACTIVE_KEY = "inject:active"
@@ -682,7 +706,7 @@ def _run_text_inject(text: str, inject_id: str):
                 "inject_begin",
                 {"inject_id": inject_id, "interval_ms": INJECT_DISMANTLE_INTERVAL_MS},
             )
-            _emit_bot_transport_state("Injected")
+            _set_bot_transport_state("Injected", f"inject/{inject_id}")
             socketio.emit(
                 "graph_dismantle",
                 {"inject_id": inject_id, "interval_ms": INJECT_DISMANTLE_INTERVAL_MS},
@@ -752,6 +776,8 @@ def _ensure_redis_defaults():
     for key, default in defaults.items():
         if not redis.get(key):
             redis.set(key, default)
+    if not redis.get(BOT_TRANSPORT_STATE_KEY):
+        redis.set(BOT_TRANSPORT_STATE_KEY, BOT_TRANSPORT_STATE_DEFAULT)
     return {k: float(redis.get(k)) for k in defaults}
 
 
@@ -2225,7 +2251,45 @@ def ctrl():
         "ctrl.html",
         cfg=_ensure_redis_defaults(),
         bot_flags=_read_bot_yaml_flags(),
+        transport_state=_read_bot_transport_state(),
+        transport_state_redis_key=BOT_TRANSPORT_STATE_KEY,
     )
+
+
+@app.route("/api/ctrl/transport-state/", methods=["GET"])
+def api_ctrl_transport_state_get():
+    """Current bot transport state from Redis (Active / Stopped / Injected)."""
+    return jsonify({
+        "ok": True,
+        "state": _read_bot_transport_state(),
+        "redis_key": BOT_TRANSPORT_STATE_KEY,
+        "allowed": sorted(BOT_TRANSPORT_STATES),
+    })
+
+
+@app.route("/api/ctrl/transport-state/", methods=["POST"])
+def api_ctrl_transport_state_set():
+    """Set transport state in Redis and apply side effects (ctrl start/stop for Active/Stopped)."""
+    payload = request.get_json(silent=True) or {}
+    state = (payload.get("state") or "").strip()
+    if state not in BOT_TRANSPORT_STATES:
+        return jsonify({
+            "ok": False,
+            "error": "state must be Active, Stopped, or Injected",
+        }), 400
+    source = "HTTP /api/ctrl/transport-state/"
+    if state == "Active":
+        _ctrl_log("start", source)
+    elif state == "Stopped":
+        _ctrl_log("stop", source)
+    else:
+        _publish_ctrl("stop", f"{source} Injected")
+        _set_bot_transport_state("Injected", source)
+    return jsonify({
+        "ok": True,
+        "state": _read_bot_transport_state(),
+        "redis_key": BOT_TRANSPORT_STATE_KEY,
+    })
 
 
 @app.route("/api/ctrl/bot_yaml/<key>/<int:flag>/", methods=["POST"])
@@ -3058,6 +3122,10 @@ def handle_connect():
         active_viewers[viewer["sid"]] = viewer
         active_viewers_size.set(len(active_viewers))
     logger.info("Client connected sid=%s role=%s ip=%s", viewer["sid"], viewer["role"], viewer["ip"])
+    try:
+        emit("bot_transport_state", {"state": _read_bot_transport_state()})
+    except Exception as exc:
+        logger.debug("connect transport state emit: %s", exc)
 
 @socketio.on('disconnect')
 def handle_disconnect():
