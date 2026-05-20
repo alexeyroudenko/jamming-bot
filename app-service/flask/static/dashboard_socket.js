@@ -380,19 +380,18 @@
     }
 
     function setBotTransportState(state) {
-        var label = state || 'Stopped';
-        if (window._lastBotTransportState !== label) {
-            window._lastBotTransportState = label;
-            console.log('[jamming-bot] State:', label);
-        }
-        var el = document.getElementById('metric-bot-state');
-        if (!el) {
+        if (typeof window.setBotTransportState === 'function' &&
+            window.setBotTransportState !== setBotTransportState) {
+            window.setBotTransportState(state);
             return;
         }
-        el.textContent = label;
-        el.dataset.state = String(label).toLowerCase();
+        var label = state || 'Stopped';
+        var el = document.getElementById('metric-bot-state');
+        if (el) {
+            el.textContent = label;
+            el.dataset.state = String(label).toLowerCase();
+        }
     }
-    window.setBotTransportState = setBotTransportState;
 
     if (socket) {
     socket.on('connect', function () {
@@ -469,19 +468,9 @@
         }
     });
 
-    socket.on('bot_transport_state', function (data) {
-        if (data && data.state) {
-            setBotTransportState(data.state);
-        }
-    });
-
-    socket.on('inject_begin', function () {
-        setBotTransportState('Injected');
-    });
-
-    socket.on('inject_end', function () {
-        setBotTransportState('Active');
-    });
+    if (typeof window.jbAttachTransportSocket === 'function') {
+        window.jbAttachTransportSocket(socket);
+    }
 
     socket.on('screenshot', function (data) {
         pushSocketLog('screenshot', data, 'screenshoter');

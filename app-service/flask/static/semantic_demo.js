@@ -67,33 +67,6 @@ function isTypingTargetForHotkey(el) {
     return el.isContentEditable === true;
 }
 
-function wireForcePanelHotkey() {
-    document.addEventListener("keydown", function (ev) {
-        if (!ev || ev.defaultPrevented) {
-            return;
-        }
-        if (ev.ctrlKey || ev.metaKey || ev.altKey) {
-            return;
-        }
-        if (ev.key !== "s" && ev.key !== "S") {
-            return;
-        }
-        if (isTypingTargetForHotkey(ev.target)) {
-            return;
-        }
-        ev.preventDefault();
-        var panel = document.getElementById("semantic-force-panel");
-        var toggle = document.getElementById("semantic-force-toggle");
-        var body = document.getElementById("semantic-force-body");
-        if (!panel || !toggle || !body) {
-            return;
-        }
-        var collapsed = panel.classList.contains("is-collapsed");
-        applyForcePanelCollapsedUi(panel, toggle, body, !collapsed);
-        saveForcePanelCollapsed(!collapsed);
-    });
-}
-
 var DEFAULT_FORCE_VALUES = {
     v1: 0.25,
     v2: 0.25,
@@ -776,20 +749,6 @@ function setSemanticWorkerHint(text) {
     }
 }
 
-function setBotTransportState(state) {
-    var label = state || "Stopped";
-    if (window._lastBotTransportState !== label) {
-        window._lastBotTransportState = label;
-        console.log("[jamming-bot] State:", label);
-    }
-    var el = document.getElementById("metric-bot-state");
-    if (!el) {
-        return;
-    }
-    el.textContent = label;
-    el.dataset.state = String(label).toLowerCase();
-}
-
 function semanticCollectFingerprint(data) {
     if (!data || typeof data !== "object") {
         return "";
@@ -1082,20 +1041,16 @@ function initSemanticSocket() {
         paintSemanticSocketMetrics(lat);
     });
 
-    semanticSocket.on("bot_transport_state", function (data) {
-        if (data && data.state) {
-            setBotTransportState(data.state);
+    semanticSocket.on("inject_begin", function () {
+        if (typeof window.setBotTransportState === "function") {
+            window.setBotTransportState("Injected");
         }
     });
 
-    semanticSocket.on("inject_begin", function () {
-        document.documentElement.classList.add("inject-active");
-        setBotTransportState("Injected");
-    });
-
     semanticSocket.on("inject_end", function () {
-        document.documentElement.classList.remove("inject-active");
-        setBotTransportState("Active");
+        if (typeof window.setBotTransportState === "function") {
+            window.setBotTransportState("Active");
+        }
     });
 
     semanticSocket.on("semantic_collect", function (data) {
@@ -1137,7 +1092,6 @@ setTimeout(function () {
     initGraph();
     wireDemoControls();
     wireForcePanelCollapse();
-    wireForcePanelHotkey();
     wireForceSliders();
     initSemanticSocket();
     if (graph && typeof graph.setValues === "function") {

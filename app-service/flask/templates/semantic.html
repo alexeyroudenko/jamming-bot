@@ -16,7 +16,7 @@
 <div id="nodes"></div>
 <div class="semantic-log-row">
   <div id="log_semantic" class="text"></div>
-  <pre id="log_mood" class="semantic-log-mood" aria-label="Mood log"></pre>
+  <pre id="log_mood" class="semantic-log-mood div-hidden" aria-label="Mood log"></pre>
 </div>
 
 <div id="debug">
@@ -33,7 +33,7 @@
       <button type="button" class="bot-action" id="semantic-play">play</button>
       <button type="button" class="bot-action" id="semantic-step-once">step</button>
       <button type="button" class="bot-action" id="semantic-reset">reset</button>
-      <span class="semantic-demo-meta" id="semantic-status">loading…</span>
+      <span class="semantic-demo-meta div-hidden" id="semantic-status">loading…</span>
       <div class="semantic-demo-metrics" aria-live="polite">
         <div class="bot-metric">
           <span class="bot-metric-label">Counter</span>
@@ -50,13 +50,13 @@
       </div>
     </div>
     <div class="semantic-worker-row">
-      <span class="semantic-demo-meta" id="semantic-worker-hint">Socket.IO + HTTP: ожидание данных воркеров…</span>
+      <span class="semantic-demo-meta div-hidden" id="semantic-worker-hint">Socket.IO + HTTP: ожидание данных воркеров…</span>
     </div>
     <div id="semantic-source-panel" aria-label="Source text excerpt"></div>
   </section>
 </div>
 
-<div id="semantic-force-panel" class="semantic-force-panel is-collapsed" aria-label="Параметры силового графа">
+<div id="semantic-force-panel" class="semantic-force-panel is-collapsed div-hidden" aria-label="Параметры силового графа">
   <div class="semantic-force-toolbar">
     <button type="button" class="semantic-force-toggle" id="semantic-force-toggle" aria-expanded="false" aria-controls="semantic-force-body" title="Показать параметры силы">
       <span class="semantic-force-toggle-icon" aria-hidden="true">▸</span>
@@ -131,6 +131,24 @@
         })
         .then(function () {
             return new Promise(function (resolve) {
+                var tr = document.createElement("script");
+                tr.src = "/flask_static/bot_transport_ui.js?v=1";
+                tr.onload = function () { resolve(); };
+                tr.onerror = function () { resolve(); };
+                document.head.appendChild(tr);
+            });
+        })
+        .then(function () {
+            return new Promise(function (resolve) {
+                var ov = document.createElement("script");
+                ov.src = "/flask_static/semantic_overlay_ui.js?v=1";
+                ov.onload = function () { resolve(); };
+                ov.onerror = function () { resolve(); };
+                document.head.appendChild(ov);
+            });
+        })
+        .then(function () {
+            return new Promise(function (resolve) {
                 var sc = document.createElement("script");
                 sc.src = "https://cdn.socket.io/4.7.5/socket.io.min.js";
                 sc.crossOrigin = "anonymous";
@@ -144,7 +162,7 @@
         })
         .then(function () {
             var s = document.createElement("script");
-            s.src = "/flask_static/semantic_demo.js?v=2";
+            s.src = "/flask_static/semantic_demo.js?v=3";
             document.body.appendChild(s);
         })
         .catch(function (e) {

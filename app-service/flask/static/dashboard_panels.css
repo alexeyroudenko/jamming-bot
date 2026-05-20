@@ -106,6 +106,21 @@ html.inject-active a.bot-brand-kicker {
     color: #e53935 !important;
 }
 
+#inject-flash-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483647;
+    background: #ffffff;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+#inject-flash-overlay.is-active {
+    opacity: 1;
+    visibility: visible;
+}
+
 .bot-brand-title {
     color: var(--bot-text);
     font-size: 18px;

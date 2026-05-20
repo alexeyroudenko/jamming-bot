@@ -107,6 +107,25 @@ a:visited {
     text-transform: uppercase;
 }
 
+.div-hidden {
+    display: none !important;
+}
+
+#inject-flash-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483647;
+    background: #ffffff;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+#inject-flash-overlay.is-active {
+    opacity: 1;
+    visibility: visible;
+}
+
 html.inject-active .bot-brand-kicker {
     color: #e53935;
 }
