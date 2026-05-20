@@ -5,7 +5,7 @@ aliases:
 note_type: note
 project: "[[jamming-bot/Jamming Bot]]"
 parent: "[[web/API|Jamming Bot API Index]]"
-updated: 2026-04-08
+updated: 2026-05-20
 tags:
   - api
   - web
@@ -98,6 +98,7 @@ tags:
 | --- | --- |
 | `POST /bot/events/<event_id>/` | Внешний bot event hook. |
 | `POST /bot/sublink/add/` | Legacy fallback для sublink event. |
+| `POST /bot/inject/text/` | Сценарий inject: stop → разбор графа на `/` → RQ `analyze` + `analyze_semantic` → показ на главной и сборка графа на `/semantic3d/` → через 60 с после `semantic_collect` — `start` и возврат demo на 3D. См. [[#Text inject — POST /bot/inject/text/]]. |
 | `GET /bot/step/` | Основной ingest шага бота. |
 | `POST /bot/step/` | Основной ingest шага бота. |
 | `GET /spacy/` | Тестовый spaCy proxy endpoint. |
@@ -111,6 +112,46 @@ tags:
 | `POST /semantic/vars/` | Вернуть semantic vars payload. |
 | `GET /semantic/ent/` | Тестовый semantic entity proxy. |
 | `POST /semantic/ent/` | Тестовый semantic entity proxy. |
+
+### Text inject — POST /bot/inject/text/
+
+Публичный эндпоинт (префикс `/bot/`, без логина). Параллельный второй inject → **409** (`inject already active`).
+
+**Тело:** `application/json` `{"text": "…"}` или form `text=…`. Не пустой, до 8000 символов.
+
+**Ответ:** `202` `{"ok": true, "inject_id": "<uuid>"}` — сценарий в фоновом потоке.
+
+**Последовательность (сервер):**
+
+1. Redis `ctrl` → `stop` (бот `spider.is_active = false`).
+2. Socket.IO: `inject_begin`, `graph_dismantle` (`interval_ms`: 20).
+3. Пауза 5 с + оценка разбора графа (~3 с).
+4. RQ `jobs.analyze` → emit `analyzed`; `inject_display` с текстом.
+5. Socket.IO `semantic_inject_begin` → RQ `jobs.analyze_semantic` → `semantic_collect`.
+6. Через **60 с** после успешного `semantic_collect` — Redis `ctrl` → `start`, `semantic_restore_demo`, `inject_end`. При ошибке анализа — restore не позже **120 с** от старта inject.
+
+**Socket.IO (server → client):**
+
+| event | страницы | назначение |
+| --- | --- | --- |
+| `inject_begin` | `/` | флаг inject; не добавлять узлы на `step` |
+| `graph_dismantle` | `/` | снять узлы графа по одному каждые 20 ms |
+| `inject_display` | `/` | показать переданный текст в `#log_text` |
+| `analyzed` | `/` | phrases/words (как после шага бота) |
+| `semantic_inject_begin` | `/semantic3d/` | очистить 3D-граф, `demoCompleted = true` |
+| `semantic_collect` | `/semantic3d/` | собрать граф из `dependency_lines` |
+| `semantic_restore_demo` | `/semantic3d/` | `semanticReset` + demo edges |
+| `inject_end` | `/` | сброс флага inject |
+
+**Client → server (опционально):** `graph_dismantle_done` после завершения разбора на главной.
+
+**Пример:**
+
+```bash
+curl -sS -X POST https://jamming-bot.arthew0.online/bot/inject/text/ \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"Пример фразы для семантического разбора."}'
+```
 
 ## Public JSON API via app-service
 
@@ -145,9 +186,118 @@ tags:
 
 | endpoint | описание |
 | --- | --- |
-| `GET /api/analyze_all/` | Полный semantic analysis текста через semantic-service. |
-| `POST /api/analyze_all/` | Полный semantic analysis текста через semantic-service. |
+| `GET /api/analyze_all/` | Полный разбор текста (spaCy `en_core_web_lg`) — см. [[#Analyze all — полный разбор текста]]. |
+| `POST /api/analyze_all/` | То же, тело JSON или form — см. [[#Analyze all — полный разбор текста]]. |
 | `POST /api/data` | Echo JSON endpoint. |
+
+#### Analyze all — полный разбор текста
+
+Публичный URL на проде: [https://jamming-bot.arthew0.online/api/analyze_all/](https://jamming-bot.arthew0.online/api/analyze_all/)
+
+**Назначение.** Один запрос прогоняет входной текст через spaCy (`en_core_web_lg`) и возвращает структурированный срез: noun chunks, глаголы, NER, ключевые слова, подлежащие/дополнения и дерево зависимостей. В `app-service` это тонкий **прокси** в **semantic-service** (`POST …/api/v1/semantic/analyze_all/` с телом `{"text": "…"}`); логика разбора — в `semantic-service/app/api/semantic.py`, функция `_analyze_all`.
+
+> [!warning]
+> **Авторизация на основном host.** Путь `/api/analyze_all/` **не** входит в `PUBLIC_PREFIXES` app-service. Запрос без сессии (браузер, `curl` без cookie) получает **302 на `/login`** — поэтому открытие ссылки в адресной строке показывает форму входа, а не JSON. Для API: сначала `POST /login` с `AUTH_USER` / `AUTH_PASS`, затем запрос с cookie сессии. Альтернатива без логина в app — прямой вызов semantic host (ниже).
+
+**Методы и параметры**
+
+| метод | как передать `text` | примечание |
+| --- | --- | --- |
+| `GET` | query `?text=…` | удобно для быстрых проверок и ссылок; длинный текст — URL-encode |
+| `POST` | JSON `{"text": "…"}` | предпочтительно для больших фрагментов |
+| `POST` | form field `text` | fallback, если JSON не отправлен |
+
+Пустой `text` → **400** `{"error": "text parameter is required"}` (прокси app-service). Semantic-service при пустом тексте отдаёт **400** с `detail: "text parameter is required"` / `"text is required"`.
+
+**Успешный ответ (200, JSON)**
+
+| поле | тип | описание |
+| --- | --- | --- |
+| `noun_phrases` | `string[]` | Noun chunks spaCy (`doc.noun_chunks`), порядок как в модели |
+| `verbs` | `string[]` | Леммы глаголов (`pos_ == "VERB"`) |
+| `entities` | `{text, label}[]` | Named entities (NER): `text` — span, `label` — тип (`PERSON`, `ORG`, …) |
+| `keywords` | `string[]` | Токены `NOUN`/`ADJ` без стоп-слов, в нижнем регистре (без ранжирования по частоте, в отличие от `POST …/tags/`) |
+| `subjects` | `string[]` | Токены с `dep_ == "nsubj"` |
+| `objects` | `string[]` | Токены с `dep_ == "dobj"` |
+| `dependency` | `{token, dep, head}[]` | По одному токену: текст, тип зависимости, голова |
+
+**Ошибки прокси (app-service)**
+
+| код | когда |
+| --- | --- |
+| **400** | нет `text` |
+| **503** | semantic-service недоступен, таймаут или не-2xx: `{"error": "Semantic service unavailable", "detail": "…"}` |
+
+Таймаут HTTP-прокси: **30 с**. В фоновой очереди (`analyze_semantic` в `jobs.py`) к semantic уходит тот же URL с таймаутом `HTTP_SEMANTIC_ANALYZE_ALL_TIMEOUT_SEC` (по умолчанию **12 с**) и обрезкой сниппета до **2500** символов.
+
+**Пример GET (после логина)**
+
+```http
+GET /api/analyze_all/?text=Jammingbot%20is%20a%20fantasy%20on%20the%20theme%20of%20a%20post-apocalyptic%20future HTTP/1.1
+Host: jamming-bot.arthew0.online
+Cookie: session=…
+```
+
+Пример из журнала: [[journal/2026-03-17]] (раздел `/api/analyze_all/`).
+
+**Пример POST (JSON)**
+
+```bash
+# 1) сессия
+curl -sS -c /tmp/jb-cookies.txt -b /tmp/jb-cookies.txt \
+  -X POST 'https://jamming-bot.arthew0.online/login' \
+  -d 'username=YOUR_USER&password=YOUR_PASS' -L -o /dev/null
+
+# 2) analyze
+curl -sS -b /tmp/jb-cookies.txt \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"Jammingbot is a fantasy on the theme of a post-apocalyptic future."}' \
+  'https://jamming-bot.arthew0.online/api/analyze_all/'
+```
+
+**Пример фрагмента ответа**
+
+```json
+{
+  "noun_phrases": ["Jammingbot", "a fantasy", "the theme", "a post-apocalyptic future"],
+  "verbs": ["be"],
+  "entities": [],
+  "keywords": ["jammingbot", "fantasy", "theme", "future"],
+  "subjects": ["Jammingbot"],
+  "objects": [],
+  "dependency": [
+    {"token": "Jammingbot", "dep": "nsubj", "head": "is"},
+    {"token": "is", "dep": "ROOT", "head": "is"}
+  ]
+}
+```
+
+**Прямой вызов semantic-service (без app-login)**
+
+На выделенном host префикса `/semantic/` нет; ingress не требует сессии app-service:
+
+| URL | метод |
+| --- | --- |
+| `https://semantic.jamming-bot.arthew0.online/api/v1/semantic/analyze_all/?text=…` | `GET` |
+| `https://semantic.jamming-bot.arthew0.online/api/v1/semantic/analyze_all/` | `POST`, body `{"text": "…"}` |
+
+На основном сайте те же контракты: `GET /semantic/api/v1/semantic/analyze_all/` и `POST /semantic/api/v1/semantic/analyze_all/` (после strip `/semantic/`).
+
+Если spaCy не загружен (`nlp_lg is None`), semantic отвечает **503** `SpaCy model not loaded`.
+
+**Отличие от `POST …/semantic/tags/`**
+
+| | `analyze_all` | `POST /semantic/api/v1/semantic/tags/` (и тестовые `/spacy/`, `/semantic/ent/`) |
+| --- | --- | --- |
+| Предобработка | сырой текст в spaCy | стоп-слова, пунктуация, леммы, топ keywords по частоте |
+| Выход | `noun_phrases`, `verbs`, `entities`, `dependency`, … | `words`, `hrases`, `sim`, `entities`, `dependency` (строки `token>head`) |
+| Использование | полный срез для пайплайна / отладки | лёгкий тегинг и similarity к эталонному запросу «happiness love life…» |
+
+**Внутренний пайплайн бота**
+
+После успешного `analyze` шага бот может поставить RQ-job `analyze_semantic`: сниппет страницы → тот же `analyze_all` в semantic → результат в `semantic` JSON job meta (`noun_phrases`, `entities`, `dependency_lines`, …). Ручной аналог очереди — `POST /add_analyze_job/` (другой job `analyze`, не путать с `analyze_all`).
+
+**CORS.** На маршруте включён `@cross_origin()`; глобально app разрешает credentials для origin из `CORS_ALLOWED_ORIGINS` (в т.ч. `https://jamming-bot.arthew0.online`). Без сессии браузерный `fetch` всё равно упрётся в редирект на login.
 
 ### Steps
 
