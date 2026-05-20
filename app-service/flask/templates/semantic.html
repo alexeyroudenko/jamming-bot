@@ -132,7 +132,7 @@
         .then(function () {
             return new Promise(function (resolve) {
                 var tr = document.createElement("script");
-                tr.src = "/flask_static/bot_transport_ui.js?v=1";
+                tr.src = "/flask_static/bot_transport_ui.js?v=2";
                 tr.onload = function () { resolve(); };
                 tr.onerror = function () { resolve(); };
                 document.head.appendChild(tr);

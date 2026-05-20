@@ -1,6 +1,9 @@
-/* global io */
 (function () {
     "use strict";
+
+    function getIo() {
+        return typeof window !== "undefined" ? window.io : undefined;
+    }
 
     var FLASH_MS = 50;
 
@@ -84,10 +87,13 @@
     }
 
     function patchIo() {
-        if (typeof io === "undefined" || io.__jbTransportPatched) {
-            return !!io;
+        var orig = getIo();
+        if (typeof orig !== "function") {
+            return false;
         }
-        var orig = io;
+        if (orig.__jbTransportPatched) {
+            return true;
+        }
         function wrapped() {
             var s = orig.apply(this, arguments);
             attachTransportSocketListeners(s);
