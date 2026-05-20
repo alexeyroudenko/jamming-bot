@@ -1610,13 +1610,13 @@ function initSemanticSocket() {
     });
 
     semanticSocket.on("graph_dismantle", function (data) {
-        semanticPeriodicLog("semanticSocket.on.graph_dismantle");
+        s3dLog("socket: graph_dismantle");
         var interval = data && data.interval_ms ? data.interval_ms : 20;
         runSemanticGraphDismantle(interval);
     });
 
     semanticSocket.on("semantic_inject_begin", function (data) {
-        semanticPeriodicLog("semanticSocket.on.semantic_inject_begin");
+        s3dLog("socket: semantic_inject_begin");
         semanticPause();
         stopLiveCollectReplay();
         demoPlaying = false;
@@ -1634,7 +1634,7 @@ function initSemanticSocket() {
     });
 
     semanticSocket.on("semantic_restore_demo", function (data) {
-        semanticPeriodicLog("semanticSocket.on.semantic_restore_demo");
+        s3dLog("socket: semantic_restore_demo");
         document.documentElement.classList.remove("inject-active");
         setBotTransportState("Active");
         semanticReset();
