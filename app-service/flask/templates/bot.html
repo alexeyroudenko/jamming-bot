@@ -1890,6 +1890,16 @@ return length
         window._injectActive = true;
         setInjectBrandActive(true);
         clearMainLogPanels();
+        var t = (data && data.text) ? String(data.text) : '';
+        if (t) {
+            text = t;
+            currentNounPhrases = [];
+            renderHighlightedLogText(t, []);
+            var logUrl = document.getElementById('log_url');
+            if (logUrl) {
+                logUrl.innerHTML = '<code><nobr>inject : ' + (data.inject_id || '') + '</nobr></code>';
+            }
+        }
         if (typeof window.setBotTransportState === 'function') {
             window.setBotTransportState('Injected');
         }
@@ -1912,7 +1922,9 @@ return length
             clearTimeout(graphDismantleTimer);
             graphDismantleTimer = null;
         }
-        clearMainLogPanels();
+        if (!window._injectActive) {
+            clearMainLogPanels();
+        }
         var interval = (data && data.interval_ms) ? data.interval_ms : 20;
         var nodes = graph.getNodes().slice();
         var idx = 0;

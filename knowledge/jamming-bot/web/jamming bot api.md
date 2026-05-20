@@ -126,17 +126,17 @@ tags:
 **Последовательность (сервер):**
 
 1. Redis `ctrl` → `stop` (бот `spider.is_active = false`).
-2. Socket.IO: `inject_begin`, `graph_dismantle` (`interval_ms`: 20).
+2. Socket.IO: `inject_begin` (поле `text` — сразу в `#log_text` на `/`), `graph_dismantle` (`interval_ms`: 20).
 3. Пауза 5 с + оценка разбора графа (~3 с).
-4. RQ `jobs.analyze` → emit `analyzed`; `inject_display` с текстом.
+4. RQ `jobs.analyze` → emit `analyzed`; `inject_display` с текстом (повтор/подсветка).
 5. Socket.IO `semantic_inject_begin` → RQ `jobs.analyze_semantic` → `semantic_collect`.
-6. Через **60 с** после успешного `semantic_collect` — Redis `ctrl` → `start`, `semantic_restore_demo`, `inject_end`. При ошибке анализа — restore не позже **120 с** от старта inject.
+6. Фиксированная пауза **300 с** (5 мин) после semantic-фазы — Redis `ctrl` → `start`, `semantic_restore_demo`, `inject_end` (и если semantic не выполнялся).
 
 **Socket.IO (server → client):**
 
 | event | страницы | назначение |
 | --- | --- | --- |
-| `inject_begin` | `/` | флаг inject; не добавлять узлы на `step` |
+| `inject_begin` | `/` | флаг inject; `text` в `#log_text`; не добавлять узлы на `step` |
 | `graph_dismantle` | `/` | снять узлы графа по одному каждые 20 ms |
 | `inject_display` | `/` | показать переданный текст в `#log_text` |
 | `analyzed` | `/` | phrases/words (как после шага бота) |

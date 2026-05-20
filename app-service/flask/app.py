@@ -657,8 +657,7 @@ INJECT_ACTIVE_TTL_SEC = 600
 INJECT_MAX_TEXT_CHARS = 8000
 INJECT_STOP_WAIT_SEC = 5
 INJECT_DISMANTLE_ESTIMATE_SEC = 3.0
-INJECT_RESTORE_AFTER_SEMANTIC_SEC = 60
-INJECT_FALLBACK_RESTORE_SEC = 120
+INJECT_POST_SEMANTIC_HOLD_SEC = 300
 INJECT_DISMANTLE_INTERVAL_MS = 20
 INJECT_SEMANTIC_SNIPPET_CHARS = 2500
 
@@ -697,14 +696,17 @@ def _emit_semantic_collect_payload(result):
 
 
 def _run_text_inject(text: str, inject_id: str):
-    started = time.monotonic()
     step_key = "step:inject"
     try:
         with app.app_context():
             _publish_ctrl("stop", f"inject/{inject_id}")
             socketio.emit(
                 "inject_begin",
-                {"inject_id": inject_id, "interval_ms": INJECT_DISMANTLE_INTERVAL_MS},
+                {
+                    "inject_id": inject_id,
+                    "text": text,
+                    "interval_ms": INJECT_DISMANTLE_INTERVAL_MS,
+                },
             )
             _set_bot_transport_state("Injected", f"inject/{inject_id}")
             socketio.emit(
@@ -740,12 +742,8 @@ def _run_text_inject(text: str, inject_id: str):
                 if sem_ok and sem_result is not None:
                     _emit_semantic_collect_payload(sem_result)
                     semantic_done = True
-                    time.sleep(INJECT_RESTORE_AFTER_SEMANTIC_SEC)
 
-            if not semantic_done:
-                elapsed = time.monotonic() - started
-                remaining = max(0.0, INJECT_FALLBACK_RESTORE_SEC - elapsed)
-                time.sleep(remaining)
+            time.sleep(INJECT_POST_SEMANTIC_HOLD_SEC)
 
             _publish_ctrl("start", f"inject/{inject_id}")
             socketio.emit("semantic_restore_demo", {"inject_id": inject_id})
