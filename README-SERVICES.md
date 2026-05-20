@@ -1,3 +1,20 @@
+## Service map (topology)
+
+Interactive graph of Kubernetes Services and declared dependencies (from `deployment.yaml` env + `services-map/topology.json`):
+
+- **https://services.jamming-bot.arthew0.online/**
+
+Rebuild after manifest or topology changes:
+
+```bash
+make k3s-services-map
+kubectl apply -f deployment.yaml
+```
+
+DNS: `services.jamming-bot.arthew0.online` → same ingress as other `*.jamming-bot.arthew0.online` hosts.
+
+---
+
 ```
 kubectl apply -f deployment.yaml
 ```

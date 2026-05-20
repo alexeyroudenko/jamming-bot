@@ -4,6 +4,39 @@
 var SEMANTIC_FORCE_LS = "jammingSemantic3dForceParams";
 var SEMANTIC_FORCE_PANEL_COLLAPSED_LS = "jammingSemantic3dForcePanelCollapsed";
 
+/** События в консоль DevTools: [semantic3d] … */
+var SEMANTIC3D_DEBUG_LOG = true;
+
+function s3dLog(event, detail) {
+    if (!SEMANTIC3D_DEBUG_LOG) {
+        return;
+    }
+    if (detail !== undefined) {
+        console.log("[semantic3d]", event, detail);
+    } else {
+        console.log("[semantic3d]", event);
+    }
+}
+
+function nodeHasFinitePos(n) {
+    return (
+        n &&
+        typeof n === "object" &&
+        isFinite(n.x) &&
+        isFinite(n.y) &&
+        isFinite(n.z)
+    );
+}
+
+function linkEndpointsFinite(link) {
+    var s = link.source;
+    var t = link.target;
+    if (s && typeof s === "object" && t && typeof t === "object") {
+        return nodeHasFinitePos(s) && nodeHasFinitePos(t);
+    }
+    return false;
+}
+
 function loadForcePanelCollapsedDefaultTrue() {
     try {
         var v = localStorage.getItem(SEMANTIC_FORCE_PANEL_COLLAPSED_LS);
@@ -228,37 +261,55 @@ function createSemanticGraph3D(containerEl) {
     }
 
     var graphData = { nodes: [], links: [] };
-    var fg = ForceGraph3D()(containerEl)
+
+    function sanitizeNodePositions() {
+        var i;
+        for (i = 0; i < graphData.nodes.length; i++) {
+            var n = graphData.nodes[i];
+            if (!isFinite(n.x)) {
+                n.x = (Math.random() - 0.5) * 40;
+            }
+            if (!isFinite(n.y)) {
+                n.y = (Math.random() - 0.5) * 40;
+            }
+            if (!isFinite(n.z)) {
+                n.z = (Math.random() - 0.5) * 40;
+            }
+        }
+    }
+
+    /* OrbitControls как на /tags/3d/ (дефолт 3d-force-graph — trackball) */
+    var fg = ForceGraph3D({ controlType: "orbit" })(containerEl)
         .graphData(graphData)
         .nodeId("id")
         .nodeLabel("id")
         .nodeVal(function (d) {
             return (d.r || 6) * 2.2;
         })
-        .nodeOpacity(1)
+        .nodeOpacity(0)
         .nodeColor(function () {
             return "#ffffff";
         })
-        .nodeThreeObjectExtend(true)
-        .nodeRelSize(NODE_REL_SIZE)
+        /* Только подпись (sprite), без сферы-шарика */
+        .nodeThreeObjectExtend(false)
         .nodeThreeObject(function (node) {
             var spr = makeNodeLabelSprite(node.id);
             if (!spr) {
                 return null;
             }
-            /* Как в three-forcegraph: radius = cbrt(nodeVal) * nodeRelSize */
-            var nodeVal = (node.r || 6) * 2.2;
-            var sphereR = Math.cbrt(nodeVal) * NODE_REL_SIZE;
-            var margin = 1.2;
-            spr.position.set(sphereR + margin, sphereR * 0.55, 1.2);
-            return spr;
+            if (node._noisePh == null) {
+                node._noisePh = Math.random() * Math.PI * 2;
+            }
+            /* Group на (x,y,z) симуляции; sprite колышется локально (nodePositionUpdate в API нет) */
+            var g = new THREE.Group();
+            spr.position.set(0, 0, 0);
+            g.add(spr);
+            node.__noiseSpr = spr;
+            return g;
         })
-        .linkWidth(function (d) {
-            var v = d.value != null ? Number(d.value) : 15;
-            if (isNaN(v)) v = 15;
-            /* ×8 и min 1.1 — в 2 раза толще прежних ×4 / 0.55 (ведро геометрии по-прежнему с шагом 0.1) */
-            return Math.max(1.1, (v / 55) * 8);
-        })
+        /* 0 → THREE.Line, постоянные ~1px на экране (не цилиндры в world units) */
+        .linkWidth(0)
+        .linkVisibility(linkEndpointsFinite)
         .linkColor(function () {
             return "#666666";
         })
@@ -266,6 +317,158 @@ function createSemanticGraph3D(containerEl) {
         .linkDirectionalParticles(0)
         .backgroundColor("#000000")
         .showNavInfo(false);
+
+    function applyNodeWaveNoise() {
+        var t = performance.now() * 0.001;
+        var amp = 0.95;
+        var ni;
+        for (ni = 0; ni < graphData.nodes.length; ni++) {
+            var node = graphData.nodes[ni];
+            if (!nodeHasFinitePos(node)) {
+                continue;
+            }
+            var spr = node.__noiseSpr;
+            if (!spr) {
+                continue;
+            }
+            var ph = node._noisePh;
+            if (ph == null) {
+                ph = Math.random() * Math.PI * 2;
+                node._noisePh = ph;
+            }
+            var cx = node.x || 0;
+            var cz = node.z || 0;
+            var wave = Math.sin(t * 0.62 + cx * 0.028 + cz * 0.028 + ph);
+            spr.position.set(
+                Math.sin(t * 0.81 + ph * 1.7) * amp * 0.42 + wave * amp * 0.18,
+                Math.sin(t * 0.54 + ph * 2.3) * amp * 0.55 + wave * amp * 0.35,
+                Math.cos(t * 0.73 + ph * 0.9) * amp * 0.38 + wave * amp * 0.15
+            );
+        }
+    }
+
+    function addCenterReferenceCube() {
+        if (typeof THREE === "undefined" || typeof fg.scene !== "function") {
+            return;
+        }
+        var sc = fg.scene();
+        if (!sc || sc.getObjectByName("semantic3d-center-cube")) {
+            return;
+        }
+        var size = 2.6;
+        var mesh = new THREE.Mesh(
+            new THREE.BoxGeometry(size, size, size),
+            new THREE.MeshBasicMaterial({
+                color: 0x555555,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.62,
+                depthWrite: false
+            })
+        );
+        mesh.name = "semantic3d-center-cube";
+        mesh.position.set(0, 0, 0);
+        mesh.renderOrder = -1;
+        sc.add(mesh);
+        s3dLog("сцена: куб по центру (0,0,0)", { size: size });
+    }
+    addCenterReferenceCube();
+
+    /* OrbitControls как tags_3d; дистанция — zoomToFit по bbox графа (далеко, «всё в кадре») */
+    var CAM_FAR = 4000;
+    var CAM_MAX_DISTANCE = 2400;
+    var CAM_FIT_PADDING_PX = 160;
+    var CAM_FIT_PULLBACK = 1.55;
+    var fitCameraDebounceTimer = null;
+    var userAdjustedCamera = false;
+
+    var cam = typeof fg.camera === "function" ? fg.camera() : null;
+    if (cam) {
+        cam.fov = 55;
+        cam.near = 0.1;
+        cam.far = CAM_FAR;
+        cam.updateProjectionMatrix();
+    }
+    if (typeof fg.controls === "function") {
+        try {
+            var orbitCtrls = fg.controls();
+            if (orbitCtrls) {
+                orbitCtrls.enableDamping = true;
+                orbitCtrls.dampingFactor = 0.06;
+                orbitCtrls.minDistance = 8;
+                orbitCtrls.maxDistance = CAM_MAX_DISTANCE;
+                if (orbitCtrls.target && typeof orbitCtrls.target.set === "function") {
+                    orbitCtrls.target.set(0, 0, 0);
+                    orbitCtrls.update();
+                }
+            }
+        } catch (eOrbitCfg) {
+            /* ignore */
+        }
+    }
+
+    function fitCameraToGraph(opts) {
+        opts = opts || {};
+        if (!graphData.nodes.length) {
+            return;
+        }
+        if (userAdjustedCamera && !opts.force) {
+            s3dLog("камера: fit пропущен (пользователь двигал камеру)");
+            return;
+        }
+        if (typeof fg.zoomToFit !== "function") {
+            return;
+        }
+        var ms = opts.immediate ? 0 : 800;
+        s3dLog("камера: подгонка под граф (zoomToFit)", {
+            nodes: graphData.nodes.length,
+            links: graphData.links.length,
+            force: !!opts.force,
+            ms: ms
+        });
+        fg.zoomToFit(ms, CAM_FIT_PADDING_PX);
+        function pullBack() {
+            var p = typeof fg.cameraPosition === "function" ? fg.cameraPosition() : null;
+            if (!p || !isFinite(p.x)) {
+                return;
+            }
+            var lk = getCameraLookAt();
+            var m = CAM_FIT_PULLBACK;
+            if (typeof fg.cameraPosition === "function") {
+                fg.cameraPosition(
+                    { x: (p.x || 0) * m, y: (p.y || 0) * m, z: (p.z || 0) * m },
+                    lk,
+                    opts.immediate ? 0 : 500
+                );
+                s3dLog("камера: отъезд после fit (×" + m + ")", {
+                    from: { x: p.x, y: p.y, z: p.z },
+                    lookAt: lk
+                });
+            }
+        }
+        if (ms > 0) {
+            setTimeout(pullBack, ms + 100);
+        } else {
+            pullBack();
+        }
+    }
+
+    function scheduleFitCamera(force) {
+        if (fitCameraDebounceTimer) {
+            clearTimeout(fitCameraDebounceTimer);
+        }
+        var delay = force ? 0 : 1500;
+        fitCameraDebounceTimer = setTimeout(function () {
+            fitCameraDebounceTimer = null;
+            fitCameraToGraph({ force: !!force, immediate: false });
+        }, delay);
+    }
+
+    function resetCameraFraming() {
+        userAdjustedCamera = false;
+        s3dLog("камера: сброс авто-кадра (reset framing)");
+        scheduleFitCamera(true);
+    }
 
     /* Вместо FOCUS: каждые 21 с — случайно ±45° по Y сцене или «орбита» камеры вокруг Y (тот же период, что был у random focus) */
     var RANDOM_MOTION_INTERVAL_MS = 21000;
@@ -285,6 +488,20 @@ function createSemanticGraph3D(containerEl) {
         return { x: 0, y: 0, z: 0 };
     }
 
+    /** Центр орбиты — wireframe-куб в центре графа */
+    function getCubeOrbitPivot() {
+        var sc = typeof fg.scene === "function" ? fg.scene() : null;
+        if (sc && typeof THREE !== "undefined") {
+            var cube = sc.getObjectByName("semantic3d-center-cube");
+            if (cube) {
+                var v = new THREE.Vector3();
+                cube.getWorldPosition(v);
+                return { x: v.x, y: v.y, z: v.z };
+            }
+        }
+        return { x: 0, y: 0, z: 0 };
+    }
+
     function applyRandomSceneOrOrbit() {
         if (cameraMotionActive) {
             return;
@@ -292,7 +509,12 @@ function createSemanticGraph3D(containerEl) {
         if (Math.random() < 0.5) {
             var sc = typeof fg.scene === "function" ? fg.scene() : null;
             if (sc) {
-                sc.rotation.y += (Math.random() < 0.5 ? 1 : -1) * RAD45;
+                var signSc = Math.random() < 0.5 ? 1 : -1;
+                sc.rotation.y += signSc * RAD45;
+                s3dLog("сцена: случайный поворот ±45°", {
+                    sign: signSc,
+                    rotationY: sc.rotation.y
+                });
             }
             return;
         }
@@ -302,7 +524,8 @@ function createSemanticGraph3D(containerEl) {
         }
         cameraMotionActive = true;
         bumpGraphActivity();
-        var lk = getCameraLookAt();
+        var pivot = getCubeOrbitPivot();
+        var lk = { x: pivot.x, y: pivot.y, z: pivot.z };
         var sign = Math.random() < 0.5 ? 1 : -1;
         var angle = sign * ORBIT_ANGLE_RAD;
         var cos = Math.cos(angle);
@@ -310,11 +533,31 @@ function createSemanticGraph3D(containerEl) {
         var cx = p.x;
         var cy = p.y || 0;
         var cz = p.z;
-        var nx = cx * cos + cz * sin;
-        var nz = -cx * sin + cz * cos;
+        var relX = cx - pivot.x;
+        var relZ = cz - pivot.z;
+        var nx = pivot.x + relX * cos + relZ * sin;
+        var nz = pivot.z - relX * sin + relZ * cos;
         if (typeof fg.cameraPosition === "function") {
             fg.cameraPosition({ x: nx, y: cy, z: nz }, lk, ORBIT_DURATION_MS);
         }
+        if (typeof fg.controls === "function") {
+            try {
+                var ctrlsOrbit = fg.controls();
+                if (ctrlsOrbit && ctrlsOrbit.target && typeof ctrlsOrbit.target.set === "function") {
+                    ctrlsOrbit.target.set(pivot.x, pivot.y, pivot.z);
+                    ctrlsOrbit.update();
+                }
+            } catch (ePivot) {
+                /* ignore */
+            }
+        }
+        s3dLog("камера: случайная орбита вокруг куба (Y)", {
+            angleDeg: Math.round((angle * 180) / Math.PI),
+            durationMs: ORBIT_DURATION_MS,
+            pivot: lk,
+            from: { x: cx, y: cy, z: cz },
+            to: { x: nx, y: cy, z: nz }
+        });
         if (cameraMotionClearTimer) {
             clearTimeout(cameraMotionClearTimer);
         }
@@ -322,10 +565,12 @@ function createSemanticGraph3D(containerEl) {
             cameraMotionActive = false;
             cameraMotionClearTimer = null;
             bumpGraphActivity();
+            s3dLog("камера: орбита завершена");
         }, ORBIT_DURATION_MS + 200);
     }
 
     setTimeout(function () {
+        s3dLog("таймер: первый случайный поворот/орбита");
         applyRandomSceneOrOrbit();
         setInterval(applyRandomSceneOrOrbit, RANDOM_MOTION_INTERVAL_MS);
     }, RANDOM_MOTION_INTERVAL_MS);
@@ -336,6 +581,7 @@ function createSemanticGraph3D(containerEl) {
     var IDLE_ROTATE_Y_RAD_PER_SEC = 0.05;
     var lastGraphActivityMs = performance.now();
     var lastEngineTickMs = performance.now();
+    var idleRotateActive = false;
 
     function bumpGraphActivity() {
         lastGraphActivityMs = performance.now();
@@ -349,34 +595,50 @@ function createSemanticGraph3D(containerEl) {
         try {
             var ctrls0 = fg.controls();
             if (ctrls0 && typeof ctrls0.addEventListener === "function") {
-                ctrls0.addEventListener("change", bumpGraphActivity);
-                ctrls0.addEventListener("end", bumpGraphActivity);
+                ctrls0.addEventListener("change", function () {
+                    userAdjustedCamera = true;
+                    bumpGraphActivity();
+                });
+                ctrls0.addEventListener("end", function () {
+                    userAdjustedCamera = true;
+                    bumpGraphActivity();
+                });
             }
         } catch (eCtrl) {
             /* ignore */
         }
     }
 
-    var cam2xApplied = false;
+    if (typeof fg.onEngineStop === "function") {
+        fg.onEngineStop(function () {
+            s3dLog("симуляция: остановилась (onEngineStop)");
+            scheduleFitCamera(false);
+        });
+    }
+
     fg.onEngineTick(function () {
         var now = performance.now();
         var dt = Math.min(0.05, (now - lastEngineTickMs) / 1000);
         lastEngineTickMs = now;
 
-        if (!cam2xApplied) {
-            var p = fg.cameraPosition();
-            if (p && typeof p.z === "number" && Math.abs(p.z) > 20) {
-                fg.cameraPosition({ x: p.x || 0, y: p.y || 0, z: p.z * 2 });
-                cam2xApplied = true;
-            }
-        }
+        sanitizeNodePositions();
 
-        if (!cameraMotionActive && now - lastGraphActivityMs >= IDLE_ROTATE_DELAY_MS) {
+        var isIdleRotating =
+            !cameraMotionActive && now - lastGraphActivityMs >= IDLE_ROTATE_DELAY_MS;
+        if (isIdleRotating && !idleRotateActive) {
+            idleRotateActive = true;
+            s3dLog("idle: медленный поворот сцены вокруг Y");
+        } else if (!isIdleRotating && idleRotateActive) {
+            idleRotateActive = false;
+            s3dLog("idle: поворот сцены остановлен");
+        }
+        if (isIdleRotating) {
             var sc2 = typeof fg.scene === "function" ? fg.scene() : null;
             if (sc2) {
                 sc2.rotation.y += IDLE_ROTATE_Y_RAD_PER_SEC * dt;
             }
         }
+        applyNodeWaveNoise();
     });
 
     function pushGraph() {
@@ -407,6 +669,9 @@ function createSemanticGraph3D(containerEl) {
         }
         if (typeof fg.d3ReheatSimulation === "function") {
             fg.d3ReheatSimulation();
+        }
+        if (graphData.nodes.length > 0) {
+            scheduleFitCamera(false);
         }
     }
 
@@ -485,6 +750,9 @@ function createSemanticGraph3D(containerEl) {
         var h = Math.max(2, containerEl.clientHeight || window.innerHeight || 240);
         fg.width(w).height(h);
         applyForceLayoutParameters();
+        if (graphData.nodes.length > 0) {
+            scheduleFitCamera(true);
+        }
     }
     window.addEventListener("resize", resize);
     resize();
@@ -498,7 +766,8 @@ function createSemanticGraph3D(containerEl) {
 
         addNode: function (id, step, r) {
             if (r === undefined) r = 6;
-            graphData.nodes.push({ id: String(id), step: step, r: r });
+            var nid = String(id);
+            graphData.nodes.push({ id: nid, step: step, r: r });
             pushGraph();
             return id;
         },
@@ -517,11 +786,13 @@ function createSemanticGraph3D(containerEl) {
         },
 
         removeallLinks: function () {
+            s3dLog("граф: все рёбра удалены");
             graphData.links.length = 0;
             pushGraph();
         },
 
         removeAllNodes: function () {
+            s3dLog("граф: все узлы и рёбра удалены");
             graphData.nodes.length = 0;
             graphData.links.length = 0;
             pushGraph();
@@ -530,7 +801,9 @@ function createSemanticGraph3D(containerEl) {
         addLink: function (source, target, value) {
             var s = this.findNode(source);
             var t = this.findNode(target);
-            if (!s || !t) return;
+            if (!s || !t) {
+                return;
+            }
             graphData.links.push({
                 source: s,
                 target: t,
@@ -567,6 +840,12 @@ function createSemanticGraph3D(containerEl) {
         setValues: function (v) {
             values = mergeForceDefaults(v);
             applyForceLayoutParameters();
+        },
+
+        resetCameraFraming: resetCameraFraming,
+
+        fitCamera: function () {
+            fitCameraToGraph({ force: true, immediate: false });
         }
     };
 }
@@ -604,6 +883,8 @@ function initGraph() {
     if (!graph) {
         var el = document.getElementById("semantic-status");
         if (el) el.textContent = "graph init failed";
+    } else {
+        s3dLog("граф: инициализирован (OrbitControls + force layout)");
     }
 }
 
@@ -711,6 +992,7 @@ function semanticStepOnce() {
 }
 
 function semanticPause() {
+    s3dLog("демо: pause");
     demoPlaying = false;
     if (demoTimer) {
         clearInterval(demoTimer);
@@ -725,6 +1007,7 @@ function semanticPause() {
 }
 
 function semanticPlay() {
+    s3dLog("демо: play");
     stopLiveCollectReplay();
     if (!demoEdges.length || !graph) return;
     if (demoIndex >= demoEdges.length) {
@@ -750,6 +1033,7 @@ function semanticTogglePlay() {
 }
 
 function semanticReset() {
+    s3dLog("демо: reset");
     semanticPause();
     stopLiveCollectReplay();
     semanticWorkerApplySinceClear = 0;
@@ -763,6 +1047,9 @@ function semanticReset() {
     }
     graph.removeallLinks();
     graph.removeAllNodes();
+    if (typeof graph.resetCameraFraming === "function") {
+        graph.resetCameraFraming();
+    }
     semanticUpdateStatus();
 }
 
@@ -932,6 +1219,7 @@ function semanticCollectFingerprint(data) {
 
 function applySemanticCollectPayload(data, sourceTag) {
     if (!demoCompleted) {
+        s3dLog("collect: пропуск (демо ещё не завершено)", { source: sourceTag });
         return;
     }
     if (!data || typeof data !== "object") {
@@ -939,8 +1227,15 @@ function applySemanticCollectPayload(data, sourceTag) {
     }
     var fp = semanticCollectFingerprint(data);
     if (fp && fp === lastAppliedCollectFp) {
+        s3dLog("collect: дубликат пропущен", { source: sourceTag });
         return;
     }
+
+    s3dLog("collect: пакет", {
+        source: sourceTag,
+        step: data.number,
+        lines: Array.isArray(data.dependency_lines) ? data.dependency_lines.length : 0
+    });
 
     stopLiveCollectReplay();
     semanticPause();
@@ -966,6 +1261,7 @@ function applySemanticCollectPayload(data, sourceTag) {
     semanticWorkerApplySinceClear += 1;
     var doFullClear = semanticWorkerApplySinceClear >= semanticWorkerClearEvery;
     if (doFullClear) {
+        s3dLog("collect: полная очистка графа");
         graph.removeallLinks();
         graph.removeAllNodes();
         demoLinkKeys = {};
@@ -1015,6 +1311,7 @@ function applySemanticCollectPayload(data, sourceTag) {
         src + ": шаг " + stepLabel + ", рёбер " + String(liveCollectQueue.length) + ra + packHint
     );
 
+    s3dLog("collect: очередь рёбер", { count: liveCollectQueue.length });
     liveCollectTimer = setInterval(function () {
         if (!graph) {
             stopLiveCollectReplay();
@@ -1023,6 +1320,7 @@ function applySemanticCollectPayload(data, sourceTag) {
         if (!liveCollectQueue.length) {
             clearInterval(liveCollectTimer);
             liveCollectTimer = null;
+            s3dLog("collect: очередь опустошена");
             return;
         }
         var e = liveCollectQueue.shift();
@@ -1190,6 +1488,7 @@ function initSemanticSocket() {
     semanticSocket = io({ path: "/socket.io" });
 
     semanticSocket.on("connect", function () {
+        s3dLog("socket: connect");
         stopSemanticPingLoop();
         semanticPingTimer = setInterval(function () {
             semanticPingCounter += 1;
@@ -1199,6 +1498,7 @@ function initSemanticSocket() {
     });
 
     semanticSocket.on("disconnect", function () {
+        s3dLog("socket: disconnect");
         stopSemanticPingLoop();
     });
 
@@ -1208,10 +1508,15 @@ function initSemanticSocket() {
     });
 
     semanticSocket.on("semantic_collect", function (data) {
+        s3dLog("socket: semantic_collect");
         applySemanticCollectPayload(data, "Socket.IO");
     });
 
     semanticSocket.on("mood_collect", function (data) {
+        s3dLog("socket: mood_collect", {
+            step: data && data.step_number,
+            mood: data && data.dominant_mood
+        });
         applyMoodCollectPayload(data, "Socket.IO");
     });
 }

@@ -1,0 +1,574 @@
+{
+  "generatedAt": "2026-05-20T02:14:16.266Z",
+  "deploymentFile": "deployment.yaml",
+  "nodes": [
+    {
+      "id": "app-metrics-lb",
+      "label": "app-metrics-lb",
+      "group": "ops",
+      "port": 5000,
+      "kind": "service"
+    },
+    {
+      "id": "app-service",
+      "label": "app-service",
+      "group": "core",
+      "port": 80,
+      "kind": "service"
+    },
+    {
+      "id": "app-service-metrics",
+      "label": "app-service-metrics",
+      "group": "ops",
+      "port": 5000,
+      "kind": "service"
+    },
+    {
+      "id": "data-service",
+      "label": "data-service",
+      "group": "services",
+      "port": 80,
+      "kind": "service"
+    },
+    {
+      "id": "frontend-static-app",
+      "label": "frontend-static-app",
+      "group": "edge",
+      "port": 80,
+      "kind": "service"
+    },
+    {
+      "id": "html-renderer-service",
+      "label": "html-renderer-service",
+      "group": "services",
+      "port": 80,
+      "kind": "service"
+    },
+    {
+      "id": "image-analyze-service",
+      "label": "image-analyze-service",
+      "group": "services",
+      "port": 80,
+      "kind": "service"
+    },
+    {
+      "id": "ip-service",
+      "label": "ip-service",
+      "group": "services",
+      "port": 80,
+      "kind": "service"
+    },
+    {
+      "id": "jaeger",
+      "label": "jaeger",
+      "group": "infra",
+      "port": 80,
+      "kind": "service"
+    },
+    {
+      "id": "jaeger-nodeport",
+      "label": "jaeger-nodeport",
+      "group": "ops",
+      "port": 80,
+      "kind": "service"
+    },
+    {
+      "id": "keywords-service",
+      "label": "keywords-service",
+      "group": "services",
+      "port": 80,
+      "kind": "service"
+    },
+    {
+      "id": "mood-service",
+      "label": "mood-service",
+      "group": "services",
+      "port": 80,
+      "kind": "service"
+    },
+    {
+      "id": "n8n",
+      "label": "n8n",
+      "group": "services",
+      "port": 80,
+      "kind": "service"
+    },
+    {
+      "id": "otel-collector",
+      "label": "otel-collector",
+      "group": "infra",
+      "port": 4317,
+      "kind": "service"
+    },
+    {
+      "id": "redis",
+      "label": "redis",
+      "group": "infra",
+      "port": 6379,
+      "kind": "service"
+    },
+    {
+      "id": "rq-dashboard",
+      "label": "rq-dashboard",
+      "group": "ops",
+      "port": 80,
+      "kind": "service"
+    },
+    {
+      "id": "rq-exporter",
+      "label": "rq-exporter",
+      "group": "ops",
+      "port": 9726,
+      "kind": "service"
+    },
+    {
+      "id": "rq-exporter-lb",
+      "label": "rq-exporter-lb",
+      "group": "ops",
+      "port": 9101,
+      "kind": "service"
+    },
+    {
+      "id": "semantic-service",
+      "label": "semantic-service",
+      "group": "services",
+      "port": 80,
+      "kind": "service"
+    },
+    {
+      "id": "steps-service",
+      "label": "steps-service",
+      "group": "services",
+      "port": 80,
+      "kind": "service"
+    },
+    {
+      "id": "storage-service",
+      "label": "storage-service",
+      "group": "services",
+      "port": 80,
+      "kind": "service"
+    },
+    {
+      "id": "tags-db",
+      "label": "tags-db",
+      "group": "infra",
+      "port": 5432,
+      "kind": "service"
+    },
+    {
+      "id": "tags-service",
+      "label": "tags-service",
+      "group": "services",
+      "port": 80,
+      "kind": "service"
+    },
+    {
+      "id": "ingress",
+      "label": "ingress",
+      "group": "edge",
+      "kind": "virtual"
+    },
+    {
+      "id": "worker-service",
+      "label": "worker-service",
+      "group": "workers",
+      "kind": "virtual"
+    },
+    {
+      "id": "worker-screenshots",
+      "label": "worker-screenshots",
+      "group": "workers",
+      "kind": "virtual"
+    },
+    {
+      "id": "bot-service",
+      "label": "bot-service",
+      "group": "workers",
+      "kind": "virtual"
+    },
+    {
+      "id": "backfill-worker",
+      "label": "backfill-worker",
+      "group": "workers",
+      "kind": "virtual"
+    },
+    {
+      "id": "external-s3",
+      "label": "s3.firstvds.ru",
+      "group": "external",
+      "kind": "virtual"
+    }
+  ],
+  "links": [
+    {
+      "source": "worker-service",
+      "target": "redis",
+      "label": "worker-service: REDIS_HOST",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "redis",
+      "label": "worker-service: REDIS_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "tags-service",
+      "label": "worker-service: TAGS_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "semantic-service",
+      "label": "worker-service: SEMANTIC_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "mood-service",
+      "label": "worker-service: MOOD_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "storage-service",
+      "label": "worker-service: STORAGE_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "data-service",
+      "label": "worker-service: DATA_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "ip-service",
+      "label": "worker-service: IP_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "html-renderer-service",
+      "label": "worker-service: RENDERER_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "image-analyze-service",
+      "label": "worker-service: IMAGE_ANALYZE_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "external-s3",
+      "label": "worker-service: S3_HOST",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "otel-collector",
+      "label": "worker-service: OTEL_EXPORTER_OTLP_ENDPOINT",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "redis",
+      "label": "worker-screenshots: REDIS_HOST",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "redis",
+      "label": "worker-screenshots: REDIS_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "tags-service",
+      "label": "worker-screenshots: TAGS_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "semantic-service",
+      "label": "worker-screenshots: SEMANTIC_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "mood-service",
+      "label": "worker-screenshots: MOOD_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "storage-service",
+      "label": "worker-screenshots: STORAGE_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "data-service",
+      "label": "worker-screenshots: DATA_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "ip-service",
+      "label": "worker-screenshots: IP_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "html-renderer-service",
+      "label": "worker-screenshots: RENDERER_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "image-analyze-service",
+      "label": "worker-screenshots: IMAGE_ANALYZE_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "external-s3",
+      "label": "worker-screenshots: S3_HOST",
+      "origin": "env"
+    },
+    {
+      "source": "worker-service",
+      "target": "otel-collector",
+      "label": "worker-screenshots: OTEL_EXPORTER_OTLP_ENDPOINT",
+      "origin": "env"
+    },
+    {
+      "source": "bot-service",
+      "target": "redis",
+      "label": "bot-service: REDIS_HOST",
+      "origin": "env"
+    },
+    {
+      "source": "bot-service",
+      "target": "app-service",
+      "label": "bot-service: FLASK_HOST",
+      "origin": "env"
+    },
+    {
+      "source": "bot-service",
+      "target": "otel-collector",
+      "label": "bot-service: OTEL_EXPORTER_OTLP_ENDPOINT",
+      "origin": "env"
+    },
+    {
+      "source": "app-service",
+      "target": "redis",
+      "label": "app-service: REDIS_HOST",
+      "origin": "env"
+    },
+    {
+      "source": "app-service",
+      "target": "redis",
+      "label": "app-service: REDIS_URL",
+      "origin": "env"
+    },
+    {
+      "source": "app-service",
+      "target": "tags-service",
+      "label": "app-service: TAGS_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "app-service",
+      "target": "semantic-service",
+      "label": "app-service: SEMANTIC_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "app-service",
+      "target": "mood-service",
+      "label": "app-service: MOOD_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "app-service",
+      "target": "storage-service",
+      "label": "app-service: STORAGE_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "app-service",
+      "target": "ip-service",
+      "label": "app-service: IP_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "app-service",
+      "target": "html-renderer-service",
+      "label": "app-service: RENDERER_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "app-service",
+      "target": "image-analyze-service",
+      "label": "app-service: IMAGE_ANALYZE_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "app-service",
+      "target": "external-s3",
+      "label": "app-service: S3_HOST",
+      "origin": "env"
+    },
+    {
+      "source": "app-service",
+      "target": "otel-collector",
+      "label": "app-service: OTEL_EXPORTER_OTLP_ENDPOINT",
+      "origin": "env"
+    },
+    {
+      "source": "rq-exporter",
+      "target": "redis",
+      "label": "rq-exporter: RQ_REDIS_HOST",
+      "origin": "env"
+    },
+    {
+      "source": "backfill-worker",
+      "target": "data-service",
+      "label": "backfill-worker: DATA_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "backfill-worker",
+      "target": "storage-service",
+      "label": "backfill-worker: STORAGE_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "backfill-worker",
+      "target": "app-service",
+      "label": "backfill-worker: APP_SERVICE_URL",
+      "origin": "env"
+    },
+    {
+      "source": "backfill-worker",
+      "target": "redis",
+      "label": "backfill-worker: REDIS_HOST",
+      "origin": "env"
+    },
+    {
+      "source": "ingress",
+      "target": "app-service",
+      "label": "jamming-bot.arthew0.online /",
+      "origin": "topology"
+    },
+    {
+      "source": "ingress",
+      "target": "app-service",
+      "label": "app.jamming-bot / b0ts",
+      "origin": "topology"
+    },
+    {
+      "source": "ingress",
+      "target": "tags-service",
+      "label": "/tags/api → tags-service",
+      "origin": "topology"
+    },
+    {
+      "source": "ingress",
+      "target": "tags-service",
+      "label": "tags.jamming-bot",
+      "origin": "topology"
+    },
+    {
+      "source": "ingress",
+      "target": "semantic-service",
+      "label": "semantic.jamming-bot",
+      "origin": "topology"
+    },
+    {
+      "source": "ingress",
+      "target": "storage-service",
+      "label": "storage.jamming-bot /paths",
+      "origin": "topology"
+    },
+    {
+      "source": "ingress",
+      "target": "data-service",
+      "label": "data.jamming-bot /paths",
+      "origin": "topology"
+    },
+    {
+      "source": "ingress",
+      "target": "keywords-service",
+      "label": "keywords.jamming-bot /paths",
+      "origin": "topology"
+    },
+    {
+      "source": "ingress",
+      "target": "html-renderer-service",
+      "label": "/render",
+      "origin": "topology"
+    },
+    {
+      "source": "ingress",
+      "target": "steps-service",
+      "label": "/steps",
+      "origin": "topology"
+    },
+    {
+      "source": "ingress",
+      "target": "ip-service",
+      "label": "/ip",
+      "origin": "topology"
+    },
+    {
+      "source": "ingress",
+      "target": "jaeger",
+      "label": "jaeger.jamming-bot",
+      "origin": "topology"
+    },
+    {
+      "source": "ingress",
+      "target": "rq-dashboard",
+      "label": "rq.jamming-bot",
+      "origin": "topology"
+    },
+    {
+      "source": "ingress",
+      "target": "frontend-static-app",
+      "label": "/scenes",
+      "origin": "topology"
+    },
+    {
+      "source": "ingress",
+      "target": "n8n",
+      "label": "n8n.jamming-bot",
+      "origin": "topology"
+    },
+    {
+      "source": "app-service",
+      "target": "tags-service",
+      "label": "UI /tags/* (Flask)",
+      "origin": "topology"
+    },
+    {
+      "source": "bot-service",
+      "target": "app-service",
+      "label": "POST /bot/step/",
+      "origin": "topology"
+    }
+  ],
+  "groups": [
+    "edge",
+    "core",
+    "workers",
+    "services",
+    "infra",
+    "ops",
+    "external"
+  ]
+}

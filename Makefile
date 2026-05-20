@@ -121,6 +121,12 @@ k3s-frontend-static-app:
 	docker save frontend-static-app:latest | k3s ctr images import -
 	kubectl rollout restart deployment frontend-static-app -n jamming-bot
 
+.PHONY: k3s-services-map
+k3s-services-map:
+	docker build -f ./services-map/Dockerfile.prod -t services-map:latest .
+	docker save services-map:latest | k3s ctr images import -
+	kubectl rollout restart deployment services-map -n jamming-bot
+
 .PHONY: k3s-backfill-worker
 k3s-backfill-worker:
 	docker build -t backfill-worker:latest ./backfill-worker

@@ -1,0 +1,49 @@
+{
+  "nodeGroups": {
+    "app-service": "core",
+    "frontend-static-app": "edge",
+    "bot-service": "workers",
+    "redis": "infra",
+    "tags-db": "infra",
+    "jaeger": "infra",
+    "otel-collector": "infra",
+    "n8n": "services",
+    "rq-dashboard": "ops",
+    "rq-exporter": "ops",
+    "app-service-metrics": "ops",
+    "app-metrics-lb": "ops",
+    "jaeger-nodeport": "ops",
+    "rq-exporter-lb": "ops"
+  },
+  "virtualNodes": [
+    { "id": "ingress", "label": "ingress", "group": "edge" },
+    { "id": "worker-service", "label": "worker-service", "group": "workers" },
+    { "id": "worker-screenshots", "label": "worker-screenshots", "group": "workers" },
+    { "id": "bot-service", "label": "bot-service", "group": "workers" },
+    { "id": "backfill-worker", "label": "backfill-worker", "group": "workers" },
+    { "id": "external-s3", "label": "s3.firstvds.ru", "group": "external" }
+  ],
+  "edges": [
+    { "source": "ingress", "target": "app-service", "label": "jamming-bot.arthew0.online /" },
+    { "source": "ingress", "target": "app-service", "label": "app.jamming-bot / b0ts" },
+    { "source": "ingress", "target": "tags-service", "label": "/tags/api → tags-service" },
+    { "source": "ingress", "target": "tags-service", "label": "tags.jamming-bot" },
+    { "source": "ingress", "target": "semantic-service", "label": "semantic.jamming-bot" },
+    { "source": "ingress", "target": "storage-service", "label": "storage.jamming-bot /paths" },
+    { "source": "ingress", "target": "data-service", "label": "data.jamming-bot /paths" },
+    { "source": "ingress", "target": "keywords-service", "label": "keywords.jamming-bot /paths" },
+    { "source": "ingress", "target": "html-renderer-service", "label": "/render" },
+    { "source": "ingress", "target": "steps-service", "label": "/steps" },
+    { "source": "ingress", "target": "ip-service", "label": "/ip" },
+    { "source": "ingress", "target": "jaeger", "label": "jaeger.jamming-bot" },
+    { "source": "ingress", "target": "rq-dashboard", "label": "rq.jamming-bot" },
+    { "source": "ingress", "target": "frontend-static-app", "label": "/scenes" },
+    { "source": "ingress", "target": "n8n", "label": "n8n.jamming-bot" },
+    { "source": "app-service", "target": "tags-service", "label": "UI /tags/* (Flask)" },
+    { "source": "bot-service", "target": "app-service", "label": "POST /bot/step/" }
+  ],
+  "sourceAliases": {
+    "worker-screenshots": "worker-service"
+  },
+  "skipEnvNames": ["SENTRY_DSN", "SHHH_SENTRY_URL"]
+}

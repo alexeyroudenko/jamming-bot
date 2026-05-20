@@ -102,6 +102,14 @@ jobs:
             build_and_import app-service           app-service:latest
             build_and_import data-service          data-service:latest
             build_and_import frontend              frontend-static-app:latest Dockerfile.prod
+            if changed "services-map" || changed "scripts" || git diff --name-only "$PREV" "$CURR" -- deployment.yaml | grep -q .; then
+              echo ">>> Building services-map:latest (services-map/, scripts/, or deployment.yaml)..."
+              docker build -f ./services-map/Dockerfile.prod -t services-map:latest .
+              docker save services-map:latest | k3s ctr images import -
+              BUILT="$BUILT services-map"
+            else
+              echo ">>> Skipping services-map:latest (no changes)"
+            fi
 
             echo ">>> Applying Kubernetes manifests..."
             kubectl apply -f deployment.yaml
@@ -132,6 +140,7 @@ jobs:
             restart_if_built app-service            worker-screenshots && WAIT="$WAIT worker-screenshots"
             restart_if_built data-service           data-service       && WAIT="$WAIT data-service"
             restart_if_built frontend               frontend-static-app && WAIT="$WAIT frontend-static-app"
+            restart_if_built services-map           services-map && WAIT="$WAIT services-map"
 
             if [ -z "$WAIT" ]; then
               echo ">>> No services rebuilt — nothing to restart."
