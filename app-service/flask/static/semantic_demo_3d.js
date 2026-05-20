@@ -316,7 +316,9 @@ function createSemanticGraph3D(containerEl) {
         .linkOpacity(0.52)
         .linkDirectionalParticles(0)
         .backgroundColor("#000000")
-        .showNavInfo(false);
+        .showNavInfo(false)
+        /* Не гасить force layout после cooldown — иначе onEngineTick (волна, idle) перестаёт вызываться */
+        .cooldownTicks(Infinity);
 
     function applyNodeWaveNoise() {
         var t = performance.now() * 0.001;
@@ -378,7 +380,7 @@ function createSemanticGraph3D(containerEl) {
     var CAM_FAR = 4000;
     var CAM_MAX_DISTANCE = 2400;
     var CAM_FIT_PADDING_PX = 160;
-    var CAM_FIT_PULLBACK = 1.55;
+    var CAM_FIT_PULLBACK = 0.75;
     var fitCameraDebounceTimer = null;
     var userAdjustedCamera = false;
 
@@ -470,12 +472,11 @@ function createSemanticGraph3D(containerEl) {
         scheduleFitCamera(true);
     }
 
-    /* Вместо FOCUS: каждые 21 с — случайно ±45° по Y сцене или «орбита» камеры вокруг Y (тот же период, что был у random focus) */
+    /* Каждые 21 с — случайная «орбита» камеры вокруг куба по Y */
     var RANDOM_MOTION_INTERVAL_MS = 21000;
     var ORBIT_ANGLE_RAD = Math.PI / 3;
     /* Орбита камеры: в 2× быстрее прежних 2800 ms */
     var ORBIT_DURATION_MS = 1400;
-    var RAD45 = Math.PI / 4;
 
     var cameraMotionActive = false;
     var cameraMotionClearTimer = null;
@@ -502,20 +503,8 @@ function createSemanticGraph3D(containerEl) {
         return { x: 0, y: 0, z: 0 };
     }
 
-    function applyRandomSceneOrOrbit() {
+    function applyRandomCameraOrbit() {
         if (cameraMotionActive) {
-            return;
-        }
-        if (Math.random() < 0.5) {
-            var sc = typeof fg.scene === "function" ? fg.scene() : null;
-            if (sc) {
-                var signSc = Math.random() < 0.5 ? 1 : -1;
-                sc.rotation.y += signSc * RAD45;
-                s3dLog("сцена: случайный поворот ±45°", {
-                    sign: signSc,
-                    rotationY: sc.rotation.y
-                });
-            }
             return;
         }
         var p = typeof fg.cameraPosition === "function" ? fg.cameraPosition() : null;
@@ -570,9 +559,9 @@ function createSemanticGraph3D(containerEl) {
     }
 
     setTimeout(function () {
-        s3dLog("таймер: первый случайный поворот/орбита");
-        applyRandomSceneOrOrbit();
-        setInterval(applyRandomSceneOrOrbit, RANDOM_MOTION_INTERVAL_MS);
+        s3dLog("таймер: первая случайная орбита камеры");
+        applyRandomCameraOrbit();
+        setInterval(applyRandomCameraOrbit, RANDOM_MOTION_INTERVAL_MS);
     }, RANDOM_MOTION_INTERVAL_MS);
 
     /* Как tags_3d.html: после паузы ввода — медленный поворот сцены вокруг Y */
@@ -611,8 +600,15 @@ function createSemanticGraph3D(containerEl) {
 
     if (typeof fg.onEngineStop === "function") {
         fg.onEngineStop(function () {
-            s3dLog("симуляция: остановилась (onEngineStop)");
-            scheduleFitCamera(false);
+            if (typeof fg.d3ReheatSimulation === "function") {
+                try {
+                    fg.d3ReheatSimulation();
+                } catch (eReheat) {
+                    if (window.console && console.warn) {
+                        console.warn("d3ReheatSimulation (onEngineStop):", eReheat);
+                    }
+                }
+            }
         });
     }
 
