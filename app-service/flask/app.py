@@ -7,6 +7,7 @@ import json
 import random
 import logging
 import threading
+import uuid
 import tempfile
 import ipaddress
 import requests
@@ -565,6 +566,126 @@ def _ctrl_log(action: str, source: str):
     ip = request.remote_addr if request else "?"
     logger.info(f"ctrl '{action}' from {source} (ip={ip})")
     redis.publish("ctrl", json.dumps(action))
+
+
+def _publish_ctrl(action: str, source: str):
+    """Publish transport control without Flask request context (background inject thread)."""
+    logger.info("ctrl '%s' from %s", action, source)
+    redis.publish("ctrl", json.dumps(action))
+
+
+INJECT_ACTIVE_KEY = "inject:active"
+INJECT_ACTIVE_TTL_SEC = 600
+INJECT_MAX_TEXT_CHARS = 8000
+INJECT_STOP_WAIT_SEC = 5
+INJECT_DISMANTLE_ESTIMATE_SEC = 3.0
+INJECT_RESTORE_AFTER_SEMANTIC_SEC = 60
+INJECT_FALLBACK_RESTORE_SEC = 120
+INJECT_DISMANTLE_INTERVAL_MS = 20
+INJECT_SEMANTIC_SNIPPET_CHARS = 2500
+
+
+def _wait_rq_job(job, timeout=30, poll_interval=0.5):
+    """Synchronously wait for an RQ job (used by text-inject orchestrator)."""
+    elapsed = 0.0
+    while elapsed < timeout:
+        time.sleep(poll_interval)
+        elapsed += poll_interval
+        try:
+            job.refresh()
+        except Exception:
+            logger.debug("RQ job %s no longer exists", getattr(job, "id", None))
+            return None, False
+        if job.is_finished:
+            return job.result, True
+        if job.is_failed:
+            logger.warning("RQ job %s failed", job.id)
+            return None, False
+    logger.warning("RQ job %s timed out after %ss", job.id, timeout)
+    return None, False
+
+
+def _emit_semantic_collect_payload(result):
+    if not isinstance(result, dict):
+        return
+    received_at = datetime.now(timezone.utc).isoformat()
+    emit_payload = {**result, "received_at": received_at}
+    _persist_semantic_last_collect(emit_payload)
+    logger.info(
+        "inject semantic_collect dependency_lines=%s",
+        len(emit_payload.get("dependency_lines") or []),
+    )
+    socketio.emit("semantic_collect", emit_payload)
+
+
+def _run_text_inject(text: str, inject_id: str):
+    started = time.monotonic()
+    step_key = "step:inject"
+    try:
+        with app.app_context():
+            _publish_ctrl("stop", f"inject/{inject_id}")
+            socketio.emit(
+                "inject_begin",
+                {"inject_id": inject_id, "interval_ms": INJECT_DISMANTLE_INTERVAL_MS},
+            )
+            socketio.emit(
+                "graph_dismantle",
+                {"inject_id": inject_id, "interval_ms": INJECT_DISMANTLE_INTERVAL_MS},
+            )
+            time.sleep(INJECT_STOP_WAIT_SEC)
+            time.sleep(INJECT_DISMANTLE_ESTIMATE_SEC)
+
+            _save_to_step_hash(step_key, {"text": text, "url": "inject://text"})
+
+            job = jobs.analyze.delay(
+                text, step_number="inject", step_url="inject://text"
+            )
+            inject_trace_context_into_job(job)
+            result, ok = _wait_rq_job(job, timeout=30)
+            if ok and result is not None:
+                socketio.emit("analyzed", result)
+                if isinstance(result, dict):
+                    _save_to_step_hash(step_key, result)
+
+            socketio.emit("inject_display", {"inject_id": inject_id, "text": text})
+            socketio.emit("semantic_inject_begin", {"inject_id": inject_id})
+
+            snippet = text.strip()[:INJECT_SEMANTIC_SNIPPET_CHARS]
+            semantic_done = False
+            if snippet:
+                j2 = jobs.analyze_semantic.delay(
+                    snippet, step_number="inject", step_url="inject://text"
+                )
+                inject_trace_context_into_job(j2)
+                sem_result, sem_ok = _wait_rq_job(j2, timeout=30)
+                if sem_ok and sem_result is not None:
+                    _emit_semantic_collect_payload(sem_result)
+                    semantic_done = True
+                    time.sleep(INJECT_RESTORE_AFTER_SEMANTIC_SEC)
+
+            if not semantic_done:
+                elapsed = time.monotonic() - started
+                remaining = max(0.0, INJECT_FALLBACK_RESTORE_SEC - elapsed)
+                time.sleep(remaining)
+
+            _publish_ctrl("start", f"inject/{inject_id}")
+            socketio.emit("semantic_restore_demo", {"inject_id": inject_id})
+            socketio.emit("inject_end", {"inject_id": inject_id})
+            logger.info("inject %s finished", inject_id)
+    except Exception as exc:
+        logger.exception("inject %s failed: %s", inject_id, exc)
+        try:
+            with app.app_context():
+                _publish_ctrl("start", f"inject/{inject_id}/error")
+                socketio.emit("semantic_restore_demo", {"inject_id": inject_id})
+                socketio.emit("inject_end", {"inject_id": inject_id, "error": str(exc)})
+        except Exception:
+            pass
+    finally:
+        try:
+            redis.delete(INJECT_ACTIVE_KEY)
+        except Exception as exc:
+            logger.warning("inject active key delete: %s", exc)
 
 
 def _ensure_redis_defaults():
@@ -2237,6 +2358,39 @@ def sublink_add():
         logger.info("Received legacy HTTP sublink event; prefer Redis Pub/Sub channel %s", SUBLINK_CHANNEL)
         socketio.emit('sublink', data)
     return "step"
+
+
+@app.route("/bot/inject/text/", methods=["POST"])
+def bot_inject_text():
+    """Stop bot, dismantle main graph, analyze injected text, rebuild semantic3d, then restore."""
+    text = ""
+    if request.is_json:
+        payload = request.get_json(silent=True) or {}
+        text = (payload.get("text") or "").strip()
+    else:
+        text = (request.form.get("text") or "").strip()
+    if not text:
+        return jsonify({"ok": False, "error": "text is required"}), 400
+    if len(text) > INJECT_MAX_TEXT_CHARS:
+        return jsonify(
+            {"ok": False, "error": f"text exceeds {INJECT_MAX_TEXT_CHARS} characters"}
+        ), 400
+    inject_id = str(uuid.uuid4())
+    acquired = redis.set(INJECT_ACTIVE_KEY, inject_id, nx=True, ex=INJECT_ACTIVE_TTL_SEC)
+    if not acquired:
+        active = redis.get(INJECT_ACTIVE_KEY)
+        if isinstance(active, bytes):
+            active = active.decode()
+        return jsonify(
+            {"ok": False, "error": "inject already active", "inject_id": active}
+        ), 409
+    ip = request.remote_addr or "?"
+    logger.info("inject %s accepted from %s (%d chars)", inject_id, ip, len(text))
+    _publish_ctrl("stop", f"HTTP /bot/inject/text/ ip={ip}")
+    threading.Thread(
+        target=_run_text_inject, args=(text, inject_id), daemon=True
+    ).start()
+    return jsonify({"ok": True, "inject_id": inject_id}), 202
 
 
 @app.route('/bot/step/', methods=['GET', 'POST'])

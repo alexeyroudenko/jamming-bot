@@ -1861,7 +1861,58 @@ return length
         event_sub_time = (new Date).getTime()
     })
 
+    window._injectActive = false;
+    var graphDismantleTimer = null;
 
+    socket.on('inject_begin', function(data) {
+        window._injectActive = true;
+    });
+
+    socket.on('inject_end', function(data) {
+        window._injectActive = false;
+        if (graphDismantleTimer) {
+            clearTimeout(graphDismantleTimer);
+            graphDismantleTimer = null;
+        }
+    });
+
+    socket.on('graph_dismantle', function(data) {
+        if (graphDismantleTimer) {
+            clearTimeout(graphDismantleTimer);
+            graphDismantleTimer = null;
+        }
+        var interval = (data && data.interval_ms) ? data.interval_ms : 20;
+        var nodes = graph.getNodes().slice();
+        var idx = 0;
+        function tick() {
+            if (idx >= nodes.length) {
+                graphDismantleTimer = null;
+                socket.emit('graph_dismantle_done', {
+                    inject_id: data && data.inject_id ? data.inject_id : null
+                });
+                return;
+            }
+            var node = nodes[idx];
+            if (node && node.id) {
+                graph.removeNode(node.id);
+            }
+            idx += 1;
+            graphDismantleTimer = setTimeout(tick, interval);
+        }
+        tick();
+    });
+
+    socket.on('inject_display', function(data) {
+        if (!data) return;
+        var t = data.text || '';
+        text = t;
+        currentNounPhrases = [];
+        var log_view = document.getElementById('log_url');
+        if (log_view) {
+            log_view.innerHTML = "<code><nobr>inject : " + (data.inject_id || '') + "</nobr></code>";
+        }
+        renderHighlightedLogText(t, currentNounPhrases);
+    });
 
     socket.on('clear', function(data){
         console.log("clear")
@@ -1937,9 +1988,10 @@ return length
         // }
 
 
-        // add node and delete fifo
-        graph.add_node_safe(step, url, from_url, words_count)
-
+        // add node and delete fifo (skip during text-inject scenario)
+        if (!window._injectActive && !data.inject) {
+            graph.add_node_safe(step, url, from_url, words_count);
+        }
 
         var log_view = document.getElementById('log_url');
         log_view.innerHTML = "<a href='" + url + "'><code><nobr>" + step + " : " + url + "</nobr></code></a>";

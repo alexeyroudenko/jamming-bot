@@ -1436,6 +1436,35 @@ function initSemanticSocket() {
         paintSemanticSocketMetrics(lat);
     });
 
+    semanticSocket.on("semantic_inject_begin", function (data) {
+        semanticPeriodicLog("semanticSocket.on.semantic_inject_begin");
+        semanticPause();
+        stopLiveCollectReplay();
+        demoPlaying = false;
+        demoIndex = 0;
+        demoLinkKeys = {};
+        if (demoTimer) {
+            clearInterval(demoTimer);
+            demoTimer = null;
+        }
+        clearSemanticLog();
+        if (graph) {
+            graph.removeallLinks();
+            graph.removeAllNodes();
+        }
+        demoCompleted = true;
+        semanticUpdateStatus();
+        setSemanticWorkerHint(
+            "inject" + (data && data.inject_id ? " " + data.inject_id : "") + ": ожидание semantic_collect…"
+        );
+    });
+
+    semanticSocket.on("semantic_restore_demo", function (data) {
+        semanticPeriodicLog("semanticSocket.on.semantic_restore_demo");
+        semanticReset();
+        loadDemoPayload();
+    });
+
     semanticSocket.on("semantic_collect", function (data) {
         semanticPeriodicLog("semanticSocket.on.semantic_collect");
         applySemanticCollectPayload(data, "Socket.IO");
