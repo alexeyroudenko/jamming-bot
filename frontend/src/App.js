@@ -123,6 +123,26 @@ function writeTagEmbedAutoswitchToStorage(enabled) {
   }
 }
 
+function isScenesHotkeyTypingTarget(el) {
+  return (
+    el &&
+    (el.tagName === 'INPUT' ||
+      el.tagName === 'TEXTAREA' ||
+      el.tagName === 'SELECT' ||
+      (typeof el.isContentEditable === 'boolean' && el.isContentEditable))
+  )
+}
+
+/** @param {KeyboardEvent} e */
+function scenesHotkeyFromKeyboardEvent(e) {
+  if (!e || e.defaultPrevented) return null
+  if (isScenesHotkeyTypingTarget(e.target)) return null
+  if (e.ctrlKey || e.metaKey || e.altKey) return null
+  if (e.key === 'a' || e.key === 'A') return 'toggle-autoswitch'
+  if (e.key === 'n' || e.key === 'N') return 'next-scene'
+  return null
+}
+
 const SCENES_PWA_TITLE = 'Jamming Bot Scenes'
 
 /** Bottom 1px progress bar; grows from 0 to 100vw over `duration` ms. */
@@ -191,33 +211,41 @@ export function AppContent() {
     }
   }, [])
 
-  useEffect(() => {
-    const onKeyDown = (e) => {
-      if (e.defaultPrevented) return
-      const el = e.target
-      if (
-        el &&
-        (el.tagName === 'INPUT' ||
-          el.tagName === 'TEXTAREA' ||
-          el.tagName === 'SELECT' ||
-          (typeof el.isContentEditable === 'boolean' && el.isContentEditable))
-      ) {
-        return
-      }
-      if (e.ctrlKey || e.metaKey || e.altKey) return
-      if (e.key === 'a' || e.key === 'A') {
-        e.preventDefault()
+  const applyScenesHotkeyAction = useCallback(
+    (action) => {
+      if (action === 'toggle-autoswitch') {
         setTagEmbedAutoswitch((v) => !v)
         return
       }
-      if (e.key === 'n' || e.key === 'N') {
-        e.preventDefault()
+      if (action === 'next-scene') {
         navigate(nextScenePath(pathnameRef.current))
       }
+    },
+    [navigate]
+  )
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      const action = scenesHotkeyFromKeyboardEvent(e)
+      if (!action) return
+      e.preventDefault()
+      applyScenesHotkeyAction(action)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [navigate])
+  }, [applyScenesHotkeyAction])
+
+  useEffect(() => {
+    const onMessage = (e) => {
+      const data = e.data
+      if (!data || data.type !== 'jamming-scenes-hotkey') return
+      if (data.action === 'toggle-autoswitch' || data.action === 'next-scene') {
+        applyScenesHotkeyAction(data.action)
+      }
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [applyScenesHotkeyAction])
 
   useEffect(() => {
     writeTagEmbedAutoswitchToStorage(tagEmbedAutoswitch)
