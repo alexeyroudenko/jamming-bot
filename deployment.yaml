@@ -54,7 +54,7 @@ spec:
             cpu: "250m"
             memory: "512Mi"
           limits:
-            cpu: "1000m"
+            cpu: "500m"
             memory: "1024Mi"
         readinessProbe:
           httpGet:
@@ -251,7 +251,7 @@ spec:
             cpu: "500m"
             memory: "1Gi"
           limits:
-            cpu: "2"
+            cpu: "1"
             memory: "1536Mi"
         readinessProbe:
           httpGet:
@@ -393,10 +393,10 @@ spec:
         resources:
           requests:
             cpu: "100m"
-            memory: "192Mi"
+            memory: "512Mi"
           limits:
             cpu: "1000m"
-            memory: "512Mi"
+            memory: "1536Mi"
         startupProbe:
           tcpSocket:
             port: 7781
@@ -846,9 +846,8 @@ spec:
     targetPort: 16686
     nodePort: 31686
 ---
-# ===================== otel-collector (OTLP fan-out: Jaeger + Coroot) =====================
+# ===================== otel-collector (OTLP fan-out: Jaeger) =====================
 # Apps use OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318 (HTTP OTLP).
-# Coroot: gRPC OTLP on coroot-coroot.coroot:4317 + header x-api-key from Secret COROOT_OTEL_API_KEY.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -879,22 +878,13 @@ data:
         endpoint: http://jaeger:4318
         tls:
           insecure: true
-      otlp/coroot:
-        endpoint: coroot-coroot.coroot.svc.cluster.local:4317
-        tls:
-          insecure: true
-        # Coroot gRPC без gzip-распаковки в ответе; иначе: Decompressor is not installed for grpc-encoding "gzip"
-        compression: none
-        # Пустой default, если ключа нет в Secret — под стартует; верни ключ в jamming-bot-secrets для Coroot.
-        headers:
-          x-api-key: ${env:COROOT_OTEL_API_KEY:-}
     service:
       extensions: [health_check]
       pipelines:
         traces:
           receivers: [otlp]
           processors: [memory_limiter, batch]
-          exporters: [otlphttp/jaeger, otlp/coroot]
+          exporters: [otlphttp/jaeger]
       telemetry:
         logs:
           level: warn
@@ -920,13 +910,6 @@ spec:
         imagePullPolicy: IfNotPresent
         args:
         - --config=/etc/otelcol/config.yaml
-        env:
-        - name: COROOT_OTEL_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: jamming-bot-secrets
-              key: COROOT_OTEL_API_KEY
-              optional: true
         ports:
         - containerPort: 4317
           name: otlp-grpc
@@ -1083,7 +1066,7 @@ spec:
             cpu: "125m"
             memory: "192Mi"
           limits:
-            cpu: "1000m"
+            cpu: "500m"
             memory: "512Mi"
 ---
 # ===================== worker-screenshots (RQ queue screenshots only) =====================
@@ -2084,19 +2067,8 @@ spec:
     - app.jamming-bot.arthew0.online
     - b0ts.arthew0.online
     - rq.jamming-bot.arthew0.online
-    - jaeger.jamming-bot.arthew0.online
     secretName: jamming-bot-tls
   rules:
-    - host: jaeger.jamming-bot.arthew0.online
-      http:
-        paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: jaeger
-              port:
-                number: 80
     - host: rq.jamming-bot.arthew0.online
       http:
         paths:

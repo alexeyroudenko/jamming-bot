@@ -1,19 +1,21 @@
 # Coroot (jamming-bot)
 
-Цель: развернуть [Coroot Community Edition](https://docs.coroot.com/installation/kubernetes/) и открыть UI по адресам:
+> **Статус (2026-07):** Coroot **выгружен** с single-node k3s (`make k3s-coroot-uninstall`) для экономии RAM. PVC в namespace `coroot` сохранены. Трассы OpenTelemetry идут в **Jaeger** через `otel-collector` (см. [`deployment.yaml`](../../deployment.yaml)).
+
+Цель при установке: развернуть [Coroot Community Edition](https://docs.coroot.com/installation/kubernetes/) и открыть UI по адресам:
 
 - HTTPS: `https://coroot.jamming-bot.arthew0.online/`
 - HTTP редиректится ингрессом Traefik/cert-manager типичным образом (если настроен только HTTPS).
 
 Метрики Flask/RQ см. [app-service-monitoring-runbook.md](app-service-monitoring-runbook.md); здесь только Coroot.
 
-## Трассы OpenTelemetry (Jaeger + Coroot)
+## Трассы OpenTelemetry (Jaeger)
 
-В кластере в namespace `jamming-bot` развёрнут **OpenTelemetry Collector** (`Deployment`/`Service` **`otel-collector`**, см. [`deployment.yaml`](../../deployment.yaml)): `app-service`, `worker-service` и `bot-service` отправляют OTLP HTTP на **`http://otel-collector:4318`**; collector дублирует трассы в **Jaeger** и в **Coroot** (OTLP gRPC на `coroot-coroot.coroot.svc.cluster.local:4317` с заголовком **`x-api-key`**).
+В кластере в namespace `jamming-bot` развёрнут **OpenTelemetry Collector** (`Deployment`/`Service` **`otel-collector`**): `app-service`, `worker-service` и `bot-service` отправляют OTLP HTTP на **`http://otel-collector:4318`**; collector экспортирует трассы в **Jaeger** (`http://jaeger:4318`).
 
-Ключ API проекта Coroot хранится в Secret **`jamming-bot-secrets`**, ключ **`COROOT_OTEL_API_KEY`** (шаблон: [`k8s-secrets.yaml.template`](../../k8s-secrets.yaml.template)). Должен совпадать с ключом в UI Coroot для этого проекта.
+UI Jaeger: `https://jaeger.jamming-bot.arthew0.online`.
 
-Локально в Docker Compose тот же collector описан в [`docker/otel-collector-config.yaml`](../../docker/otel-collector-config.yaml); переменные окружения **`COROOT_OTEL_API_KEY`** и **`COROOT_OTLP_GRPC_ADDR`** (по умолчанию `host.docker.internal:4317`, см. `docker-compose.yml`).
+При переустановке Coroot можно вернуть dual-export (Jaeger + Coroot) по образцу [`docker/otel-collector-config.yaml`](../../docker/otel-collector-config.yaml); для Coroot нужен ключ **`COROOT_OTEL_API_KEY`** в Secret `jamming-bot-secrets`.
 
 ## Зафиксированные версии Helm chart (актуализировать при апгрейде)
 
@@ -110,7 +112,15 @@ helm rollback coroot-operator -n coroot
 
 Либо удалить релиз и переустановить предыдущие версии chart из секции выше.
 
-## Полное удаление
+## Выгрузка (поды сняты, PVC сохраняются)
+
+```bash
+make k3s-coroot-uninstall
+```
+
+Поды исчезнут, RAM освободится (~3.5 GiB на single-node). PVC (ClickHouse, Prometheus) остаются в namespace `coroot` для переустановки.
+
+## Полное удаление (включая PVC и данные)
 
 ```bash
 helm uninstall coroot -n coroot

@@ -60,16 +60,32 @@ ssh-keygen -t ed25519 -C "github-actions-deploy" -f deploy_key -N ""
 5. Applies `deployment.yaml`
 6. Restarts all deployments for rolling update
 
-### Coroot (опционально)
+### Coroot (опционально, сейчас выгружен)
 
-Мониторинг уровня кластера через Coroot CE не входит в стандартный CI-деплой `deployment.yaml`. Разово на сервере:
+Мониторинг уровня кластера через Coroot CE не входит в стандартный CI-деплой `deployment.yaml`. На single-node k3s Coroot выгружен для экономии RAM (~3.5 GiB); PVC в namespace `coroot` сохранены для возможной переустановки.
+
+Установка / переустановка:
 
 ```bash
 cd /opt/jamming-bot
 make k3s-coroot
 ```
 
+Выгрузка (поды сняты, PVC остаются):
+
+```bash
+make k3s-coroot-uninstall
+```
+
 Подробнее: [`docs/monitoring/coroot-runbook.md`](../docs/monitoring/coroot-runbook.md).
+
+### OpenTelemetry: Jaeger (K3s)
+
+В [`deployment.yaml`](../deployment.yaml) поднят **`otel-collector`**: приложения (`app-service`, `worker-service`, `bot-service`) шлют OTLP на `http://otel-collector:4318`, collector экспортирует трассы в **Jaeger** (`http://jaeger:4318`).
+
+UI Jaeger: `https://jaeger.jamming-bot.arthew0.online` или NodePort `:31686`.
+
+Ключ **`COROOT_OTEL_API_KEY`** в Secret больше не нужен для `otel-collector` (Coroot выгружен). Для локального Docker Compose с Coroot см. [`docker/otel-collector-config.yaml`](../docker/otel-collector-config.yaml).
 
 ### Traefik stability (K3s)
 
@@ -84,12 +100,6 @@ make k3s-traefik-stabilize
 - увеличивает `timeoutSeconds` для `liveness/readiness` до `5`,
 - ставит `initialDelaySeconds` в `10`,
 - перезапускает `traefik` и ждёт успешный rollout.
-
-### OpenTelemetry: Jaeger + Coroot (K3s)
-
-В [`deployment.yaml`](../deployment.yaml) поднят **`otel-collector`**: приложения (`app-service`, `worker-service`, `bot-service`) шлют OTLP на `http://otel-collector:4318`, collector экспортирует трассы в **Jaeger** (`http://jaeger:4318`) и в **Coroot** (gRPC `coroot-coroot.coroot.svc.cluster.local:4317`, заголовок `x-api-key`).
-
-В [`k8s-secrets.yaml`](../k8s-secrets.yaml) (из шаблона [`k8s-secrets.yaml.template`](../k8s-secrets.yaml.template)) обязательно задайте ключ **`COROOT_OTEL_API_KEY`** — API key проекта Coroot (Settings → API keys). Без него под `otel-collector` не стартует (`secretKeyRef`).
 
 ### kube-state-metrics (опционально)
 
