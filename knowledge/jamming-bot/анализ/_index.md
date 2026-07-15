@@ -4,7 +4,7 @@ note_type: moc
 project: "[[jamming-bot/Jamming Bot]]"
 status: draft
 created: 2026-05-05
-updated: 2026-05-05
+updated: 2026-06-10
 tags:
   - analyze
   - analysis
@@ -13,6 +13,10 @@ tags:
 ---
 
 # Анализ — индекс
+
+## QA — диалог (июнь 2026)
+
+- [[анализ/qa/_index|QA — диалог о Jamming Bot]]
 
 ## Психологический профиль автора
 
