@@ -335,6 +335,7 @@ CORS_ALLOWED_ORIGINS = frozenset({
     "http://127.0.0.1:8767",
     "https://jamming-bot.arthew0.online",
     "http://jamming-bot.arthew0.online",
+    "https://semantic3d.aa.arthew0.online",
 })
 _extra_origins = os.getenv("CORS_EXTRA_ORIGINS", "")
 if _extra_origins.strip():
@@ -348,6 +349,11 @@ CORS_LOCAL_ORIGIN_RE = re.compile(
     r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     re.IGNORECASE,
 )
+# Статика AA-клонов (semantic3d.aa… и соседние поддомены)
+CORS_AA_ORIGIN_RE = re.compile(
+    r"^https://([a-z0-9-]+\.)?aa\.arthew0\.online$",
+    re.IGNORECASE,
+)
 
 
 def _cors_origin_allowed(origin: str | None) -> bool:
@@ -355,7 +361,9 @@ def _cors_origin_allowed(origin: str | None) -> bool:
         return False
     if origin in CORS_ALLOWED_ORIGINS:
         return True
-    return bool(CORS_LOCAL_ORIGIN_RE.match(origin))
+    if CORS_LOCAL_ORIGIN_RE.match(origin):
+        return True
+    return bool(CORS_AA_ORIGIN_RE.match(origin))
 
 
 def _apply_cors_headers(response, origin: str | None):

@@ -25,6 +25,9 @@ async def health_check():
 origins = [
     "http://localhost:3000",
     "https://example.com",
+    "https://jamming-bot.arthew0.online",
+    "http://jamming-bot.arthew0.online",
+    "https://semantic3d.aa.arthew0.online",
 ]
 
 app.add_middleware(

@@ -18,6 +18,32 @@ function s3dLog(event, detail) {
     }
 }
 
+/** Cross-origin host for Socket.IO / API when this page is not served by Flask. */
+function jbBotOrigin() {
+    if (typeof window !== "undefined" && window.JB_BOT_ORIGIN) {
+        return String(window.JB_BOT_ORIGIN).replace(/\/$/, "");
+    }
+    var host = (typeof location !== "undefined" && location.hostname) || "";
+    if (/(^|\.)aa\.arthew0\.online$/i.test(host)) {
+        return "https://jamming-bot.arthew0.online";
+    }
+    return "";
+}
+
+function jbBotFetch(path, opts) {
+    var origin = jbBotOrigin();
+    var next = opts ? Object.assign({}, opts) : {};
+    if (origin && (next.credentials == null || next.credentials === "same-origin")) {
+        next.credentials = "omit";
+    }
+    return fetch(origin + path, next);
+}
+
+if (typeof window !== "undefined") {
+    window.jbBotOrigin = jbBotOrigin;
+    window.jbBotFetch = jbBotFetch;
+}
+
 function nodeHasFinitePos(n) {
     return (
         n &&
@@ -1725,7 +1751,7 @@ function applySemanticCollectPayload(data, sourceTag) {
 
 function pollSemanticLastCollect() {
     semanticLastCollectPollCount += 1;
-    fetch("/api/semantic/last-collect/", { credentials: "same-origin", cache: "no-store" })
+    jbBotFetch("/api/semantic/last-collect/", { credentials: "same-origin", cache: "no-store" })
         .then(function (r) {
             return r.json();
         })
@@ -1838,7 +1864,7 @@ function applyMoodCollectPayload(data, sourceTag) {
 }
 
 function pollMoodLastCollect() {
-    fetch("/api/semantic/mood-last/", { credentials: "same-origin", cache: "no-store" })
+    jbBotFetch("/api/semantic/mood-last/", { credentials: "same-origin", cache: "no-store" })
         .then(function (r) {
             return r.json();
         })
@@ -1882,7 +1908,15 @@ function initSemanticSocket() {
     if (typeof io === "undefined") {
         return;
     }
-    semanticSocket = io({ path: "/socket.io" });
+    var botOrigin = jbBotOrigin();
+    var socketOpts = { path: "/socket.io", transports: ["websocket", "polling"] };
+    if (botOrigin) {
+        socketOpts.withCredentials = false;
+        semanticSocket = io(botOrigin, socketOpts);
+        s3dLog("socket: origin", botOrigin);
+    } else {
+        semanticSocket = io(socketOpts);
+    }
 
     semanticSocket.on("connect", function () {
         s3dLog("socket: connect");
@@ -1973,7 +2007,7 @@ function initSemanticSocket() {
 }
 
 function loadDemoPayload() {
-    return fetch("/api/semantic/demo-edges/", { credentials: "same-origin", cache: "no-store" })
+    return jbBotFetch("/api/semantic/demo-edges/", { credentials: "same-origin", cache: "no-store" })
         .then(function (r) { return r.json(); })
         .then(function (data) {
             demoEdges = Array.isArray(data.edges) ? data.edges : [];
