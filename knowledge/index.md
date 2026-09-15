@@ -1,44 +1,46 @@
 ---
-title: Knowledge index
+title: Knowledge index (stub)
 note_type: moc
 aliases:
   - Knowledge Vault
 tags:
   - moc
   - knowledge
+  - stub
 ---
 
-# Knowledge index
+# Knowledge index — перенесён
 
-![[Jamming Bot - Scene 01 - Path.png]]
+> [!important] Канонический vault
+> Знания проекта Jamming Bot живут в общем Obsidian vault:
+>
+> **`Z:\Developer.work\arthew0_obsidian\projects\jamming-bot\`**
+>
+> Точки входа:
+> - [[projects/jamming-bot/_index|Jamming Bot Index]]
+> - [[Jamming Bot]]
+> - [[Jamming Bot MOC]]
+> - Паспорт: [[2026-02_jamming-bot]]
 
-## Проекты
+## Эта папка (`jamming-bot/knowledge`)
 
-- [[jamming-bot/Jamming Bot]]
+| Путь | Назначение |
+|------|------------|
+| `index.md` | этот указатель |
+| `scripts/` | служебные скрипты (media, canvas) |
+| `.cursor/` | правила Cursor для репо |
+| `_archive/` | снимок vault до миграции 2026-07-15 (**не править**) |
 
-## Разделы vault
+> [!warning] `@knowledge/...` в Cursor
+> Старые пути `@knowledge/jamming-bot/...` ведут в `_archive/` или никуда. Для агента указывай `Z:\Developer.work\arthew0_obsidian\projects\jamming-bot\` или открой workspace `arthew0_obsidian`.
 
-- [[concepts/_index|concepts]]
-- [[refs/_index|refs]]
-- [[journal/_index|journal]]
-- [[exhibitions/_index|exhibitions]]
-- [[jamming-bot/анализ/_index|анализ]]
-- [[arthew0]]
+## Карта переноса
 
-## Журнал
-
-- [[journal/_index|journal]] — датированные заметки и черновики
-- `templates/` — шаблоны для новых заметок
-- `scripts/` — служебные скрипты для поддержки vault
-
-## Что внутри Jamming Bot
-
-- Карточка проекта: [[jamming-bot/Jamming Bot]]
-- Карта содержания: [[Jamming Bot MOC]]
-- Аналитика: [[jamming-bot/анализ/_index|Анализ — индекс]]
-- Краулер: [[jamming-bot/dev/bot-service|Bot service]]
-- Web surface: [[Jamming bot web|Jamming Bot Web]]
-- Разработка: [[jamming-bot/dev/_index|Jamming Bot Dev Index]]
-- Веб-разделы: [[jamming-bot/web/_index|Jamming Bot Web Index]]
-
-[[Jamming bot Scenaria.canvas]]
+| Было | Стало |
+|------|-------|
+| `knowledge/jamming-bot/` | `arthew0_obsidian/projects/jamming-bot/` |
+| `knowledge/journal/` | `projects/jamming-bot/journal/` |
+| `knowledge/exhibitions/` | `notes/festivals/` |
+| `knowledge/refs/` | `notes/` (+ [[MOC Technologies]]) |
+| `knowledge/concepts/` | `notes/` |
+| `knowledge/media/` | `media/projects/jamming-bot/` |
