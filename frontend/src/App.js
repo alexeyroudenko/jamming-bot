@@ -91,6 +91,7 @@ const TAG_EMBED_AUTOSWITCH_ROUTES = [
   '/tags',
   '/tags/3d',
   '/tags/sentiment-vortex',
+  '/tags/vectorfield',
   '/tags/vectorfield-3d',
   '/',
 ]
@@ -310,6 +311,14 @@ export function AppContent() {
           }
         />
         <Route
+          path="/tags/vectorfield"
+          element={
+            <PwaScenesManifest>
+              <TagEmbedPage title="Vectorfield" path="/tags/vectorfield/" />
+            </PwaScenesManifest>
+          }
+        />
+        <Route
           path="/tags/vectorfield-3d"
           element={
             <PwaScenesManifest>
@@ -337,6 +346,10 @@ export function AppContent() {
         <Route
           path="/sentiment-vortex"
           element={<Navigate to="/tags/sentiment-vortex" replace />}
+        />
+        <Route
+          path="/vectorfield"
+          element={<Navigate to="/tags/vectorfield" replace />}
         />
         <Route
           path="/vectorfield-3d"

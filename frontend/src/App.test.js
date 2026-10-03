@@ -33,4 +33,6 @@ test('renders main nav', () => {
   expect(screen.getByRole('link', { name: 'Semantic' })).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Semantic 3D' })).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Tags' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Vectorfield' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Vectorfield 3D' })).toBeInTheDocument();
 });

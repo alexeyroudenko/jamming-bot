@@ -22,6 +22,9 @@ const Navbar = () => {
                     <NavLink to="/tags/sentiment-vortex">
                     Sentiment vortex
                     </NavLink>
+                    <NavLink to="/tags/vectorfield">
+                    Vectorfield
+                    </NavLink>
                     <NavLink to="/tags/vectorfield-3d">
                     Vectorfield 3D
                     </NavLink>
