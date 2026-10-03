@@ -33,7 +33,7 @@ jobs:
           key: ${{ secrets.K3S_SSH_PRIVATE_KEY }}
           password: ${{ secrets.K3S_SSH_PASSWORD }}
           port: ${{ secrets.K3S_SSH_PORT || '22' }}
-          command_timeout: 30m
+          command_timeout: 90m
           script: |
             set -e
             DEPLOY_PATH="${{ secrets.K3S_DEPLOY_PATH || '/opt/jamming-bot' }}"
