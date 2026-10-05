@@ -349,9 +349,9 @@ CORS_LOCAL_ORIGIN_RE = re.compile(
     r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     re.IGNORECASE,
 )
-# Статика AA-клонов (semantic3d.aa… и соседние поддомены)
-CORS_AA_ORIGIN_RE = re.compile(
-    r"^https://([a-z0-9-]+\.)?aa\.arthew0\.online$",
+# Своя статика: arthew0.online и любые поддомены (*.aa…, *.dev…, dev.arthew0.online/data-art-vectorfield/)
+CORS_ARTHEW0_ORIGIN_RE = re.compile(
+    r"^https://([a-z0-9-]+\.)*arthew0\.online$",
     re.IGNORECASE,
 )
 
@@ -363,7 +363,7 @@ def _cors_origin_allowed(origin: str | None) -> bool:
         return True
     if CORS_LOCAL_ORIGIN_RE.match(origin):
         return True
-    return bool(CORS_AA_ORIGIN_RE.match(origin))
+    return bool(CORS_ARTHEW0_ORIGIN_RE.match(origin))
 
 
 def _apply_cors_headers(response, origin: str | None):

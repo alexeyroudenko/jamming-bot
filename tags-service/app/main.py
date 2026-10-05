@@ -74,6 +74,8 @@ origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    # arthew0.online и любые поддомены (*.aa…, *.dev…)
+    allow_origin_regex=r"https://([a-z0-9-]+\.)*arthew0\.online",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
