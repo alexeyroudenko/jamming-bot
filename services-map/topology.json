@@ -21,7 +21,7 @@
     { "id": "worker-screenshots", "label": "worker-screenshots", "group": "workers" },
     { "id": "bot-service", "label": "bot-service", "group": "workers" },
     { "id": "backfill-worker", "label": "backfill-worker", "group": "workers" },
-    { "id": "external-s3", "label": "s3.firstvds.ru", "group": "external" }
+    { "id": "external-s3", "label": "firsts3.ru", "group": "external" }
   ],
   "edges": [
     { "source": "ingress", "target": "app-service", "label": "jamming-bot.arthew0.online /" },

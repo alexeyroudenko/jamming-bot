@@ -195,7 +195,7 @@
     },
     {
       "id": "external-s3",
-      "label": "s3.firstvds.ru",
+      "label": "firsts3.ru",
       "group": "external",
       "kind": "virtual"
     }

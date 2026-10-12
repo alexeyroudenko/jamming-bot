@@ -60,7 +60,7 @@ S3_READ_TIMEOUT_SEC = int(os.getenv("S3_READ_TIMEOUT_SEC", "4"))
 SVC_NAME = os.getenv("SVC_NAME", "jobs service")
 
 # S3 configuration
-S3_HOST = os.getenv('S3_HOST', 's3.firstvds.ru')
+S3_HOST = os.getenv('S3_HOST', 'firsts3.ru')
 S3_PORT = os.getenv('S3_PORT', '443')
 S3_ACCESS_KEY = os.getenv('S3_ACCESS_KEY', '')
 S3_SECRET_KEY = os.getenv('S3_SECRET_KEY', '')

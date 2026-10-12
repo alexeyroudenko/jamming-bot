@@ -1018,7 +1018,7 @@ spec:
         - name: IMAGE_ANALYZE_SERVICE_URL
           value: "http://image-analyze-service"
         - name: S3_HOST
-          value: "s3.firstvds.ru"
+          value: "firsts3.ru"
         - name: S3_PORT
           value: "443"
         - name: S3_ACCESS_KEY
@@ -1119,7 +1119,7 @@ spec:
         - name: IMAGE_ANALYZE_SERVICE_URL
           value: "http://image-analyze-service"
         - name: S3_HOST
-          value: "s3.firstvds.ru"
+          value: "firsts3.ru"
         - name: S3_PORT
           value: "443"
         - name: S3_ACCESS_KEY
@@ -1507,7 +1507,7 @@ spec:
         - name: IMAGE_ANALYZE_SERVICE_URL
           value: "http://image-analyze-service"
         - name: S3_HOST
-          value: "s3.firstvds.ru"
+          value: "firsts3.ru"
         - name: S3_PORT
           value: "443"
         - name: S3_ACCESS_KEY
