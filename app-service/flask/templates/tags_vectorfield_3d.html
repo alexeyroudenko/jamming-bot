@@ -108,8 +108,8 @@
     <option value="high">High</option>
   </select>
   <label class="tags-vis-density-label vf3-native-only" for="vf3-noise">Noise value</label>
-  <input id="vf3-noise" class="tags-vis-select vf3-native-only" type="range" min="0" max="1.26" step="0.01" value="0.42" aria-label="Noise value">
-  <span class="tags-vis-status vf3-native-only" id="vf3-noise-value">0.42</span>
+  <input id="vf3-noise" class="tags-vis-select vf3-native-only" type="range" min="0" max="1.65" step="0.01" value="0.55" aria-label="Noise value">
+  <span class="tags-vis-status vf3-native-only" id="vf3-noise-value">0.55</span>
   <label class="tags-vis-density-label vf3-native-only" for="vf3-anchors">Anchors value</label>
   <input id="vf3-anchors" class="tags-vis-select vf3-native-only" type="range" min="0" max="8" step="0.1" value="1" aria-label="Anchors value">
   <span class="tags-vis-status vf3-native-only" id="vf3-anchors-value">1.0</span>
@@ -125,7 +125,7 @@
   <label class="tags-vis-density-label vf3-native-only" for="vf3-anchor-count">Count anchors</label>
   <input id="vf3-anchor-count" class="tags-vis-select vf3-native-only" type="range" min="0" max="256" step="1" value="32" aria-label="Count anchors">
   <span class="tags-vis-status vf3-native-only" id="vf3-anchor-count-value">32</span>
-  <button type="button" class="tags-vis-btn vf3-native-only" id="btn-anchor-labels" aria-pressed="true" title="Show tag labels (projected; 3D view only — no drag)">Anchor labels</button>
+  <button type="button" class="tags-vis-btn vf3-native-only" id="btn-anchor-labels" aria-pressed="false" title="Show tag labels (projected; 3D view only — no drag)">Anchor labels</button>
   <button type="button" class="tags-vis-btn vf3-native-only" id="btn-show-vectors" aria-pressed="false" title="Sample field direction on a coarse 3D grid">Field vectors</button>
   <button type="button" class="tags-vis-btn vf3-native-only" id="btn-freeze">Freeze</button>
   <button type="button" class="tags-vis-btn vf3-native-only" id="btn-export">Export PNG</button>
@@ -137,7 +137,7 @@
 <div class="tags-vis-canvas-host">
   <canvas id="vf3"></canvas>
   <div id="vf3-intro-veil" class="vf3-intro-veil" aria-hidden="true"></div>
-  <div id="vf3-anchors-layer" class="vf-anchors-layer" aria-hidden="false"></div>
+  <div id="vf3-anchors-layer" class="vf-anchors-layer is-hidden" aria-hidden="true"></div>
   <iframe
     id="vf3-shredder-frame"
     title="Polygon shredder particles"
@@ -166,7 +166,8 @@
   var MAX_ANCHOR_CANDIDATES = 256;
   var DEFAULT_ANCHOR_COUNT = 32;
   var MAX_DPR = 2;
-  var NOISE_BASE = 0.42;
+  /** Same default as `/tags/vectorfield/` (2D). */
+  var NOISE_BASE = 0.55;
   var ANCHORS_BASE = 1.0;
   var animSlow = 1;
   var reduceMotionPreferred = false;
@@ -265,7 +266,7 @@
   var positions, velocities;
   var reloadTimer = null;
   var anchorLayer = document.getElementById('vf3-anchors-layer');
-  var showAnchorLabels = true;
+  var showAnchorLabels = false;
   var showVectors = false;
   var vectorGeom = null;
   var vectorLines = null;
@@ -402,10 +403,11 @@
     return '';
   }
 
+  /** 3D analog of `/tags/vectorfield/` noise2 — same spatial scales / weights. */
   function noise3(x, y, z, t) {
     return (
-      Math.sin(y * 0.017 + z * 0.011 + t * 0.6) * Math.cos(x * 0.015 - t * 0.45) +
-      0.45 * Math.sin(x * 0.031 + y * 0.019 + z * 0.013 + t * 0.95)
+      Math.sin(x * 0.019 + z * 0.011 + t * 0.7) * Math.cos(y * 0.017 - t * 0.5) +
+      0.5 * Math.sin(x * 0.041 + y * 0.023 + z * 0.017 + t * 1.1)
     );
   }
 
@@ -779,9 +781,11 @@
       size: effectiveParticles > 11000 ? 0.72 : 1.15,
       color: 0xffffff,
       transparent: true,
-      opacity: 0.82,
+      opacity: 0.8,
       depthWrite: false,
       blending: THREE.NormalBlending,
+      /* Как orthographic 2D: одинаковый экранный размер, без перспективного «крупного» шума спереди. */
+      sizeAttenuation: false,
     });
     points = new THREE.Points(geom, mat);
     scene.add(points);
@@ -1276,13 +1280,13 @@
     var btn = document.getElementById('btn-anchor-labels');
     if (!btn) return;
     try {
-      if (sessionStorage.getItem('tags-vectorfield-3d-anchor-labels') === '0') {
-        setAnchorLabelsVisible(false);
-      } else {
+      if (sessionStorage.getItem('tags-vectorfield-3d-anchor-labels') === '1') {
         setAnchorLabelsVisible(true);
+      } else {
+        setAnchorLabelsVisible(false);
       }
     } catch (e) {
-      setAnchorLabelsVisible(true);
+      setAnchorLabelsVisible(false);
     }
     btn.addEventListener('click', function () {
       setAnchorLabelsVisible(!showAnchorLabels);
