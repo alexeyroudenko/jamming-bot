@@ -140,15 +140,15 @@
   <div id="vf3-anchors-layer" class="vf-anchors-layer is-hidden" aria-hidden="true"></div>
   <iframe
     id="vf3-shredder-frame"
-    title="Polygon shredder particles"
+    title="Particle shredder"
     loading="lazy"
-    referrerpolicy="no-referrer-when-downgrade"
+    referrerpolicy="no-referrer"
     allow="fullscreen"
   ></iframe>
 </div>
 
-<script src="https://unpkg.com/three@0.128.0/build/three.min.js" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js" crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='vendor/three.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/OrbitControls.js') }}"></script>
 <script src="{{ url_for('static', filename='tags_vis_controls.js') }}"></script>
 <script>
 (function () {
@@ -184,7 +184,8 @@
   var vf3EmbStaggerDone = false;
   var anchorsRevealTimer = null;
 
-  var SHREDDER_URL = 'https://webgl-particles4.dev.arthew0.online/';
+  /** Local embed (no cross-origin particle host). */
+  var SHREDDER_URL = {{ url_for('static', filename='polygon-shredder/index.html')|tojson }};
   var PARTICLE_MODE_KEY = 'tags-vectorfield-3d-particle-mode';
 
   var statusEl = document.getElementById('tags-vis-status');
@@ -237,7 +238,7 @@
     document.body.classList.toggle('vf3-particle-shredder', next === 'shredder');
     if (next === 'shredder') {
       ensureShredderLoaded();
-      if (statusEl) statusEl.textContent = 'Shredder · particles4';
+      if (statusEl) statusEl.textContent = 'Shredder';
     } else {
       unloadShredder();
       if (statusEl && statusEl.textContent.indexOf('Shredder') === 0) {
