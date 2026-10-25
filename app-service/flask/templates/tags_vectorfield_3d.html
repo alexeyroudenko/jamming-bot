@@ -155,11 +155,19 @@
   var API_BASE = {{ tags_api_base|tojson }};
   var TAGS_API = (API_BASE || '') + '/api/tags/get/';
   var EMB_API = (API_BASE || '') + '/api/tags/embeddings/';
-  var MAX_PARTICLES_CAPACITY = 56000;
+  /** Cap for InstancedMesh boxels (lower than old Points for FPS). */
+  var MAX_PARTICLES_CAPACITY = 16000;
   var FLOW_SPEED = 0.05;
   var RELOAD_DEBOUNCE_MS = 550;
   /** Half-extent of simulation cube (world units). */
   var WORLD_HALF = 250;
+  /** Box half-extent ~ shredder 0.025 on unit sphere → scaled to WORLD_HALF. */
+  var BOXEL_BASE_SCALE = WORLD_HALF * 0.004;
+  /** Polygon-shredder confetti palette (main-boxels.js). */
+  var BOXEL_COLORS = [
+    0xed6a5a, 0xf4f1bb, 0x9bc1bc, 0x5ca4a9, 0xe6ebe0, 0xf0b67f, 0xfe5f55, 0xd6d1b1,
+    0xc7efcf, 0xeef5db, 0x50514f, 0xf25f5c, 0xffe066, 0x247ba0, 0x70c1b3,
+  ];
 
   var effectiveParticles = MAX_PARTICLES_CAPACITY;
   var MAX_TAGS = 48;
@@ -261,7 +269,11 @@
     applyParticleMode(saved, { skipStore: true });
   }
 
-  var renderer, scene, camera, controls, points, geom, posAttr;
+  var renderer, scene, camera, controls, boxMesh;
+  var _boxDummy = new THREE.Object3D();
+  var _boxLookAt = new THREE.Vector3();
+  var _boxUp = new THREE.Vector3(0, 1, 0);
+  var _boxColor = new THREE.Color();
   var anchors = [];
   var tAnim = 0;
   var positions, velocities;
@@ -334,9 +346,9 @@
     var pref = getDensityPref();
     var cores = typeof navigator.hardwareConcurrency === 'number' ? navigator.hardwareConcurrency : 4;
     var narrow = window.innerWidth < 640;
-    var particlesHi = 56000;
-    var particlesMed = 32000;
-    var particlesLo = 16000;
+    var particlesHi = 16000;
+    var particlesMed = 12000;
+    var particlesLo = 8000;
     var tagsHi = 48;
     var tagsMed = 36;
     var tagsLo = 24;
@@ -384,11 +396,39 @@
     MAX_DPR = t.maxDpr;
     animSlow = t.animSlow;
     reduceMotionPreferred = t.reduceMotion;
-    if (geom) geom.setDrawRange(0, effectiveParticles);
-    if (points && points.material) {
-      points.material.size = effectiveParticles > 11000 ? 0.72 : 1.15;
-      points.material.needsUpdate = true;
+    if (boxMesh) {
+      boxMesh.count = effectiveParticles;
     }
+  }
+
+  function syncBoxelInstance(i) {
+    if (!boxMesh) return;
+    var x = positions[i * 3 + 0];
+    var y = positions[i * 3 + 1];
+    var z = positions[i * 3 + 2];
+    var vx = velocities[i * 3 + 0];
+    var vy = velocities[i * 3 + 1];
+    var vz = velocities[i * 3 + 2];
+    var spd = Math.sqrt(vx * vx + vy * vy + vz * vz);
+    var sx = BOXEL_BASE_SCALE * (0.55 + Math.min(1.8, spd * 14));
+    var sy = BOXEL_BASE_SCALE * 0.35;
+    var sz = BOXEL_BASE_SCALE * (1.2 + Math.min(2.2, spd * 18));
+    _boxDummy.position.set(x, y, z);
+    if (spd > 1e-5) {
+      _boxLookAt.set(x + vx, y + vy, z + vz);
+      _boxDummy.up.copy(_boxUp);
+      _boxDummy.lookAt(_boxLookAt);
+    }
+    _boxDummy.scale.set(sx, sy, sz);
+    _boxDummy.updateMatrix();
+    boxMesh.setMatrixAt(i, _boxDummy.matrix);
+  }
+
+  function flushBoxelInstances(n) {
+    if (!boxMesh) return;
+    var lim = n != null ? n : effectiveParticles;
+    for (var i = 0; i < lim; i++) syncBoxelInstance(i);
+    boxMesh.instanceMatrix.needsUpdate = true;
   }
 
   function showErr(msg) {
@@ -765,7 +805,14 @@
     controls.target.set(0, 0, 0);
     controls.update();
 
-    geom = new THREE.BufferGeometry();
+    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+    var key = new THREE.DirectionalLight(0xffffff, 0.85);
+    key.position.set(WORLD_HALF * 0.55, WORLD_HALF * 0.35, WORLD_HALF * 0.6);
+    scene.add(key);
+    var fill = new THREE.DirectionalLight(0x9bc1bc, 0.25);
+    fill.position.set(-WORLD_HALF * 0.4, -WORLD_HALF * 0.2, WORLD_HALF * 0.3);
+    scene.add(fill);
+
     var n = MAX_PARTICLES_CAPACITY;
     positions = new Float32Array(n * 3);
     velocities = new Float32Array(n * 3);
@@ -774,22 +821,24 @@
       positions[i * 3 + 1] = 0;
       positions[i * 3 + 2] = 0;
     }
-    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    posAttr = geom.getAttribute('position');
-    geom.setDrawRange(0, effectiveParticles);
 
-    var mat = new THREE.PointsMaterial({
-      size: effectiveParticles > 11000 ? 0.72 : 1.15,
+    var boxGeo = new THREE.BoxBufferGeometry(1, 1, 1);
+    var boxMat = new THREE.MeshPhongMaterial({
       color: 0xffffff,
-      transparent: true,
-      opacity: 0.8,
-      depthWrite: false,
-      blending: THREE.NormalBlending,
-      /* Как orthographic 2D: одинаковый экранный размер, без перспективного «крупного» шума спереди. */
-      sizeAttenuation: false,
+      flatShading: true,
+      shininess: 48,
+      specular: 0x222222,
     });
-    points = new THREE.Points(geom, mat);
-    scene.add(points);
+    boxMesh = new THREE.InstancedMesh(boxGeo, boxMat, n);
+    boxMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    boxMesh.count = effectiveParticles;
+    boxMesh.frustumCulled = false;
+    for (var c = 0; c < n; c++) {
+      _boxColor.setHex(BOXEL_COLORS[c % BOXEL_COLORS.length]);
+      boxMesh.setColorAt(c, _boxColor);
+    }
+    if (boxMesh.instanceColor) boxMesh.instanceColor.needsUpdate = true;
+    scene.add(boxMesh);
     ensureVectorOverlay();
   }
 
@@ -872,7 +921,7 @@
       velocities[i * 3 + 1] = 0;
       velocities[i * 3 + 2] = 0;
     }
-    posAttr.needsUpdate = true;
+    flushBoxelInstances(n);
   }
 
   function resize() {
@@ -1455,8 +1504,9 @@
         positions[i * 3 + 0] = x;
         positions[i * 3 + 1] = y;
         positions[i * 3 + 2] = z;
+        syncBoxelInstance(i);
       }
-      posAttr.needsUpdate = true;
+      if (boxMesh) boxMesh.instanceMatrix.needsUpdate = true;
     }
     if (showVectors) {
       ensureVectorOverlay();

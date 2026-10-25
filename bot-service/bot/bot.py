@@ -671,67 +671,71 @@ class NetSpider():
 
         '''
             already added link for current domain
+
+            No explicit database.transaction(): aiosqlite/SQLite often already has an
+            open implicit txn after UPDATE visited; nested BEGIN →
+            "cannot start a transaction within a transaction" and status 801.
+            Per-row INSERT OR IGNORE is enough for crawl correctness.
         '''
         host_count_cache = {}
 
-        async with self.database.transaction():
-            for link_element in link_elements:
+        for link_element in link_elements:
 
-                url = link_element['href']
-                href = link_element['href']
+            url = link_element['href']
+            href = link_element['href']
 
-                mimetype = mimetypes.guess_type(url)
+            mimetype = mimetypes.guess_type(url)
 
-                if mimetype[0] == "text/html" or mimetype[0] == None:
-                    new_link_element = ""
-                    full_url = None
-                    if not "javascript" in url and not "mailto" in url:
-                        new_hostname = urlparse(url).hostname
-                        if not new_hostname:
-                            full_url = requests.compat.urljoin(current_site, url)
-                            url = self.filter.clean_url(full_url)
+            if mimetype[0] == "text/html" or mimetype[0] == None:
+                new_link_element = ""
+                full_url = None
+                if not "javascript" in url and not "mailto" in url:
+                    new_hostname = urlparse(url).hostname
+                    if not new_hostname:
+                        full_url = requests.compat.urljoin(current_site, url)
+                        url = self.filter.clean_url(full_url)
 
-                        if not new_hostname:
-                            new_link_element = self.filter.get_values(full_url)['url']
+                    if not new_hostname:
+                        new_link_element = self.filter.get_values(full_url)['url']
+                    else:
+                        if self.filter.clean_url(new_hostname) in self.filter.filters:
+                            # logging.debug(f"skip href {href} because host {new_hostname}")
+                            ...
                         else:
-                            if self.filter.clean_url(new_hostname) in self.filter.filters:
-                                # logging.debug(f"skip href {href} because host {new_hostname}")
-                                ...
-                            else:
-                                new_link_element = href
+                            new_link_element = href
 
-                    if new_link_element == "":
-                        continue
-                    if not domain_is_en(new_link_element) or is_domain_blocked(new_link_element):
-                        continue
-                    if await self._urls_row_exists(new_link_element):
-                        continue
+                if new_link_element == "":
+                    continue
+                if not domain_is_en(new_link_element) or is_domain_blocked(new_link_element):
+                    continue
+                if await self._urls_row_exists(new_link_element):
+                    continue
 
-                    hostname = get_second_level_domain(new_link_element)
-                    if hostname not in host_count_cache:
-                        host_count_cache[hostname] = await self._count_urls_for_hostname(hostname)
-                    if host_count_cache[hostname] > self.count_per_domain:
-                        logging.debug(f"skip add")
-                        continue
+                hostname = get_second_level_domain(new_link_element)
+                if hostname not in host_count_cache:
+                    host_count_cache[hostname] = await self._count_urls_for_hostname(hostname)
+                if host_count_cache[hostname] > self.count_per_domain:
+                    logging.debug(f"skip add")
+                    continue
 
-                    values = self.filter.get_values(href)
-                    values['url'] = new_link_element
-                    values['src_url'] = current_url
-                    values['hostname'] = hostname
+                values = self.filter.get_values(href)
+                values['url'] = new_link_element
+                values['src_url'] = current_url
+                values['hostname'] = hostname
 
-                    try:
-                        self.notify_about_sublink(
-                            {"hostname": hostname, "src_url": current_url, "url": new_link_element}
-                        )
-                    except Exception:
-                        ...
-
-                    query = (
-                        "INSERT OR IGNORE INTO Urls(hostname, url, src_url, visited) "
-                        "VALUES (:hostname, :url, :src_url, :visited)"
+                try:
+                    self.notify_about_sublink(
+                        {"hostname": hostname, "src_url": current_url, "url": new_link_element}
                     )
-                    await self._db_execute(query=query, values=values)
-                    host_count_cache[hostname] += 1
+                except Exception:
+                    ...
+
+                query = (
+                    "INSERT OR IGNORE INTO Urls(hostname, url, src_url, visited) "
+                    "VALUES (:hostname, :url, :src_url, :visited)"
+                )
+                await self._db_execute(query=query, values=values)
+                host_count_cache[hostname] += 1
 
 
     #
@@ -1000,9 +1004,13 @@ class NetSpider():
                 
                     except Exception as e1:
                         logging.warning(e1)
-                        logging.warning(f"step {self.step_number} \t ERR \t {current_base_domain} \t {src_url} > {current_url} \t e1 line {e1.__traceback__.tb_lineno}")
-                        self.notify_about_eventp("error_retrieve_url", {})                    
-                        self.step.status_code = 801         
+                        logging.warning(
+                            f"step {self.step_number} \t ERR \t {current_base_domain} \t "
+                            f"{src_url} > {current_url} \t e1 line {e1.__traceback__.tb_lineno}"
+                        )
+                        # 801 = exception after validate (often collect_links), not HTTP retrieve.
+                        self.notify_about_eventp("error_step_pipeline", {"error": str(e1)[:200]})
+                        self.step.status_code = 801
                         self.notify_about_step(self.step)
                 
         except IndexError as e2:

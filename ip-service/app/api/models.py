@@ -1,7 +1,9 @@
+from pydantic import BaseModel, Field
 
-class GeoOut():
-    ip: str
-    city: str
-    latitude: float
-    longitude: float
-    error: str
+
+class GeoOut(BaseModel):
+    ip: str = ""
+    city: str = ""
+    latitude: float = 0.0
+    longitude: float = 0.0
+    error: str = ""
