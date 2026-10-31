@@ -217,7 +217,7 @@
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
 <script>
 (function () {
-  var STORAGE_API = '/api/storage_latest/';
+  var STORAGE_API = '/api/storage_latest/?limit=100&fields=number,status_code,url,src,ip,timestamp,error,text_length,screenshot_url';
   var MAX_STEPS = 100;
   var MODE_STORAGE_KEY = 'path-map-display-mode';
   var ROWS_STORAGE_KEY = 'path-map-row-count';

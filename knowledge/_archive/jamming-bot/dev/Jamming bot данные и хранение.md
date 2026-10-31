@@ -82,7 +82,7 @@ updated: 2026-04-07
 
 | API | Смысл |
 | --- | --- |
-| `GET /get/latest` | До **3000** последних записей по `id`, плюс `total_lines` — всего шагов; к строкам подмешивается `palette` из `steps_analysis`. |
+| `GET /get/latest` | До **3000** последних записей по `id` (`?limit=`, max 20000). `?fields=` — проекция колонок; `palette` только для возвращённых номеров; `total_lines` кэшируется ~60s (`?include_total=1` — обновить). |
 | `GET /get/ids` | Отсортированные числовые номера шагов. |
 | `GET /export/csv` | Потоковый дамп всех шагов (батчи). |
 | `GET /export/img` | Одно PNG: сетка по всем шагам, режимы `presence`, `status_code`, `text_length`, `timestamp_delta`, `screenshot`. |

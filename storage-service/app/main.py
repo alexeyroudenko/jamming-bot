@@ -312,9 +312,17 @@ async def get_step(number: str):
 
 
 @app.get("/get/latest")
-async def get_latest(limit: int = 3000):
+async def get_latest(
+    limit: int = 3000,
+    fields: str | None = None,
+    include_total: bool = False,
+):
     safe_limit = max(1, min(int(limit), 20000))
-    return await db_manager.get_latest(limit=safe_limit)
+    return await db_manager.get_latest(
+        limit=safe_limit,
+        fields=fields,
+        include_total=include_total,
+    )
 
 
 @app.post("/analysis/store")

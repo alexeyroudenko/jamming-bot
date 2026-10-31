@@ -1385,7 +1385,11 @@ def build_image_url(image_type: str) -> str:
 def build_latest_url() -> str:
     base = DEFAULT_LATEST_URL.rstrip("/")
     sep = "&" if "?" in base else "?"
-    return f"{base}{sep}limit={DEFAULT_LATEST_LIMIT}"
+    fields = (
+        "number,status_code,text_length,timestamp,screenshot_url,"
+        "latitude,longitude,error,url,src"
+    )
+    return f"{base}{sep}limit={DEFAULT_LATEST_LIMIT}&fields={fields}"
 
 
 def fetch_steps_payload_sync() -> dict:

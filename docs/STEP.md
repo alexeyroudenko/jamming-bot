@@ -50,6 +50,13 @@ to storage-service, which writes it as TSV + individual JSON file.
 ```
 GET /api/step/{number}/          → from Redis hash (live, TTL 1h)
 GET /api/storage_step/{number}/  → from storage-service JSON (persistent)
-GET /api/storage_latest/         → last 3000 steps with named fields
+GET /api/storage_latest/         → last N steps with named fields
 GET /api/storage_ids/            → all stored step numbers sorted ascending
 ```
+
+`GET /api/storage_latest/` query params (proxied to storage-service `/get/latest`):
+
+- `limit` — 1..20000 (default 3000)
+- `fields` — comma-separated whitelist (`id`, STEP_FIELDS, `palette`); omits heavy columns like `text` when not listed
+- `include_total=1` — force refresh of `total_lines` (otherwise COUNT is cached ~60s)
+

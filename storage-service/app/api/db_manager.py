@@ -1,4 +1,5 @@
 import json
+import time
 
 from sqlalchemy import desc, func, select
 from app.api.db import steps, steps_analysis, database
@@ -12,12 +13,71 @@ STEP_FIELDS = [
 ]
 
 ANALYSIS_FIELDS = ['step_number', 'palette']
+LATEST_ALLOWED_FIELDS = frozenset(['id'] + STEP_FIELDS + ['palette'])
+DEFAULT_LATEST_FIELDS = STEP_FIELDS + ['palette']
+_TOTAL_LINES_CACHE_TTL = 60.0
+_total_lines_cache = {"value": None, "expires_at": 0.0}
 
 
-def _record_to_dict(r):
+def _record_to_dict(r, fields=None):
     if r is None:
         return None
-    return {field: (str(r[field]) if r[field] is not None else '') for field in ['id'] + STEP_FIELDS}
+    out_fields = fields if fields is not None else (['id'] + STEP_FIELDS)
+    result = {}
+    for field in out_fields:
+        if field == 'palette':
+            continue
+        try:
+            val = r[field]
+        except (KeyError, IndexError):
+            continue
+        result[field] = str(val) if val is not None else ''
+    return result
+
+
+def _parse_latest_fields(fields):
+    """Return (column_names_for_sql, include_palette, response_fields)."""
+    if not fields:
+        # Full row: id + STEP_FIELDS for SQL; response fields list matches legacy.
+        return ['id'] + list(STEP_FIELDS), True, list(DEFAULT_LATEST_FIELDS)
+
+    if isinstance(fields, str):
+        requested = [f.strip() for f in fields.split(',') if f.strip()]
+    else:
+        requested = [str(f).strip() for f in fields if str(f).strip()]
+
+    seen = set()
+    ordered = []
+    for name in requested:
+        if name not in LATEST_ALLOWED_FIELDS or name in seen:
+            continue
+        seen.add(name)
+        ordered.append(name)
+
+    if not ordered:
+        return ['id'] + list(STEP_FIELDS), True, list(DEFAULT_LATEST_FIELDS)
+
+    include_palette = 'palette' in seen
+    sql_names = [n for n in ordered if n != 'palette']
+    # Always fetch number when palette is needed so we can join analysis rows.
+    if include_palette and 'number' not in sql_names:
+        sql_names.append('number')
+    return sql_names, include_palette, ordered
+
+
+async def _get_total_lines(include_total: bool = False):
+    """Return total step count; refresh at most every TTL unless include_total."""
+    now = time.monotonic()
+    cached = _total_lines_cache["value"]
+    fresh = cached is not None and now < _total_lines_cache["expires_at"]
+    if fresh and not include_total:
+        return cached
+    total = await database.fetch_val(
+        query=select(func.count()).select_from(steps)
+    )
+    _total_lines_cache["value"] = total
+    _total_lines_cache["expires_at"] = now + _TOTAL_LINES_CACHE_TTL
+    return total
 
 
 def _analysis_record_to_dict(r):
@@ -158,23 +218,42 @@ async def get_image_rows():
     return result
 
 
-async def get_latest(limit: int = 3000):
-    total = await database.fetch_val(
-        query=select(func.count()).select_from(steps)
-    )
+async def get_latest(limit: int = 3000, fields=None, include_total: bool = False):
+    sql_names, include_palette, response_fields = _parse_latest_fields(fields)
+    columns = [steps.c[name] for name in sql_names if name in steps.c]
+    if not columns:
+        columns = [steps.c.id] + [steps.c[f] for f in STEP_FIELDS]
 
-    query = steps.select().order_by(desc(steps.c.id)).limit(limit)
+    total = await _get_total_lines(include_total=include_total)
+
+    query = select(*columns).order_by(desc(steps.c.id)).limit(limit)
     rows = await database.fetch_all(query=query)
-    result = [_record_to_dict(r) for r in reversed(rows)]
-    analysis_rows = await database.fetch_all(query=steps_analysis.select())
-    analysis_map = {
-        str(r["step_number"]): (_analysis_record_to_dict(r) or {}).get("palette", [])
-        for r in analysis_rows
-    }
-    for row in result:
-        row["palette"] = analysis_map.get(str(row.get("number", "")), [])
+    # Dict keys for projected rows (exclude palette; added below when requested).
+    dict_fields = [n for n in sql_names if n != 'palette']
+    result = [_record_to_dict(r, fields=dict_fields) for r in reversed(rows)]
+
+    if include_palette:
+        numbers = [str(row.get("number", "")) for row in result if row.get("number")]
+        analysis_map = {}
+        if numbers:
+            analysis_rows = await database.fetch_all(
+                query=steps_analysis.select().where(
+                    steps_analysis.c.step_number.in_(numbers)
+                )
+            )
+            analysis_map = {
+                str(r["step_number"]): (_analysis_record_to_dict(r) or {}).get("palette", [])
+                for r in analysis_rows
+            }
+        for row in result:
+            row["palette"] = analysis_map.get(str(row.get("number", "")), [])
+        # Drop helper number if caller did not ask for it.
+        if "number" not in response_fields:
+            for row in result:
+                row.pop("number", None)
+
     return {
-        "fields": STEP_FIELDS + ["palette"],
+        "fields": response_fields,
         "total_lines": total,
         "returned_lines": len(result),
         "data": result,

@@ -314,7 +314,7 @@ curl -sS -b /tmp/jb-cookies.txt \
 | endpoint                            | описание                                               |
 | ----------------------------------- | ------------------------------------------------------ |
 | `GET /api/storage_step/<step_num>/` | Прокси к storage-service: один сохранённый step.       |
-| `GET /api/storage_latest/`          | Прокси к storage-service: последние сохранённые steps. |
+| `GET /api/storage_latest/`          | Прокси к storage-service: последние steps. Query: `?limit=`, `?fields=`, `?include_total=1`. |
 | `GET /api/storage_ids/`             | Прокси к storage-service: список id / numbers.         |
 | `GET /api/storage_geo/`             | Упрощённый geo JSON для globe page.                    |
 |                                     |                                                        |

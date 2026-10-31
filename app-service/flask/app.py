@@ -2874,12 +2874,21 @@ def api_storage_step(step_num):
 @app.route("/api/storage_latest/", methods=["GET"])
 @cross_origin()
 def api_storage_latest():
-    """Proxy to storage-service GET /get/latest (optional ?limit= for steps-service)."""
+    """Proxy to storage-service GET /get/latest.
+
+    Query: ?limit= (1..20000), ?fields=comma,separated, ?include_total=1
+    """
     try:
         limit = request.args.get("limit", type=int)
         params = {}
         if limit is not None:
             params["limit"] = max(1, min(limit, 20000))
+        fields = (request.args.get("fields") or "").strip()
+        if fields:
+            params["fields"] = fields
+        include_total = request.args.get("include_total", default="0").strip().lower()
+        if include_total in ("1", "true", "yes"):
+            params["include_total"] = "true"
         resp = storage_http.storage_get("/get/latest", timeout=30, params=params or None)
         resp.raise_for_status()
         return jsonify(resp.json())
@@ -2990,8 +2999,16 @@ def api_storage_geo():
     """
     limit = request.args.get("limit", default=2000, type=int)
     limit = max(1, min(limit, 5000))
+    fetch_limit = max(1, min(max(limit * 3, 2000), 5000))
     try:
-        resp = storage_http.storage_get("/get/latest", timeout=15)
+        resp = storage_http.storage_get(
+            "/get/latest",
+            timeout=15,
+            params={
+                "limit": fetch_limit,
+                "fields": "id,number,ip,latitude,longitude,city",
+            },
+        )
         resp.raise_for_status()
         payload = resp.json()
         rows = payload.get("data") or []

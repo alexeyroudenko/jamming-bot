@@ -294,7 +294,7 @@ async def backfill_daily_from_storage(storage_url: str, limit: int = 0, offset: 
         async with httpx.AsyncClient(timeout=45) as client:
             latest_response = await client.get(
                 f"{storage_url.rstrip('/')}/get/latest",
-                params={"limit": latest_limit},
+                params={"limit": latest_limit, "fields": "number,tags"},
             )
             latest_response.raise_for_status()
             latest_rows = latest_response.json()
