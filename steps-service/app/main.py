@@ -59,7 +59,7 @@ IMAGE_TYPE_ALIASES = {
 }
 
 
-def fetch_bytes(url: str) -> bytes:
+def fetch_bytes(url: str, *, timeout: float = 90) -> bytes:
     request = urllib.request.Request(
         url,
         headers={
@@ -67,7 +67,7 @@ def fetch_bytes(url: str) -> bytes:
             "User-Agent": "steps-service/1.0",
         },
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
+    with urllib.request.urlopen(request, timeout=timeout) as response:
         return response.read()
 
 
@@ -1433,32 +1433,48 @@ async def refresh_presence() -> None:
     """
     Refresh default presence PNG + step rows. Other image types load on demand via /api/image.
     Step rows prefer STEPS_LATEST_URL (JSON); CSV only on failure.
+    Image and latest failures are independent: keep the previous good cache for each.
     """
     default_url = build_image_url(DEFAULT_IMAGE_TYPE)
     async with state_lock:
         snapshots = dict(state.snapshots or {})
         payload = dict(state.steps_payload) if state.steps_payload else None
+        had_payload = payload is not None
 
     default_result, payload_data = await asyncio.gather(
-        asyncio.to_thread(fetch_bytes, default_url),
+        asyncio.to_thread(fetch_bytes, default_url, timeout=90),
         asyncio.to_thread(fetch_steps_payload_sync),
         return_exceptions=True,
     )
 
     errors = []
+    image_ok = False
     if isinstance(default_result, Exception):
-        errors.append(f"{DEFAULT_IMAGE_TYPE}: {default_result}")
+        errors.append(f"image/{DEFAULT_IMAGE_TYPE}: {default_result}")
+        logger.warning(
+            "image refresh failed (%s); keeping previous snapshot if any",
+            default_result,
+        )
     else:
-        width, height = parse_png_dimensions(default_result)
-        await asyncio.to_thread(
-            write_snapshot, DEFAULT_OUTPUT_DIR, DEFAULT_IMAGE_TYPE, default_result
-        )
-        snapshots[DEFAULT_IMAGE_TYPE] = ImageSnapshot(
-            width=width, height=height, png_bytes=default_result
-        )
+        try:
+            width, height = parse_png_dimensions(default_result)
+            await asyncio.to_thread(
+                write_snapshot, DEFAULT_OUTPUT_DIR, DEFAULT_IMAGE_TYPE, default_result
+            )
+            snapshots[DEFAULT_IMAGE_TYPE] = ImageSnapshot(
+                width=width, height=height, png_bytes=default_result
+            )
+            image_ok = True
+        except Exception as exc:
+            errors.append(f"image/{DEFAULT_IMAGE_TYPE}: {exc}")
+            logger.warning("image parse/store failed (%s); keeping previous snapshot", exc)
 
     if isinstance(payload_data, Exception):
-        errors.append(f"payload: {payload_data}")
+        errors.append(f"latest: {payload_data}")
+        logger.warning(
+            "latest refresh failed (%s); keeping previous payload if any",
+            payload_data,
+        )
     else:
         payload = payload_data
 
@@ -1473,13 +1489,18 @@ async def refresh_presence() -> None:
             "total_lines": 0,
             "data": [],
         }
-        errors.append("payload: empty fallback (latest/CSV failed; will retry)")
+        if not had_payload:
+            errors.append("latest: empty fallback (will retry)")
 
     async with state_lock:
         state.snapshots = snapshots
-        state.steps_payload = payload
+        # Only overwrite payload when we got a new one or had nothing cached.
+        if not isinstance(payload_data, Exception) or not had_payload:
+            state.steps_payload = payload
         state.updated_at = datetime.now(timezone.utc).isoformat()
         state.error = "; ".join(errors) if errors else None
+        if image_ok and not errors:
+            state.error = None
 
 
 async def refresh_loop() -> None:

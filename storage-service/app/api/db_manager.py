@@ -1,7 +1,7 @@
 import json
 import time
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import and_, case, desc, func, select
 from app.api.db import steps, steps_analysis, database
 
 STEP_FIELDS = [
@@ -193,28 +193,117 @@ async def get_ids():
     return {"data": numbers}
 
 
-async def get_image_rows():
-    query = select(
-        steps.c.number,
-        steps.c.status_code,
-        steps.c.timestamp,
-        steps.c.text_length,
-        steps.c.screenshot_url,
+async def get_max_step_number():
+    """Cheap max step number for PNG cache invalidation (latest row by id)."""
+    row = await database.fetch_one(
+        query=select(steps.c.number).order_by(desc(steps.c.id)).limit(1)
     )
-    rows = await database.fetch_all(query=query)
+    if row is None:
+        return None
+    return _parse_step_number(row["number"])
+
+
+def _image_columns(image_type: str):
+    columns = [steps.c.id, steps.c.number]
+    need_status = image_type in ("status_code",)
+    need_timestamp = image_type in ("timestamp_delta",)
+    need_text_length = image_type in ("text_length",)
+    need_screenshot = image_type in ("screenshot",)
+    need_geo = image_type in ("latitude_longitude",)
+    if need_status:
+        columns.append(steps.c.status_code)
+    if need_timestamp:
+        columns.append(steps.c.timestamp)
+    if need_text_length:
+        columns.append(steps.c.text_length)
+    if need_screenshot:
+        has_screenshot = case(
+            (
+                and_(
+                    steps.c.screenshot_url.isnot(None),
+                    steps.c.screenshot_url != "",
+                ),
+                1,
+            ),
+            else_=0,
+        ).label("has_screenshot")
+        columns.append(has_screenshot)
+    if need_geo:
+        columns.extend([steps.c.latitude, steps.c.longitude])
+    return columns, need_status, need_timestamp, need_text_length, need_screenshot, need_geo
+
+
+def _row_to_image_item(
+    row,
+    *,
+    need_status,
+    need_timestamp,
+    need_text_length,
+    need_screenshot,
+    need_geo,
+):
+    number = _parse_step_number(row["number"])
+    if number is None:
+        return None
+    item = {"number": number, "id": row["id"]}
+    if need_status:
+        item["status_code"] = str(row["status_code"] or "")
+    if need_timestamp:
+        item["timestamp"] = str(row["timestamp"] or "")
+    if need_text_length:
+        item["text_length"] = str(row["text_length"] or "")
+    if need_screenshot:
+        item["has_screenshot"] = int(row["has_screenshot"] or 0)
+        item["screenshot_url"] = "1" if item["has_screenshot"] else ""
+    if need_geo:
+        item["latitude"] = str(row["latitude"] or "")
+        item["longitude"] = str(row["longitude"] or "")
+    return item
+
+
+async def iter_image_row_batches(image_type: str = "status_code", batch_size: int = 5000):
+    """
+    Stream image rows in id-ordered batches (avoids loading all steps into RAM / killing Postgres).
+    """
+    batch_size = max(100, min(int(batch_size), 20000))
+    columns, need_status, need_timestamp, need_text_length, need_screenshot, need_geo = (
+        _image_columns(image_type)
+    )
+    last_id = 0
+    while True:
+        query = (
+            select(*columns)
+            .where(steps.c.id > last_id)
+            .order_by(steps.c.id)
+            .limit(batch_size)
+        )
+        rows = await database.fetch_all(query=query)
+        if not rows:
+            break
+        batch = []
+        for row in rows:
+            item = _row_to_image_item(
+                row,
+                need_status=need_status,
+                need_timestamp=need_timestamp,
+                need_text_length=need_text_length,
+                need_screenshot=need_screenshot,
+                need_geo=need_geo,
+            )
+            if item is not None:
+                batch.append(item)
+            last_id = row["id"]
+        if batch:
+            yield batch
+        if len(rows) < batch_size:
+            break
+
+
+async def get_image_rows(image_type: str = "status_code"):
+    """Collect all image rows (prefer iter_image_row_batches for large tables)."""
     result = []
-    for row in rows:
-        number = _parse_step_number(row["number"])
-        if number is None:
-            continue
-        result.append({
-            "number": number,
-            "status_code": str(row["status_code"] or ""),
-            "timestamp": str(row["timestamp"] or ""),
-            "text_length": str(row["text_length"] or ""),
-            "screenshot_url": str(row["screenshot_url"] or ""),
-        })
-    result.sort(key=lambda item: item["number"])
+    async for batch in iter_image_row_batches(image_type):
+        result.extend(batch)
     return result
 
 
