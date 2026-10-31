@@ -2889,7 +2889,7 @@ def api_storage_latest():
         include_total = request.args.get("include_total", default="0").strip().lower()
         if include_total in ("1", "true", "yes"):
             params["include_total"] = "true"
-        resp = storage_http.storage_get("/get/latest", timeout=30, params=params or None)
+        resp = storage_http.storage_get("/get/latest", timeout=90, params=params or None)
         resp.raise_for_status()
         return jsonify(resp.json())
     except Exception as e:

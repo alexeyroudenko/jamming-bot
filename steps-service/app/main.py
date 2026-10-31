@@ -1522,7 +1522,11 @@ async def refresh_loop() -> None:
                 state.error = message
         except Exception as exc:
             message = f"Unexpected refresh error: {exc}"
-            logger.exception(message)
+            # First boot without snapshots is expected until storage warms; avoid traceback noise.
+            if "No image snapshots available" in message:
+                logger.warning(message)
+            else:
+                logger.exception(message)
             async with state_lock:
                 state.error = message
         await asyncio.sleep(max(1, DEFAULT_REFRESH_SECONDS))

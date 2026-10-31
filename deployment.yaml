@@ -453,7 +453,7 @@ spec:
         - name: STEPS_IMAGE_URL
           value: "http://storage-service/export/img"
         - name: STEPS_LATEST_URL
-          value: "http://app-service/api/storage_latest/"
+          value: "http://storage-service/get/latest"
         - name: STEPS_LATEST_LIMIT
           value: "1500"
         - name: STEPS_CSV_URL

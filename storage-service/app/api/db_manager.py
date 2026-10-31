@@ -261,11 +261,11 @@ def _row_to_image_item(
     return item
 
 
-async def iter_image_row_batches(image_type: str = "status_code", batch_size: int = 5000):
+async def iter_image_row_batches(image_type: str = "status_code", batch_size: int = 15000):
     """
     Stream image rows in id-ordered batches (avoids loading all steps into RAM / killing Postgres).
     """
-    batch_size = max(100, min(int(batch_size), 20000))
+    batch_size = max(100, min(int(batch_size), 50000))
     columns, need_status, need_timestamp, need_text_length, need_screenshot, need_geo = (
         _image_columns(image_type)
     )

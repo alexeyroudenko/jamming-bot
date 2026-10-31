@@ -7,6 +7,7 @@ import os
 import struct
 import time
 import zlib
+from contextlib import suppress
 from typing import List
 
 from fastapi import FastAPI, HTTPException, Request
@@ -245,14 +246,25 @@ async def _init_db_with_retry():
             await asyncio.sleep(delay)
 
 
+_export_prebuild_task: asyncio.Task | None = None
+
+
 @app.on_event("startup")
 async def startup():
+    global _export_prebuild_task
     await _init_db_with_retry()
     await database.connect()
+    _export_prebuild_task = asyncio.create_task(_export_img_prebuild_loop())
 
 
 @app.on_event("shutdown")
 async def shutdown():
+    global _export_prebuild_task
+    if _export_prebuild_task is not None:
+        _export_prebuild_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await _export_prebuild_task
+        _export_prebuild_task = None
     await database.disconnect()
 
 
@@ -374,9 +386,15 @@ async def export_csv():
 
 # In-memory PNG cache: key (image_type, requested_width) -> entry
 _IMG_CACHE_TTL_SEC = float(os.getenv("EXPORT_IMG_CACHE_TTL_SEC", "120"))
+_IMG_PREBUILD_TYPES = tuple(
+    t.strip()
+    for t in os.getenv("EXPORT_IMG_PREBUILD_TYPES", "status_code").split(",")
+    if t.strip()
+)
 _img_cache: dict[tuple[str, int], dict] = {}
 _img_cache_locks: dict[tuple[str, int], asyncio.Lock] = {}
 _img_cache_meta_lock = asyncio.Lock()
+_img_rebuild_inflight: set[tuple[str, int]] = set()
 
 
 async def _img_lock_for(key: tuple[str, int]) -> asyncio.Lock:
@@ -388,17 +406,19 @@ async def _img_lock_for(key: tuple[str, int]) -> asyncio.Lock:
         return lock
 
 
-def _img_cache_valid(entry: dict, max_step_id: int) -> bool:
-    """TTL-fresh cache is a hit even if max_step_id advanced (avoids rebuild storm)."""
+def _img_cache_fresh(entry: dict) -> bool:
+    """True when entry is within TTL."""
     if not entry or not entry.get("png_bytes"):
         return False
     built_at = entry.get("built_at")
     if built_at is None:
         return False
-    if (time.monotonic() - built_at) >= _IMG_CACHE_TTL_SEC:
-        return False
-    # Immediate hit when nothing new; otherwise still serve within TTL.
-    return True
+    return (time.monotonic() - built_at) < _IMG_CACHE_TTL_SEC
+
+
+def _img_cache_valid(entry: dict, max_step_id: int) -> bool:
+    """TTL-fresh cache is a hit even if max_step_id advanced (avoids rebuild storm)."""
+    return _img_cache_fresh(entry)
 
 
 def _gray_for_row(row: dict, image_type: str, *, text_min, text_max, delta_min, delta_max, geo_min, geo_max) -> int:
@@ -529,6 +549,82 @@ async def _build_export_img(image_type: str, width: int, max_step_id: int) -> by
     return _build_grayscale_png(canvas, img_width, img_height)
 
 
+async def _store_export_img(cache_key: tuple[str, int], image_type: str, width: int) -> bytes:
+    max_step_id = await db_manager.get_max_step_number()
+    if max_step_id is None:
+        raise HTTPException(status_code=404, detail="No step ids available")
+    t0 = time.monotonic()
+    png_bytes = await _build_export_img(image_type, width, max_step_id)
+    _img_cache[cache_key] = {
+        "png_bytes": png_bytes,
+        "max_step_id": max_step_id,
+        "built_at": time.monotonic(),
+    }
+    logger.info(
+        "export/img built type=%s width=%s max_step_id=%s bytes=%s in %.2fs",
+        image_type,
+        width,
+        max_step_id,
+        len(png_bytes),
+        time.monotonic() - t0,
+    )
+    return png_bytes
+
+
+async def _rebuild_export_img_bg(cache_key: tuple[str, int], image_type: str, width: int) -> None:
+    if cache_key in _img_rebuild_inflight:
+        return
+    _img_rebuild_inflight.add(cache_key)
+    try:
+        lock = await _img_lock_for(cache_key)
+        async with lock:
+            cached = _img_cache.get(cache_key)
+            if cached and _img_cache_fresh(cached):
+                return
+            try:
+                await _store_export_img(cache_key, image_type, width)
+            except HTTPException:
+                logger.warning("export/img bg rebuild skipped type=%s width=%s", image_type, width)
+            except Exception:
+                logger.exception("export/img bg rebuild failed type=%s width=%s", image_type, width)
+    finally:
+        _img_rebuild_inflight.discard(cache_key)
+
+
+async def _export_img_prebuild_loop() -> None:
+    """Keep default PNG types warm so steps-service rarely waits on cold build."""
+    await asyncio.sleep(2)
+    interval = max(30.0, _IMG_CACHE_TTL_SEC * 0.75)
+    while True:
+        for raw_type in _IMG_PREBUILD_TYPES:
+            image_type = _normalize_image_type(raw_type)
+            cache_key = (image_type, 0)
+            try:
+                cached = _img_cache.get(cache_key)
+                if cached and _img_cache_fresh(cached):
+                    continue
+                lock = await _img_lock_for(cache_key)
+                async with lock:
+                    cached = _img_cache.get(cache_key)
+                    if cached and _img_cache_fresh(cached):
+                        continue
+                    await _store_export_img(cache_key, image_type, 0)
+            except Exception:
+                logger.exception("export/img prebuild failed type=%s", image_type)
+        await asyncio.sleep(interval)
+
+
+def _png_response(png_bytes: bytes, image_type: str, cache_status: str) -> StreamingResponse:
+    return StreamingResponse(
+        io.BytesIO(png_bytes),
+        media_type="image/png",
+        headers={
+            "Content-Disposition": f'inline; filename="presence_{image_type}.png"',
+            "X-Export-Img-Cache": cache_status,
+        },
+    )
+
+
 @app.get("/export/img")
 async def export_img(width: int = 0, type: str = DEFAULT_IMAGE_TYPE):
     image_type = _normalize_image_type(type)
@@ -540,63 +636,35 @@ async def export_img(width: int = 0, type: str = DEFAULT_IMAGE_TYPE):
         raise HTTPException(status_code=404, detail="No step ids available")
 
     cached = _img_cache.get(cache_key)
-    if cached and _img_cache_valid(cached, max_step_id):
-        return StreamingResponse(
-            io.BytesIO(cached["png_bytes"]),
-            media_type="image/png",
-            headers={
-                "Content-Disposition": f'inline; filename="presence_{image_type}.png"',
-                "X-Export-Img-Cache": "hit",
-            },
+    if cached and cached.get("png_bytes"):
+        if _img_cache_fresh(cached):
+            return _png_response(cached["png_bytes"], image_type, "hit")
+        # Stale-while-revalidate: serve old PNG, refresh in background.
+        asyncio.create_task(
+            _rebuild_export_img_bg(cache_key, image_type, requested_width)
         )
+        return _png_response(cached["png_bytes"], image_type, "stale")
 
     lock = await _img_lock_for(cache_key)
     async with lock:
-        # Re-check after acquiring single-flight lock
-        max_step_id = await db_manager.get_max_step_number()
-        if max_step_id is None:
-            raise HTTPException(status_code=404, detail="No step ids available")
         cached = _img_cache.get(cache_key)
-        if cached and _img_cache_valid(cached, max_step_id):
-            return StreamingResponse(
-                io.BytesIO(cached["png_bytes"]),
-                media_type="image/png",
-                headers={
-                    "Content-Disposition": f'inline; filename="presence_{image_type}.png"',
-                    "X-Export-Img-Cache": "hit",
-                },
-            )
+        if cached and cached.get("png_bytes"):
+            status = "hit" if _img_cache_fresh(cached) else "stale"
+            if status == "stale":
+                asyncio.create_task(
+                    _rebuild_export_img_bg(cache_key, image_type, requested_width)
+                )
+            return _png_response(cached["png_bytes"], image_type, status)
 
         try:
-            t0 = time.monotonic()
-            png_bytes = await _build_export_img(image_type, requested_width, max_step_id)
-            logger.info(
-                "export/img built type=%s width=%s max_step_id=%s bytes=%s in %.2fs",
-                image_type,
-                requested_width,
-                max_step_id,
-                len(png_bytes),
-                time.monotonic() - t0,
-            )
+            png_bytes = await _store_export_img(cache_key, image_type, requested_width)
         except HTTPException:
             raise
         except Exception:
             logger.exception("export/img build failed type=%s width=%s", image_type, requested_width)
             raise HTTPException(status_code=500, detail="Failed to build steps image")
-        _img_cache[cache_key] = {
-            "png_bytes": png_bytes,
-            "max_step_id": max_step_id,
-            "built_at": time.monotonic(),
-        }
 
-    return StreamingResponse(
-        io.BytesIO(png_bytes),
-        media_type="image/png",
-        headers={
-            "Content-Disposition": f'inline; filename="presence_{image_type}.png"',
-            "X-Export-Img-Cache": "miss",
-        },
-    )
+    return _png_response(png_bytes, image_type, "miss")
 
 
 @app.get("/backfill/image")

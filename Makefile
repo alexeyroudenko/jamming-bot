@@ -84,6 +84,12 @@ k3s-storage-service:
 	docker save storage-service:latest | k3s ctr images import -
 	kubectl rollout restart deployment storage-service -n jamming-bot
 
+.PHONY: k3s-steps-service
+k3s-steps-service:
+	docker build -t steps-service:latest ./steps-service
+	docker save steps-service:latest | k3s ctr images import -
+	kubectl rollout restart deployment steps-service -n jamming-bot
+
 .PHONY: k3s-tags-service
 k3s-tags-service:
 	docker build -t tags-service:latest ./tags-service
