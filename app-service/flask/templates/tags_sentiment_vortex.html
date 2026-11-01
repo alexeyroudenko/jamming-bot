@@ -81,6 +81,21 @@
 (function () {
   var API_BASE = {{ tags_api_base|tojson }};
   var API = (API_BASE || '') + '/api/tags/sentiment-vortex/';
+  /** Default: today. Override via ?days=N or ?day=N (or ?period=week|month|all). */
+  var DAYS_QUERY_SUFFIX = (function () {
+    var sp = new URLSearchParams(window.location.search);
+    if (sp.has('period')) {
+      var p = (sp.get('period') || '').toLowerCase();
+      if (p === 'week' || p === 'month' || p === 'all') return '?period=' + p;
+    }
+    var raw = null;
+    if (sp.has('days')) raw = sp.get('days');
+    else if (sp.has('day')) raw = sp.get('day');
+    if (raw === null || raw === '') return '?days=0';
+    var d = parseInt(raw, 10);
+    if (isNaN(d) || d < 0) return '?days=0';
+    return '?days=' + d;
+  })();
   var MAX_PARTICLES = 360;
   var MAX_DPR = 2;
   var DT = 0.016;
@@ -646,7 +661,7 @@
   }
 
   function reloadData() {
-    fetch(API)
+    fetch(API + DAYS_QUERY_SUFFIX)
       .then(function (r) {
         return r.json().then(function (b) {
           return { ok: r.ok, status: r.status, b: b };

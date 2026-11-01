@@ -154,6 +154,17 @@
 (function () {
   var API_BASE = {{ tags_api_base|tojson }};
   var TAGS_API = (API_BASE || '') + '/api/tags/get/';
+  /** Default: today. Override via ?days=N or ?day=N. */
+  var DAYS_QUERY_SUFFIX = (function () {
+    var sp = new URLSearchParams(window.location.search);
+    var raw = null;
+    if (sp.has('days')) raw = sp.get('days');
+    else if (sp.has('day')) raw = sp.get('day');
+    if (raw === null || raw === '') return '?days=0';
+    var d = parseInt(raw, 10);
+    if (isNaN(d) || d < 0) return '?days=0';
+    return '?days=' + d;
+  })();
   var EMB_API = (API_BASE || '') + '/api/tags/embeddings/';
   /** Cap for InstancedMesh boxels (lower than old Points for FPS). */
   var MAX_PARTICLES_CAPACITY = 16000;
@@ -1188,7 +1199,7 @@
 
   function reloadData() {
     statusEl.textContent = 'Loading tags…';
-    return fetch(TAGS_API)
+    return fetch(TAGS_API + DAYS_QUERY_SUFFIX)
       .then(function (r) {
         return r.json().then(function (b) {
           return { ok: r.ok, b: b };

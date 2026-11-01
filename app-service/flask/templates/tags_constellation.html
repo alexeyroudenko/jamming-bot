@@ -51,6 +51,17 @@
   var API_BASE = {{ tags_api_base|tojson }};
   var TAGS_API = (API_BASE || '') + '/api/tags/get/';
   var EMB_API = (API_BASE || '') + '/api/tags/embeddings/';
+  /** Default: today. Override via ?days=N or ?day=N. */
+  var DAYS_PARAM = (function () {
+    var sp = new URLSearchParams(window.location.search);
+    var raw = null;
+    if (sp.has('days')) raw = sp.get('days');
+    else if (sp.has('day')) raw = sp.get('day');
+    if (raw === null || raw === '') return 0;
+    var d = parseInt(raw, 10);
+    if (isNaN(d) || d < 0) return 0;
+    return d;
+  })();
   var DEFAULT_VISIBLE_COUNT = 56;
   var PAGE_SIZE = 200;
   var MAX_DPR = 2;
@@ -520,7 +531,7 @@
   }
 
   function fetchTagPage(page) {
-    return fetch(TAGS_API + '?count=' + PAGE_SIZE + '&page=' + page)
+    return fetch(TAGS_API + '?count=' + PAGE_SIZE + '&page=' + page + '&days=' + DAYS_PARAM)
       .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
       .then(function (res) {
         if (!res.ok || (res.b && res.b.error)) {

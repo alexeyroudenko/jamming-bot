@@ -2060,9 +2060,23 @@ def tags_sentiment_vortex():
 @app.route('/api/tags/sentiment-vortex/', methods=['GET', 'POST'])
 @cross_origin()
 def sentiment_vortex_api():
+    # Default: today (days=0); override via ?days=N or ?period=week|month|all
+    days_param = request.args.get("days", type=int)
+    period = (request.args.get("period") or "").strip().lower()
+    tags_params = {}
+    if days_param is not None:
+        tags_params["days"] = max(days_param, 0)
+    elif period == "week":
+        tags_params["days"] = 7
+    elif period == "month":
+        tags_params["days"] = 30
+    elif period == "all":
+        pass
+    else:
+        tags_params["days"] = 0
     tags_url = f"{TAGS_SERVICE_URL}/api/v1/tags/tags/group/"
     try:
-        tr = requests.get(tags_url, timeout=10)
+        tr = requests.get(tags_url, params=tags_params or None, timeout=10)
         tr.raise_for_status()
         tags = tr.json()
     except requests.exceptions.RequestException as e:

@@ -90,6 +90,17 @@
 (function () {
   var API_BASE = {{ tags_api_base|tojson }};
   var API = (API_BASE || '') + '/api/tags/get/';
+  /** Default: today. Override via ?days=N or ?day=N. */
+  var DAYS_QUERY_SUFFIX = (function () {
+    var sp = new URLSearchParams(window.location.search);
+    var raw = null;
+    if (sp.has('days')) raw = sp.get('days');
+    else if (sp.has('day')) raw = sp.get('day');
+    if (raw === null || raw === '') return '?days=0';
+    var d = parseInt(raw, 10);
+    if (isNaN(d) || d < 0) return '?days=0';
+    return '?days=' + d;
+  })();
   var DISPLAY_COUNT_MULT = 2;
   var MAX_TAGS = 600;
   var SPHERE_RADIUS = 14;
@@ -709,7 +720,7 @@
   }
 
   function fetchTags() {
-    return fetch(API)
+    return fetch(API + DAYS_QUERY_SUFFIX)
       .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
       .then(function (res) {
         var body = res.body;

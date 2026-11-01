@@ -151,15 +151,15 @@
 (function () {
   var API_BASE = {{ tags_api_base|tojson }};
   var API = (API_BASE || '') + '/api/tags/get/';
-  /** Sanitized ?days=N or ?day=N (fixed at load); omitted = all-time API. `day` is alias for `days`. */
+  /** Sanitized ?days=N or ?day=N (fixed at load); default today. `day` is alias for `days`. */
   var DAYS_QUERY_SUFFIX = (function () {
     var sp = new URLSearchParams(window.location.search);
     var raw = null;
     if (sp.has('days')) raw = sp.get('days');
     else if (sp.has('day')) raw = sp.get('day');
-    if (raw === null || raw === '') return '';
+    if (raw === null || raw === '') return '?days=0';
     var d = parseInt(raw, 10);
-    if (isNaN(d) || d < 0) return '';
+    if (isNaN(d) || d < 0) return '?days=0';
     return '?days=' + d;
   })();
   if (DAYS_QUERY_SUFFIX === '?days=0') {
