@@ -98,6 +98,8 @@ SEMANTIC_LAST_COLLECT_KEY = "semantic:last_collect"
 SEMANTIC_LAST_COLLECT_TTL = int(os.getenv("SEMANTIC_LAST_COLLECT_TTL", "86400"))
 MOOD_LAST_COLLECT_KEY = "mood:last_collect"
 MOOD_LAST_COLLECT_TTL = int(os.getenv("MOOD_LAST_COLLECT_TTL", "86400"))
+STEP_LATEST_COMPLETE_KEY = os.getenv("STEP_LATEST_COMPLETE_KEY", "step:latest_complete")
+STEP_LATEST_COMPLETE_TTL = int(os.getenv("STEP_LATEST_COMPLETE_TTL", "86400"))
 _sublink_listener_started = False
 _sublink_listener_lock = threading.Lock()
 POLL_THREAD_LIMIT = max(1, int(os.getenv("POLL_THREAD_LIMIT", "64")))
@@ -1005,6 +1007,91 @@ def _persist_mood_last_collect(payload):
         logger.warning("mood last_collect redis: %s", exc)
 
 
+def _coerce_phrases(raw):
+    """Normalize hrases/phrases from step hash to a list (empty list allowed)."""
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, tuple):
+        return list(raw)
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return []
+        try:
+            parsed = json.loads(text)
+        except (TypeError, json.JSONDecodeError):
+            return []
+        if isinstance(parsed, list):
+            return parsed
+        return []
+    return None
+
+
+def _coerce_semantic(raw):
+    """Parse semantic payload; return dict/list or None if unusable/error-only."""
+    if raw is None or raw == "":
+        return None
+    semantic = raw
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return None
+        try:
+            semantic = json.loads(text)
+        except (TypeError, json.JSONDecodeError):
+            return {"raw": text}
+    if isinstance(semantic, dict):
+        # analyze_semantic failure stub: {"error": "...", "snippet": "..."} without source
+        if semantic.get("error") and not semantic.get("source"):
+            return None
+        return semantic
+    if isinstance(semantic, list):
+        return semantic
+    return None
+
+
+def _publish_latest_complete_step(step_key):
+    """
+    Latch Redis snapshot for GET /api/step/latest/ when number/url/text/phrases/semantic
+    are all present. Does not overwrite on partial next-step updates.
+    """
+    if not step_key or not str(step_key).startswith("step:"):
+        return
+    if str(step_key).startswith("step:inject"):
+        return
+    try:
+        row = _read_step_hash(step_key) or {}
+        number = str(row.get("number") or str(step_key).split(":", 1)[-1] or "").strip()
+        url = str(row.get("url") or "").strip()
+        text = str(row.get("text") or "").strip()
+        if not number or not url or not text:
+            return
+        if "hrases" not in row and "phrases" not in row:
+            return
+        phrases = _coerce_phrases(row.get("hrases", row.get("phrases")))
+        # Empty phrases → keep previous latch (homepage needs a real collect).
+        if phrases is None or not phrases:
+            return
+        semantic = _coerce_semantic(row.get("semantic"))
+        if semantic is None:
+            return
+        payload = {
+            "number": number,
+            "url": url,
+            "text": text,
+            "semantic": semantic,
+            "phrases": phrases,
+        }
+        redis.setex(
+            STEP_LATEST_COMPLETE_KEY,
+            STEP_LATEST_COMPLETE_TTL,
+            json.dumps(payload, default=str, ensure_ascii=False),
+        )
+        logger.info("step latest_complete published number=%s phrases=%s", number, len(phrases))
+    except Exception as exc:
+        logger.warning("_publish_latest_complete_step(%s): %s", step_key, exc)
+
+
 def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                        step_key=None, silent=False):
     """Poll an RQ job in a background thread and emit result via SocketIO."""
@@ -1065,6 +1152,8 @@ def _poll_job_and_emit(job, event_name, timeout=60, poll_interval=0.5,
                         _patch_storage(step_key, job.result)
                         if silent and step_key:
                             _emit_presence_step(step_key.split(":")[-1], phase=event_name)
+                    if event_name == "semantic_collect" and not silent and step_key:
+                        _publish_latest_complete_step(step_key)
                     if event_name == "screenshot":
                         _enqueue_image_analysis_followup(step_key, job.result, silent=silent)
                     if event_name == "semantic_collect" and not silent:
@@ -1848,6 +1937,29 @@ def api_semantic_last_collect():
         logger.warning("semantic last_collect json: %s", exc)
         return jsonify({"ok": False, "error": "parse"}), 500
     return jsonify({"ok": True, "data": data})
+
+
+@app.route("/api/step/latest/", methods=["GET"])
+@cross_origin()
+def api_step_latest_complete():
+    """Last fully collected live step (number/url/text/semantic/phrases). Latch — not partial."""
+    try:
+        raw = redis.get(STEP_LATEST_COMPLETE_KEY)
+    except Exception as exc:
+        logger.warning("step latest_complete get: %s", exc)
+        return jsonify({"error": "redis"}), 503
+    if not raw:
+        return jsonify({"error": "empty", "detail": "No complete step published yet"}), 404
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8")
+    try:
+        data = json.loads(raw)
+    except (TypeError, json.JSONDecodeError) as exc:
+        logger.warning("step latest_complete json: %s", exc)
+        return jsonify({"error": "parse"}), 500
+    if not isinstance(data, dict):
+        return jsonify({"error": "invalid"}), 500
+    return jsonify(data)
 
 
 @app.route("/api/semantic/mood-last/", methods=["GET"])

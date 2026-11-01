@@ -348,6 +348,8 @@ services:
     restart: unless-stopped
     ports:
       - "8010:8010"
+    environment:
+      - APP_SERVICE_URL=http://flask:5000
     volumes:
       - type: bind
         source: ./data

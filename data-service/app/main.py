@@ -1,6 +1,10 @@
 import csv
 import io
+import json
+import os
 import sqlite3
+import urllib.error
+import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
@@ -9,10 +13,12 @@ from typing import List as TypingList
 
 from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 DB_PATH = Path("/app/data/database.db")
+APP_SERVICE_URL = os.getenv("APP_SERVICE_URL", "http://app-service").rstrip("/")
+STEP_LATEST_PROXY_TIMEOUT = float(os.getenv("STEP_LATEST_PROXY_TIMEOUT", "10"))
 
 app = FastAPI(
     title="Data Service",
@@ -33,6 +39,42 @@ def swagger_ui_html():
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
+
+
+@app.get("/step/latest")
+@app.get("/step/latest/")
+def get_step_latest():
+    """
+    Proxy to app-service latch of the last fully collected live step
+    (number, url, text, semantic, phrases). Public: /data/step/latest.
+    """
+    url = f"{APP_SERVICE_URL}/api/step/latest/"
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "data-service/step-latest-proxy",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=STEP_LATEST_PROXY_TIMEOUT) as resp:
+            body = resp.read()
+            status = getattr(resp, "status", 200)
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        try:
+            payload = json.loads(detail) if detail else {"detail": str(exc)}
+        except json.JSONDecodeError:
+            payload = {"detail": detail or str(exc)}
+        return JSONResponse(content=payload, status_code=exc.code)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"app-service proxy failed: {exc}") from exc
+
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=502, detail=f"invalid JSON from app-service: {exc}") from exc
+    return JSONResponse(content=payload, status_code=status)
 
 
 @contextmanager
