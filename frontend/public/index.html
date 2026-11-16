@@ -41,13 +41,20 @@
     -->
 
 
-    <!-- Google tag (gtag.js) -->
+    <!-- Google tag (gtag.js)
+         Один page_view на загрузку SPA. Смены сцен (/scenes/*) идут через History API —
+         их нельзя считать page_view (иначе autoswitch раздувает просмотры).
+         В GA4 Admin → Data stream → Enhanced measurement → Page changes based on
+         browser history events = OFF. Смена сцены шлётся как event scene_change из App.js. -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-NSBDJ2XRN8"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
-        gtag('config', 'G-NSBDJ2XRN8');
+        gtag('config', 'G-NSBDJ2XRN8', {
+          send_page_view: true,
+          // не дублировать page_view вручную на каждый route; см. scene_change
+        });
     </script>
 
   </body>

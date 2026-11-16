@@ -205,6 +205,23 @@ export function AppContent() {
 
   pathnameRef.current = location.pathname
 
+  // Смена сцены ≠ новый page_view: autoswitch иначе раздувает GA4 screenPageViews.
+  // Начальный page_view уже уходит из gtag('config'). Дальше — только scene_change.
+  const sceneAnalyticsReady = useRef(false)
+  useEffect(() => {
+    if (typeof window.gtag !== 'function') return
+    if (!sceneAnalyticsReady.current) {
+      sceneAnalyticsReady.current = true
+      return
+    }
+    const path = `${location.pathname}${location.search || ''}`
+    window.gtag('event', 'scene_change', {
+      scene_path: path,
+      page_path: `/scenes${path === '/' ? '/' : path}`,
+      page_title: document.title || SCENES_PWA_TITLE,
+    })
+  }, [location.pathname, location.search])
+
   const clearAutoswitchInterval = useCallback(() => {
     if (intervalRef.current != null) {
       window.clearInterval(intervalRef.current)
