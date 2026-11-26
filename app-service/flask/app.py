@@ -2927,40 +2927,95 @@ def handle_json():
     return jsonify({"received": data})
 
 
+def _step_row_from_storage(row):
+    """Map storage-service step dict → legacy /api/steps/ item shape."""
+    if not isinstance(row, dict):
+        return None
+    raw_num = row.get("number", row.get("id"))
+    try:
+        step_i = int(raw_num)
+    except (TypeError, ValueError):
+        return None
+    raw_code = row.get("status_code", 0)
+    try:
+        code_i = int(raw_code)
+    except (TypeError, ValueError):
+        code_i = 0
+    src = row.get("src") or row.get("src_url") or ""
+    return {
+        "id": str(step_i),
+        "type": "step",
+        "step": step_i,
+        "number": step_i,
+        "status_code": code_i,
+        "status_string": "ok" if str(raw_code) == "200" else "error",
+        "url": row.get("url") or "",
+        "src_url": src,
+        "src": src,
+        "text": row.get("text"),
+        "text_length": row.get("text_length"),
+        "timestamp": row.get("timestamp"),
+        "semantic": row.get("semantic"),
+        "words": row.get("words") or row.get("semantic_words"),
+        "semantic_words": row.get("semantic_words"),
+        "hrases": row.get("hrases") or row.get("semantic_hrases"),
+        "noun_phrases": row.get("hrases") or row.get("noun_phrases"),
+        "tags": row.get("tags"),
+        "error": row.get("error") or "",
+        "latitude": row.get("latitude"),
+        "longitude": row.get("longitude"),
+        "sim": row.get("sim"),
+    }
+
+
 @app.route("/api/steps/", methods=["GET"])
 def all_steps():
+    """Latest steps from storage-service (not RQ jobs / not crawler Urls SQLite).
+
+    Query: ?limit= (default 500, max 5000), ?page= (0-based window into latest),
+    ?fields= optional projection forwarded to storage `/get/latest`.
+    """
     limit = request.args.get("limit", default=500, type=int)
     page = request.args.get("page", default=0, type=int)
-    offset = max(0, page) * max(1, limit or 1)
-    joblist, total_jobs = get_all_jobs_paginated(limit=limit, offset=offset)
-    jobs_fetched_per_request.observe(len(joblist))
-    l = []
-    for job in list(joblist):
-        if job.meta.get('type'):
-            job_type = job.meta.get('type')
-            if job_type == "step":
-                if job.result:
-                    l.append({
-                        'id': job.get_id(),
-                        'type': job_type,
-                        'step': int(job.result['step']),
-                        'status_code': int(job.result['code']),
-                        'status_string': "ok" if str(job.result['code']) == "200" else "error",
-                        'url': job.result['url'],
-                        'src_url': job.result['src_url'],
-                        'text': job.meta.get('text'),
-                        'semantic': job.result['semantic'],
-                        'words': job.meta.get('semantic_words'),
-                        'hrases': job.meta.get('semantic_hrases'),
-                        'noun_phrases': job.meta.get('noun_phrases'),
-                        'sim': job.meta.get('sim'),
-                    })
-                else:
-                    l.append({
-                        'id': job.get_id(),
-                        'type': job_type,
-                    })
-    return jsonify({"data": l, "page": max(0, page), "limit": max(1, min(limit or 500, 5000)), "total_jobs": total_jobs})
+    limit = max(1, min(limit or 500, 5000))
+    page = max(0, page or 0)
+    offset = page * limit
+    # storage `/get/latest` is newest-N only; fetch a window then slice for page.
+    fetch_n = min(offset + limit, 20000)
+    params = {"limit": fetch_n, "include_total": "true"}
+    fields = (request.args.get("fields") or "").strip()
+    if fields:
+        params["fields"] = fields
+    try:
+        resp = storage_http.storage_get("/get/latest", timeout=90, params=params)
+        resp.raise_for_status()
+        payload = resp.json() or {}
+    except Exception as e:
+        logger.warning(f"all_steps storage: {e}")
+        return jsonify({"error": "storage temporarily unavailable", "detail": str(e)}), 502
+
+    rows = payload.get("data") or []
+    if not isinstance(rows, list):
+        rows = []
+    window = rows[offset: offset + limit] if offset < len(rows) else []
+    data = []
+    for row in window:
+        mapped = _step_row_from_storage(row)
+        if mapped is not None:
+            data.append(mapped)
+    total = payload.get("total_lines")
+    try:
+        total_jobs = int(total) if total is not None else len(rows)
+    except (TypeError, ValueError):
+        total_jobs = len(rows)
+    jobs_fetched_per_request.observe(len(data))
+    return jsonify({
+        "data": data,
+        "page": page,
+        "limit": limit,
+        "total_jobs": total_jobs,
+        "source": "storage",
+    })
 
 
 @app.route("/api/step/<step_num>/", methods=["GET"])
