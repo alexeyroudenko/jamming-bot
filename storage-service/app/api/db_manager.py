@@ -66,12 +66,19 @@ def _parse_latest_fields(fields):
 
 
 async def _get_total_lines(include_total: bool = False):
-    """Return total step count; refresh at most every TTL unless include_total."""
+    """Return total step count.
+
+    COUNT(*) on multi-million steps is expensive and can stress tags-db.
+    Only refresh when include_total=True or cache is empty/expired and
+    the caller explicitly asked for a total; otherwise return cache or None.
+    """
     now = time.monotonic()
     cached = _total_lines_cache["value"]
     fresh = cached is not None and now < _total_lines_cache["expires_at"]
-    if fresh and not include_total:
+    if fresh:
         return cached
+    if not include_total:
+        return cached  # may be None — callers should tolerate missing total
     total = await database.fetch_val(
         query=select(func.count()).select_from(steps)
     )

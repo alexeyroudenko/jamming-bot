@@ -73,7 +73,7 @@ SENTRY_DSN = os.getenv('SENTRY_DSN', '')
 TAGS_SERVICE_URL = os.getenv('TAGS_SERVICE_URL', 'http://tags_service:8000')
 SEMANTIC_SERVICE_URL = os.getenv('SEMANTIC_SERVICE_URL', 'http://semantic_service:8005')
 STORAGE_SERVICE_URL = os.getenv('STORAGE_SERVICE_URL', 'http://storage_service:7781')
-DATA_SERVICE_URL = os.getenv('DATA_SERVICE_URL', 'http://data_service:8010')
+DATA_SERVICE_URL = os.getenv('DATA_SERVICE_URL', 'http://data-service').rstrip('/')
 
 REMOTE_DATA_URL = os.getenv('REMOTE_DATA_URL', 'https://data.jamming-bot.arthew0.online')
 REMOTE_STORAGE_URL = os.getenv('REMOTE_STORAGE_URL', 'https://storage.jamming-bot.arthew0.online')
@@ -139,7 +139,6 @@ if SENTRY_DSN:
             LoggingIntegration(level=logging.INFO, event_level=logging.WARNING),
             RqIntegration(),
         ],
-        enable_logs=True,
         environment=ENVIRONMENT,
         traces_sampler=_traces_sampler,
         profiles_sample_rate=1.0,
@@ -2927,105 +2926,116 @@ def handle_json():
     return jsonify({"received": data})
 
 
-def _step_row_from_storage(row):
-    """Map storage-service step dict → legacy /api/steps/ item shape."""
+def _url_row_from_sqlite(row):
+    """Map crawler Urls SQLite row → /api/steps/ item (sqlite fields + step aliases)."""
     if not isinstance(row, dict):
         return None
-    raw_num = row.get("number", row.get("id"))
     try:
-        step_i = int(raw_num)
+        step_i = int(row.get("id"))
     except (TypeError, ValueError):
         return None
-    raw_code = row.get("status_code", 0)
-    try:
-        code_i = int(raw_code)
-    except (TypeError, ValueError):
-        code_i = 0
-    src = row.get("src") or row.get("src_url") or ""
+    src = row.get("src_url") or ""
     return {
-        "id": str(step_i),
-        "type": "step",
-        "step": step_i,
-        "number": step_i,
-        "status_code": code_i,
-        "status_string": "ok" if str(raw_code) == "200" else "error",
+        "id": step_i,
+        "hostname": row.get("hostname") or "",
         "url": row.get("url") or "",
         "src_url": src,
         "src": src,
-        "text": row.get("text"),
-        "text_length": row.get("text_length"),
-        "timestamp": row.get("timestamp"),
-        "semantic": row.get("semantic"),
-        "words": row.get("words") or row.get("semantic_words"),
-        "semantic_words": row.get("semantic_words"),
-        "hrases": row.get("hrases") or row.get("semantic_hrases"),
-        "noun_phrases": row.get("hrases") or row.get("noun_phrases"),
-        "tags": row.get("tags"),
-        "error": row.get("error") or "",
-        "latitude": row.get("latitude"),
-        "longitude": row.get("longitude"),
-        "sim": row.get("sim"),
+        "visited": row.get("visited"),
+        "step": step_i,
+        "number": step_i,
+        "type": "step",
     }
+
+
+def _data_service_get(path, *, params=None, timeout=30):
+    return requests.get(
+        f"{DATA_SERVICE_URL}{path}",
+        params=params,
+        timeout=timeout,
+    )
 
 
 @app.route("/api/steps/", methods=["GET"])
 def all_steps():
-    """Latest steps from storage-service (not RQ jobs / not crawler Urls SQLite).
+    """Crawler queue rows from data-service SQLite `Urls`.
 
-    Query: ?limit= (default 500, max 5000), ?page= (0-based window into latest),
-    ?fields= optional projection forwarded to storage `/get/latest`.
+    Query: ?limit= (default 500, max 5000), ?page= (0-based),
+    ?visited=0|1, ?hostname= optional filters forwarded to data-service.
     """
     limit = request.args.get("limit", default=500, type=int)
     page = request.args.get("page", default=0, type=int)
     limit = max(1, min(limit or 500, 5000))
     page = max(0, page or 0)
-    offset = page * limit
-    # storage `/get/latest` is newest-N only; fetch a window then slice for page.
-    fetch_n = min(offset + limit, 20000)
-    params = {"limit": fetch_n, "include_total": "true"}
-    fields = (request.args.get("fields") or "").strip()
-    if fields:
-        params["fields"] = fields
+    params = {
+        "page": page + 1,  # data-service is 1-based
+        "per_page": limit,
+    }
+    visited = request.args.get("visited", type=int)
+    if visited is not None:
+        params["visited"] = visited
+    hostname = (request.args.get("hostname") or "").strip()
+    if hostname:
+        params["hostname"] = hostname
     try:
-        resp = storage_http.storage_get("/get/latest", timeout=90, params=params)
+        resp = _data_service_get("/api/urls", params=params, timeout=60)
         resp.raise_for_status()
         payload = resp.json() or {}
     except Exception as e:
-        logger.warning(f"all_steps storage: {e}")
-        return jsonify({"error": "storage temporarily unavailable", "detail": str(e)}), 502
+        logger.warning(f"all_steps data-service: {e}")
+        return jsonify({"error": "data-service temporarily unavailable", "detail": str(e)}), 502
 
     rows = payload.get("data") or []
     if not isinstance(rows, list):
         rows = []
-    window = rows[offset: offset + limit] if offset < len(rows) else []
     data = []
-    for row in window:
-        mapped = _step_row_from_storage(row)
+    for row in rows:
+        mapped = _url_row_from_sqlite(row)
         if mapped is not None:
             data.append(mapped)
-    total = payload.get("total_lines")
+    pagination = payload.get("pagination") or {}
+    total = pagination.get("total")
     try:
-        total_jobs = int(total) if total is not None else len(rows)
+        total_jobs = int(total) if total is not None else len(data)
     except (TypeError, ValueError):
-        total_jobs = len(rows)
+        total_jobs = len(data)
     jobs_fetched_per_request.observe(len(data))
     return jsonify({
         "data": data,
         "page": page,
         "limit": limit,
         "total_jobs": total_jobs,
-        "source": "storage",
+        "source": "sqlite",
     })
 
 
 @app.route("/api/step/<step_num>/", methods=["GET"])
 @cross_origin()
 def api_step_detail(step_num):
-    """Return the aggregated Redis hash for a single step."""
-    result = _read_step_hash(f"step:{step_num}")
-    if not result:
+    """Return crawler Urls SQLite row by id (same fields as /data/<id>/)."""
+    try:
+        row_id = int(step_num)
+    except (TypeError, ValueError):
+        return jsonify({"error": "invalid step id"}), 400
+    try:
+        resp = _data_service_get(f"/{row_id}/", timeout=20)
+        if resp.status_code == 404:
+            return jsonify({"error": "step not found"}), 404
+        resp.raise_for_status()
+        row = resp.json() or {}
+    except Exception as e:
+        logger.warning(f"api_step_detail data-service: {e}")
+        return jsonify({"error": "data-service temporarily unavailable", "detail": str(e)}), 502
+    if not isinstance(row, dict) or row.get("id") is None:
         return jsonify({"error": "step not found"}), 404
-    return jsonify(result)
+    # Raw sqlite fields only.
+    return jsonify({
+        "id": row.get("id"),
+        "hostname": row.get("hostname") or "",
+        "url": row.get("url") or "",
+        "src_url": row.get("src_url") or "",
+        "visited": row.get("visited"),
+    })
 
 
 @app.route("/api/storage_step/<step_num>/", methods=["GET"])
@@ -3302,33 +3312,8 @@ def add_tags():
 
 @app.route("/api/step/<step_num>", methods=["GET"])
 def get_step(step_num):
-    limit = request.args.get("limit", default=500, type=int)
-    page = request.args.get("page", default=0, type=int)
-    offset = max(0, page) * max(1, limit or 1)
-    joblist, total_jobs = get_all_jobs_paginated(limit=limit, offset=offset)
-    jobs_fetched_per_request.observe(len(joblist))
-    l = []
-    for job in list(joblist):
-        if job.meta.get('type'):
-            job_type = job.meta.get('type')
-            if job_type == "step" and job.result and job.result.get('step'):
-                if int(job.result['step']) == int(step_num):
-                    l.append({
-                        'id': job.get_id(),
-                        'type': job_type,
-                        'step': int(job.result['step']),
-                        'status_code': int(job.result['code']),
-                        'status_string': "ok" if str(job.result['code']) == "200" else "error",
-                        'url': job.result['url'],
-                        'src_url': job.result['src_url'],
-                        'text': job.meta.get('text'),
-                        'semantic': job.result['semantic'],
-                        'words': job.meta.get('semantic_words'),
-                        'hrases': job.meta.get('semantic_hrases'),
-                        'noun_phrases': job.meta.get('noun_phrases'),
-                        'sim': job.meta.get('sim'),
-                    })
-    return jsonify({"data": l, "page": max(0, page), "limit": max(1, min(limit or 500, 5000)), "total_jobs": total_jobs})
+    """Alias without trailing slash → same SQLite row as /api/step/<id>/."""
+    return api_step_detail(step_num)
 
 
 @app.route("/add_wait_job/<num_iterations>", methods=["GET"])

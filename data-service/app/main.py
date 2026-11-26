@@ -138,7 +138,7 @@ def get_stats():
 @app.get("/api/urls")
 def get_urls(
     page: int = Query(1, ge=1),
-    per_page: int = Query(100, ge=1, le=500),
+    per_page: int = Query(100, ge=1, le=5000),
     visited: Optional[int] = Query(None, ge=0, le=1),
     hostname: Optional[str] = Query(None),
 ):

@@ -48,7 +48,9 @@ to storage-service, which writes it as TSV + individual JSON file.
 ### API
 
 ```
-GET /api/step/{number}/          → from Redis hash (live, TTL 1h)
+GET /api/steps/                  → crawler SQLite Urls via data-service (id, hostname, url, src_url, visited)
+GET /api/step/{number}/          → same Sqlite row by id
+GET /api/step/latest/            → Redis latch of last fully collected live step
 GET /api/storage_step/{number}/  → from storage-service JSON (persistent)
 GET /api/storage_latest/         → last N steps with named fields
 GET /api/storage_ids/            → all stored step numbers sorted ascending

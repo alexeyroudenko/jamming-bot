@@ -25,7 +25,6 @@ if SENTRY_DSN:
             LoggingIntegration(level=logging.INFO, event_level=logging.WARNING),
             RqIntegration(),
         ],
-        enable_logs=True,
         environment=ENVIRONMENT,
         traces_sampler=_traces_sampler,
         profiles_sample_rate=1.0,

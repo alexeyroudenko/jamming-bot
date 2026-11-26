@@ -387,6 +387,11 @@ spec:
               key: DATABASE_URI
         - name: BACKFILL_IMAGE_PATH
           value: "/tmp/backfill/presence.png"
+        # Empty disables full-table PNG prebuild (it OOMs tags-db under load).
+        - name: EXPORT_IMG_PREBUILD_TYPES
+          value: ""
+        - name: EXPORT_IMG_CACHE_TTL_SEC
+          value: "600"
         volumeMounts:
         - name: backfill-shared
           mountPath: /tmp/backfill
@@ -633,13 +638,14 @@ spec:
               key: POSTGRES_PASSWORD
         - name: POSTGRES_DB
           value: "tags_db_dev"
+        # steps table is multi-million rows; 256Mi caused chronic OOMKilled.
         resources:
           requests:
-            cpu: "100m"
-            memory: "64Mi"
+            cpu: "200m"
+            memory: "512Mi"
           limits:
-            cpu: "250m"
-            memory: "256Mi"
+            cpu: "1000m"
+            memory: "1536Mi"
         readinessProbe:
           tcpSocket:
             port: 5432
@@ -1503,6 +1509,8 @@ spec:
           value: "http://mood-service"
         - name: STORAGE_SERVICE_URL
           value: "http://storage-service"
+        - name: DATA_SERVICE_URL
+          value: "http://data-service"
         - name: IP_SERVICE_URL
           value: "http://ip-service"
         - name: RENDERER_SERVICE_URL
