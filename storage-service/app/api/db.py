@@ -44,4 +44,10 @@ steps_analysis = Table(
     Column('palette', Text),
 )
 
-database = Database(DATABASE_URI)
+# Configure connection pooling to handle high load and prevent timeout issues
+database = Database(
+    DATABASE_URI,
+    min_size=5,
+    max_size=20,
+    command_timeout=60.0,
+)

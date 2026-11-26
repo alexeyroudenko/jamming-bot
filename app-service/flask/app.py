@@ -1266,11 +1266,19 @@ def _snippet_for_analyze_semantic(step_key, analyze_result):
             return sn
         if isinstance(analyze_result, dict):
             np = analyze_result.get("noun_phrases")
-            if isinstance(np, list) and np:
-                return ". ".join(str(x) for x in np[:3])[:2500]
+            # Validate np is actually a list before attempting subscript access
+            if isinstance(np, (list, tuple)) and np:
+                try:
+                    return ". ".join(str(x) for x in np[:3])[:2500]
+                except (TypeError, AttributeError):
+                    pass
             words = analyze_result.get("words")
-            if isinstance(words, list) and words:
-                return " ".join(str(x) for x in words[:24])[:2500]
+            # Validate words is actually a list before attempting subscript access
+            if isinstance(words, (list, tuple)) and words:
+                try:
+                    return " ".join(str(x) for x in words[:24])[:2500]
+                except (TypeError, AttributeError):
+                    pass
     except Exception as exc:
         logger.warning("_snippet_for_analyze_semantic: %s", exc)
     return ""
