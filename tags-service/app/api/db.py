@@ -30,4 +30,12 @@ tag_daily_stats = Table(
     Index('ix_tag_daily_stats_tag_name', 'tag_name'),
 )
 
-database = Database(DATABASE_URI)
+# Configure connection pooling to prevent stale connections
+# min_size/max_size control the pool, command_timeout prevents long-running queries from holding connections
+database = Database(
+    DATABASE_URI,
+    min_size=2,
+    max_size=10,
+    command_timeout=60.0,
+    server_settings={"jit": "off"}  # Disable JIT for more predictable query times
+)

@@ -257,6 +257,20 @@ async def get_grouped_tags(count: int = 200, page: int = 0, days: Optional[int] 
             .offset(safe_page * safe_count)
         )
 
+    async def _fetch_with_retry(query, max_retries=2):
+        """Execute query with retry on connection errors."""
+        import asyncpg
+        for attempt in range(max_retries + 1):
+            try:
+                return await database.fetch_all(query=query)
+            except asyncpg.exceptions.ConnectionDoesNotExistError as e:
+                if attempt == max_retries:
+                    raise
+                # Brief pause before retry
+                import asyncio
+                await asyncio.sleep(0.1 * (attempt + 1))
+        return []
+
     if days is None:
         query = (
             tags.select()
@@ -264,19 +278,19 @@ async def get_grouped_tags(count: int = 200, page: int = 0, days: Optional[int] 
             .limit(safe_count)
             .offset(safe_page * safe_count)
         )
-        rows = await database.fetch_all(query=query)
+        rows = await _fetch_with_retry(query)
         return [_record_to_dict(r) for r in rows]
 
     safe_days = max(0, int(days))
     if safe_days == 0:
         today = datetime.now(timezone.utc).date()
         query = _daily_window_subquery(tag_daily_stats.c.day == today)
-        rows = await database.fetch_all(query=query)
+        rows = await _fetch_with_retry(query)
         return [_grouped_row_to_dict(r) for r in rows]
 
     cutoff_day = datetime.now(timezone.utc).date() - timedelta(days=safe_days - 1)
     query = _daily_window_subquery(tag_daily_stats.c.day >= cutoff_day)
-    rows = await database.fetch_all(query=query)
+    rows = await _fetch_with_retry(query)
     return [_grouped_row_to_dict(r) for r in rows]
 
 
