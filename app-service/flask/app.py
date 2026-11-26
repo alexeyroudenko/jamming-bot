@@ -1260,7 +1260,9 @@ def _snippet_for_analyze_semantic(step_key, analyze_result):
     """1–2 sentences from step text in Redis, else noun_phrases / words from analyze result."""
     try:
         merged = _read_step_hash(step_key) or {}
-        body = (merged.get("text") or "")[:12000]
+        text_val = merged.get("text")
+        # Validate text is actually a string before attempting subscript access
+        body = (text_val if isinstance(text_val, str) else "")[:12000]
         sn = _first_two_sentences(body)
         if sn:
             return sn
